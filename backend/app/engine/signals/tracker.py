@@ -60,7 +60,7 @@ class SignalLifecycleTracker:
                 return "EXPIRED", True, {
                     "outcome": outcome,
                     "exit_price": current_price,
-                    "exit_time": now,
+                    "exit_time": now.isoformat(),
                     "pnl_percentage": round(pnl_pct, 4),
                     "reason": f"Expiry reached at {now.isoformat()} with price {current_price}"
                 }
@@ -76,14 +76,14 @@ class SignalLifecycleTracker:
                 return "COMPLETED", True, {
                     "outcome": "LOSS",
                     "exit_price": current_price,
-                    "exit_time": now,
+                    "exit_time": now.isoformat(),
                     "reason": f"Stop Loss hit at {current_price:.5f}"
                 }
             if tp3 and current_price >= tp3:
                 return "COMPLETED", True, {
                     "outcome": "WIN",
                     "exit_price": current_price,
-                    "exit_time": now,
+                    "exit_time": now.isoformat(),
                     "reason": f"TP3 Target reached at {current_price:.5f}"
                 }
             if tp1 and current_price >= tp1 and current_status == "ACTIVE":
@@ -97,14 +97,14 @@ class SignalLifecycleTracker:
                 return "COMPLETED", True, {
                     "outcome": "LOSS",
                     "exit_price": current_price,
-                    "exit_time": now,
+                    "exit_time": now.isoformat(),
                     "reason": f"Stop Loss hit at {current_price:.5f}"
                 }
             if tp3 and current_price <= tp3:
                 return "COMPLETED", True, {
                     "outcome": "WIN",
                     "exit_price": current_price,
-                    "exit_time": now,
+                    "exit_time": now.isoformat(),
                     "reason": f"TP3 Target reached at {current_price:.5f}"
                 }
             if tp1 and current_price <= tp1 and current_status == "ACTIVE":

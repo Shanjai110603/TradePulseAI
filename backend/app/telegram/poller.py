@@ -44,9 +44,11 @@ class TelegramLongPoller:
         token = settings.TELEGRAM_BOT_TOKEN
         base_url = f"https://api.telegram.org/bot{token}"
 
-        # 1. Verify Bot Token and Fetch Bot Info
+        # 1. Verify Bot Token, Clear Old Webhooks, and Fetch Bot Info
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
+                # Clear any lingering webhook from previous deployments
+                await client.get(f"{base_url}/deleteWebhook")
                 me_resp = await client.get(f"{base_url}/getMe")
                 if me_resp.status_code == 200:
                     me_data = me_resp.json().get("result", {})
