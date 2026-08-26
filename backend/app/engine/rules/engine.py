@@ -1,5 +1,5 @@
 import math
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 from app.engine.market_data.base import Candle
 from app.engine.indicators.engine import TechnicalIndicatorEngine
 

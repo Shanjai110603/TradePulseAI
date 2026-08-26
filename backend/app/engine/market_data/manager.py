@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from app.core.config import settings
 from app.engine.market_data.base import MarketDataProvider
 from app.engine.market_data.mock_provider import MockDataProvider
