@@ -10,19 +10,23 @@ echo "=========================================================="
 echo "🚀 TradePulse AI - Cloud Server Deployment Starting"
 echo "=========================================================="
 
-# 1. Check RAM and automatically configure 2GB Swap for 1GB RAM instances (AWS EC2)
+# 1. Clean up unused docker build cache to free disk space
+echo "🧹 Freeing disk space & build cache..."
+sudo docker system prune -af --volumes 2>/dev/null || true
+
+# 2. Check RAM and configure 1GB Swap for low-RAM instances
 TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
 echo "🧠 Detected System RAM: ${TOTAL_RAM_MB} MB"
 
 if [ "$TOTAL_RAM_MB" -lt 1500 ]; then
     if [ ! -f /swapfile ]; then
-        echo "⚡ Low RAM detected (<= 1GB, standard on AWS Free Tier). Creating 2GB Swapfile..."
-        sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+        echo "⚡ Low RAM detected. Creating 1GB Swapfile..."
+        sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
         sudo chmod 600 /swapfile
         sudo mkswap /swapfile
         sudo swapon /swapfile
         echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-        echo "✅ 2GB Swap configured successfully to prevent OOM errors."
+        echo "✅ 1GB Swap configured successfully."
     else
         echo "✅ Swapfile already active."
     fi
