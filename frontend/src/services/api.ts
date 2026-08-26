@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { AuthResponse, User, UserPreferences, Market, Asset, Candle, Pattern, PatternImage, Signal, BacktestResult, TelegramStatus, PerformanceOverview } from '../types';
 
-// Production backend URL - hardcoded for Render deployment
-const API_BASE = 'https://tradepulse-ai-cb07.onrender.com/api/v1';
+// Dynamic API Base - uses local reverse proxy by default
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE,
