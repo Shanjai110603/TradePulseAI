@@ -22,6 +22,16 @@ elif "postgresql" in db_url:
     engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
+    # Clean pgbouncer parameter from query string if present
+    if "?pgbouncer=true" in db_url:
+        db_url = db_url.replace("?pgbouncer=true", "")
+    elif "&pgbouncer=true" in db_url:
+        db_url = db_url.replace("&pgbouncer=true", "")
+    if "pooler.supabase.com" in db_url or "6543" in db_url:
+        engine_kwargs["connect_args"] = {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0
+        }
 
 async_engine = create_async_engine(db_url, **engine_kwargs)
 
