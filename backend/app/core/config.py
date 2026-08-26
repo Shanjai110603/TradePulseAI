@@ -33,9 +33,14 @@ class Settings(BaseSettings):
     TELEGRAM_TEST_MODE: bool = True  # True enables local simulated Telegram test notifications
 
     # Market Data
-    MARKET_DATA_PROVIDER: str = "mock"  # mock | binance | custom
+    MARKET_DATA_PROVIDER: str = "quotex"  # mock | binance | quotex
     MARKET_DATA_API_KEY: Optional[str] = ""
-    MARKET_POLL_INTERVAL_SECONDS: int = 5
+    MARKET_POLL_INTERVAL_SECONDS: int = 10
+
+    # Quotex Demo Account Credentials
+    QUOTEX_EMAIL: Optional[str] = ""
+    QUOTEX_PASSWORD: Optional[str] = ""
+    QUOTEX_SESSION_TOKEN: Optional[str] = ""  # SSID cookie from browser - enables live data
 
     # AI Provider
     AI_PROVIDER: str = "openrouter"  # mock | openrouter | openai | anthropic | gemini

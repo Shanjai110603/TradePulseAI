@@ -26,6 +26,8 @@ services:
         sync: false
       - key: TELEGRAM_TEST_MODE
         value: "false"
+      - key: QUOTEX_SESSION_TOKEN
+        sync: false
       - key: MARKET_DATA_PROVIDER
         value: quotex
       - key: AI_PROVIDER
