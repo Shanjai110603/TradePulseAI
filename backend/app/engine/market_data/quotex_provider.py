@@ -84,6 +84,13 @@ class QuotexWebSocketClient:
         self.ssid = ssid
         self._candle_cache: Dict[str, List[dict]] = {}
 
+    def _build_cookie_header(self) -> str:
+        s = self.ssid.strip()
+        if "=" in s:
+            return s
+        # If raw value given, provide both laravel_session and ssid for maximum compatibility
+        return f"laravel_session={s}; ssid={s}"
+
     async def get_candles(self, ws_asset: str, period: int, count: int) -> List[dict]:
         """
         Fetch candles from Quotex WebSocket.
@@ -92,12 +99,13 @@ class QuotexWebSocketClient:
         end_time = int(time.time())
         received: List[dict] = []
         success = False
+        cookie_hdr = self._build_cookie_header()
 
         for ws_url in self.WS_URLS:
             try:
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Cookie": f"ssid={self.ssid}",
+                    "Cookie": cookie_hdr,
                     "Origin": "https://qxbroker.com",
                 }
                 async with websockets.connect(
