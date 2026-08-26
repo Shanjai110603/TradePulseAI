@@ -50,6 +50,8 @@ async def seed_initial_data():
             # Ensure password hash is up to date
             demo_user.hashed_password = get_password_hash("password123")
             demo_user.is_active = True
+            db.add(demo_user)
+            await db.commit()
 
             # Seed default Pattern Type 14
             p14 = Pattern(
