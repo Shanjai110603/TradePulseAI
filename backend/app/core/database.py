@@ -7,12 +7,23 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 
+# Normalize connection URL for async SQLAlchemy / Supabase
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 # Engine configuration
 engine_kwargs = {"echo": False}
-if "sqlite" in settings.DATABASE_URL:
+if "sqlite" in db_url:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif "postgresql" in db_url:
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
 
-async_engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+async_engine = create_async_engine(db_url, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
