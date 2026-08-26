@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -79,13 +79,33 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
     from sqlalchemy.orm import selectinload
-    query = select(User).where(User.email == form_data.username).options(selectinload(User.preferences))
+    email = None
+    password = None
+
+    # Support both JSON payload and Form Data
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        body = await request.json()
+        email = body.get("email") or body.get("username")
+        password = body.get("password")
+    else:
+        form = await request.form()
+        email = form.get("username") or form.get("email")
+        password = form.get("password")
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    query = select(User).where(User.email == email).options(selectinload(User.preferences))
     res = await db.execute(query)
     user = res.scalar_one_or_none()
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     access_token = create_access_token(subject=user.id)
