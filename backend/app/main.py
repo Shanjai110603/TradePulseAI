@@ -28,32 +28,45 @@ logger = logging.getLogger("tradepulse")
 
 
 async def seed_initial_data():
-    """Seeds default demo user and pre-configured Pattern Type 14 if DB is empty"""
+    """Seeds default demo user and pre-configured Pattern Type 14 if DB is empty.
+    Also refreshes demo user password hash on every startup.
+    """
     async with AsyncSessionLocal() as db:
         res = await db.execute(select(User).where(User.email == "demo@tradepulse.ai"))
         demo_user = res.scalar_one_or_none()
 
         if not demo_user:
-            logger.info("Seeding demo user and Pattern Type 14 template...")
+            logger.info("Seeding demo user...")
             demo_user = User(
                 email="demo@tradepulse.ai",
                 hashed_password=get_password_hash("password123"),
                 full_name="Alex Mercer",
-                is_admin=True
+                is_admin=True,
+                is_active=True
             )
             db.add(demo_user)
             await db.flush()
 
             prefs = UserPreferences(user_id=demo_user.id)
             db.add(prefs)
+            await db.commit()
+            await db.refresh(demo_user)
+            logger.info(f"Demo user created with id={demo_user.id}")
         else:
-            # Ensure password hash is up to date
+            # Always refresh password hash on startup (ensures it matches native bcrypt)
+            logger.info(f"Refreshing demo user password hash (id={demo_user.id})...")
             demo_user.hashed_password = get_password_hash("password123")
             demo_user.is_active = True
             db.add(demo_user)
             await db.commit()
+            logger.info("Demo user password hash refreshed.")
 
-            # Seed default Pattern Type 14
+        # Seed Pattern Type 14 only if it doesn't exist yet
+        pat_res = await db.execute(
+            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 14")
+        )
+        if not pat_res.scalar_one_or_none():
+            logger.info("Seeding Pattern Type 14 template...")
             p14 = Pattern(
                 user_id=demo_user.id,
                 name="Pattern Type 14",
@@ -117,7 +130,8 @@ async def seed_initial_data():
             )
             db.add(v1)
             await db.commit()
-            logger.info("Demo user and Pattern Type 14 seeded successfully.")
+            logger.info("Pattern Type 14 seeded successfully.")
+
 
 
 @asynccontextmanager
