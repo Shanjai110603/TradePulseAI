@@ -10,25 +10,26 @@ echo "=========================================================="
 echo "🚀 TradePulse AI - Cloud Server Deployment Starting"
 echo "=========================================================="
 
-# 1. Clean up unused docker build cache to free disk space
-echo "🧹 Freeing disk space & build cache..."
+# 1. Free up disk space aggressively (essential for AWS 8GB root disks)
+echo "🧹 Deep-cleaning disk space..."
+sudo apt-get clean -y 2>/dev/null || true
+sudo rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 2>/dev/null || true
+sudo journalctl --vacuum-size=20M 2>/dev/null || true
 sudo docker system prune -af --volumes 2>/dev/null || true
 
-# 2. Check RAM and configure 1GB Swap for low-RAM instances
+# 2. Check RAM and configure 512MB Swap (lightweight, preserves disk)
 TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
 echo "🧠 Detected System RAM: ${TOTAL_RAM_MB} MB"
 
 if [ "$TOTAL_RAM_MB" -lt 1500 ]; then
     if [ ! -f /swapfile ]; then
-        echo "⚡ Low RAM detected. Creating 1GB Swapfile..."
-        sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
+        echo "⚡ Configuring 512MB Swapfile..."
+        sudo fallocate -l 512M /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=512
         sudo chmod 600 /swapfile
         sudo mkswap /swapfile
         sudo swapon /swapfile
         echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-        echo "✅ 1GB Swap configured successfully."
-    else
-        echo "✅ Swapfile already active."
+        echo "✅ 512MB Swap configured."
     fi
 fi
 
