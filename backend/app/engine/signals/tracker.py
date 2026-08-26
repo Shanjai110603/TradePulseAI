@@ -21,10 +21,27 @@ class SignalLifecycleTracker:
             (new_status: str, is_completed: bool, event_details: dict)
         """
         now = current_time or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+
         direction = signal_data.get("direction", "DOWN").upper()
         ref_price = signal_data.get("reference_price", 1.0)
         market_id = signal_data.get("market_id", "digital_options")
-        expiry_time = signal_data.get("expiry_time")
+        raw_expiry = signal_data.get("expiry_time")
+        if raw_expiry is not None:
+            if isinstance(raw_expiry, str):
+                try:
+                    expiry_time = datetime.fromisoformat(raw_expiry)
+                except Exception:
+                    expiry_time = None
+            else:
+                expiry_time = raw_expiry
+
+            if expiry_time and expiry_time.tzinfo is None:
+                expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+        else:
+            expiry_time = None
+
         current_status = signal_data.get("status", "ACTIVE")
 
         if current_status not in ["ACTIVE", "PENDING", "UPDATE"]:

@@ -32,16 +32,18 @@ class TelegramBotService:
         self,
         chat_id: int,
         text: str,
-        parse_mode: str = "HTML",
+        parse_mode: Optional[str] = "HTML",
         reply_markup: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Sends message to a Telegram chat, with local test fallback"""
-        msg_payload = {
+        msg_payload: Dict[str, Any] = {
             "chat_id": chat_id,
             "text": text,
-            "parse_mode": parse_mode,
-            "reply_markup": reply_markup
         }
+        if parse_mode:
+            msg_payload["parse_mode"] = parse_mode
+        if reply_markup:
+            msg_payload["reply_markup"] = reply_markup
 
         # Log for audit and local test mode
         self.sent_notifications_log.append(msg_payload)
@@ -56,16 +58,26 @@ class TelegramBotService:
                 resp = await client.post(url, json=msg_payload)
                 if resp.status_code == 200:
                     return resp.json()
-                
-                # If HTML parsing fails (400 Bad Request), fallback to plain text
-                logger.warning(f"Telegram sendMessage returned {resp.status_code}: {resp.text}. Retrying without HTML formatting...")
-                fallback_payload = {**msg_payload, "parse_mode": None}
-                # Strip basic html tags for cleaner fallback
+
+                # If HTML/markup fails, fallback to clean plain text without markup
+                logger.warning(f"Telegram sendMessage returned {resp.status_code}: {resp.text}. Retrying with plain text fallback...")
                 clean_text = text.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "").replace("<i>", "").replace("</i>", "")
-                fallback_payload["text"] = clean_text
+                fallback_payload: Dict[str, Any] = {
+                    "chat_id": chat_id,
+                    "text": clean_text
+                }
+                if reply_markup:
+                    fallback_payload["reply_markup"] = reply_markup
+
                 fallback_resp = await client.post(url, json=fallback_payload)
-                fallback_resp.raise_for_status()
-                return fallback_resp.json()
+                if fallback_resp.status_code == 200:
+                    return fallback_resp.json()
+
+                # Final fallback without any markup at all
+                final_payload = {"chat_id": chat_id, "text": clean_text}
+                final_resp = await client.post(url, json=final_payload)
+                final_resp.raise_for_status()
+                return final_resp.json()
             except Exception as e:
                 logger.error(f"Failed to send Telegram message to {chat_id}: {e}")
                 return {"ok": False, "error": str(e)}
@@ -75,17 +87,19 @@ class TelegramBotService:
         chat_id: int,
         message_id: int,
         text: str,
-        parse_mode: str = "HTML",
+        parse_mode: Optional[str] = "HTML",
         reply_markup: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Edits an existing Telegram message in-place for fast, smooth sub-views"""
-        msg_payload = {
+        msg_payload: Dict[str, Any] = {
             "chat_id": chat_id,
             "message_id": message_id,
             "text": text,
-            "parse_mode": parse_mode,
-            "reply_markup": reply_markup
         }
+        if parse_mode:
+            msg_payload["parse_mode"] = parse_mode
+        if reply_markup:
+            msg_payload["reply_markup"] = reply_markup
 
         if self.test_mode or not self.base_url:
             return {"ok": True, "result": {"message_id": message_id, "text": text}}
