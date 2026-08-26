@@ -116,9 +116,9 @@ class BackgroundScheduler:
                         if pattern.user and pattern.user.preferences:
                             prefs = pattern.user.preferences
                             user_prefs = {
-                                "min_confidence_score": prefs.min_confidence_score,
-                                "require_mtf_confirmation": prefs.require_mtf_confirmation,
-                                "risk_per_trade_percent": prefs.risk_per_trade_percent
+                                "min_ai_score": prefs.min_ai_score,
+                                "min_confidence": prefs.min_confidence,
+                                "risk_per_trade_percent": getattr(prefs, "risk_per_trade_percent", 2.0)
                             }
 
                         is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
