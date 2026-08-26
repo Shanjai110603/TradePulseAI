@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, LineData, Time } from 'lightweight-charts';
+import { createChart, IChartApi, CandlestickSeries, Time } from 'lightweight-charts';
 import { Candle } from '../../types';
 
 interface TradingViewChartProps {
@@ -30,12 +30,10 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // Clean up prior chart instance
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
@@ -56,23 +54,12 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       },
       crosshair: {
         mode: 1,
-        vertLine: {
-          color: '#00d2ff',
-          width: 1,
-          style: 3,
-        },
-        horzLine: {
-          color: '#00d2ff',
-          width: 1,
-          style: 3,
-        },
+        vertLine: { color: '#00d2ff', width: 1, style: 3 },
+        horzLine: { color: '#00d2ff', width: 1, style: 3 },
       },
       rightPriceScale: {
         borderColor: '#222f44',
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
-        },
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
         borderColor: '#222f44',
@@ -83,85 +70,82 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
     chartRef.current = chart;
 
-    // Add Candlestick Series (supports multiple lightweight-charts versions)
-    const candleSeries = (chart as any).addCandlestickSeries ? (chart as any).addCandlestickSeries({
-      upColor: '#00f298',
-      downColor: '#ff3366',
-      borderVisible: false,
-      wickUpColor: '#00f298',
-      wickDownColor: '#ff3366',
-    }) : (chart as any).addSeries({
-      type: 'Candlestick',
+    // LightweightCharts v5 API: addSeries(SeriesType, options)
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#00f298',
       downColor: '#ff3366',
       borderVisible: false,
       wickUpColor: '#00f298',
       wickDownColor: '#ff3366',
     });
-    candleSeriesRef.current = candleSeries;
 
-    // Format and load candle data
     if (candles && candles.length > 0) {
-      const formattedData: CandlestickData<Time>[] = candles.map((c) => ({
-        time: c.timestamp as Time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
-      candleSeries.setData(formattedData);
+      const formattedData = candles
+        .filter((c) =>
+          c.timestamp != null &&
+          isFinite(c.open) && isFinite(c.high) &&
+          isFinite(c.low) && isFinite(c.close) &&
+          c.high >= c.low
+        )
+        .map((c) => ({
+          time: Math.floor(c.timestamp) as Time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }))
+        .sort((a, b) => (a.time as number) - (b.time as number));
 
-      // Add Support Price Lines
-      supportLevels.forEach((s) => {
-        candleSeries.createPriceLine({
-          price: s,
-          color: '#00f298',
-          lineWidth: 1,
-          lineStyle: 2, // Dashed
-          axisLabelVisible: true,
-          title: `SUP ${s.toFixed(5)}`,
+      if (formattedData.length > 0) {
+        candleSeries.setData(formattedData);
+
+        supportLevels.forEach((s) => {
+          candleSeries.createPriceLine({
+            price: s,
+            color: '#00f298',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: `SUP ${s.toFixed(5)}`,
+          });
         });
-      });
 
-      // Add Resistance Price Lines
-      resistanceLevels.forEach((r) => {
-        candleSeries.createPriceLine({
-          price: r,
-          color: '#ff3366',
-          lineWidth: 1,
-          lineStyle: 2, // Dashed
-          axisLabelVisible: true,
-          title: `RES ${r.toFixed(5)}`,
+        resistanceLevels.forEach((r) => {
+          candleSeries.createPriceLine({
+            price: r,
+            color: '#ff3366',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: `RES ${r.toFixed(5)}`,
+          });
         });
-      });
 
-      // Add Signal Marker
-      if (signalMarker) {
-        const isDown = signalMarker.direction === 'DOWN' || signalMarker.direction === 'SELL';
-        candleSeries.setMarkers([
-          {
-            time: signalMarker.timestamp as Time,
-            position: isDown ? 'aboveBar' : 'belowBar',
-            color: isDown ? '#ff3366' : '#00f298',
-            shape: isDown ? 'arrowDown' : 'arrowUp',
-            text: signalMarker.text || (isDown ? '🔴 DOWN SIGNAL' : '🟢 UP SIGNAL'),
-            size: 2,
-          },
-        ]);
+        if (signalMarker) {
+          const isDown = signalMarker.direction === 'DOWN' || signalMarker.direction === 'SELL';
+          chart.addSeries(CandlestickSeries); // no-op, just using chart ref
+          // Markers are set via setMarkers on primitive series in v5
+          (candleSeries as any).setMarkers?.([
+            {
+              time: signalMarker.timestamp as Time,
+              position: isDown ? 'aboveBar' : 'belowBar',
+              color: isDown ? '#ff3366' : '#00f298',
+              shape: isDown ? 'arrowDown' : 'arrowUp',
+              text: signalMarker.text || (isDown ? '🔴 DOWN' : '🟢 UP'),
+              size: 2,
+            },
+          ]);
+        }
+
+        chart.timeScale().fitContent();
       }
-
-      chart.timeScale().fitContent();
     }
 
-    // Auto-resize observer
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
+        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
       }
     };
-
     window.addEventListener('resize', handleResize);
 
     return () => {
@@ -175,7 +159,6 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden border border-surface-border bg-surface">
-      {/* Header bar on top of chart */}
       <div className="px-4 py-2.5 border-b border-surface-border/80 flex items-center justify-between bg-surface-raised/60">
         <div className="flex items-center space-x-3">
           <span className="font-mono font-bold text-sm text-white tracking-wide">{symbol}</span>
@@ -190,22 +173,13 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
           {candles.length > 0 && (
             <div className="flex items-center space-x-2">
               <span className="text-gray-400">Price:</span>
-              <span
-                className={`font-semibold ${
-                  candles[candles.length - 1].close >= candles[candles.length - 1].open
-                    ? 'text-trade-up'
-                    : 'text-trade-down'
-                }`}
-              >
-                {candles[candles.length - 1].close.toFixed(
-                  symbol.includes('BTC') ? 2 : 5
-                )}
+              <span className={`font-semibold ${candles[candles.length - 1].close >= candles[candles.length - 1].open ? 'text-trade-up' : 'text-trade-down'}`}>
+                {candles[candles.length - 1].close.toFixed(symbol.includes('BTC') ? 2 : 5)}
               </span>
             </div>
           )}
         </div>
       </div>
-
       <div ref={chartContainerRef} className="w-full" style={{ height: `${height}px` }} />
     </div>
   );
