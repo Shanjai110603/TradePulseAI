@@ -1,4 +1,5 @@
 import html
+import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
@@ -143,11 +144,90 @@ class TelegramUpdateHandler:
             else:
                 await telegram_service.send_message(chat_id, "❌ Please link your account first.")
 
+        # /signal or /test_signal command - triggers an immediate live AI signal
+        elif text.startswith("/signal") or text.startswith("/test_signal") or text.startswith("/alert"):
+            await telegram_service.send_message(chat_id, "🔍 <i>Analyzing live Quotex OTC market conditions for high-probability setups...</i>")
+            from app.engine.signals.evaluator import SignalEvaluationPipeline
+            from app.models.signal import Signal, SignalTechnicalSnapshot, SignalAIAnalysis, SignalEvent
+            from app.models.pattern import Pattern
+            import random
+
+            # Find active pattern
+            p_res = await db.execute(select(Pattern).where(Pattern.is_active == True).limit(1))
+            pattern = p_res.scalar_one_or_none()
+
+            provider = market_data_manager.get_provider()
+            assets = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "EUR/USD"]
+            chosen_asset = random.choice(assets)
+
+            candles = await provider.get_candles(chosen_asset, timeframe="1M", limit=50)
+            if not candles:
+                await telegram_service.send_message(chat_id, "⚠️ Market data temporarily unavailable. Please retry in a few seconds.")
+                return
+
+            last_candle = candles[-1]
+            last_ts = datetime.fromtimestamp(last_candle.timestamp, tz=timezone.utc)
+            dir_choice = "DOWN" if last_candle.close < last_candle.open else "UP"
+
+            pattern_dict = {
+                "id": pattern.id if pattern else str(uuid.uuid4()),
+                "name": pattern.name if pattern else "Quotex OTC Momentum Engine",
+                "market_id": "digital_options",
+                "direction": dir_choice,
+                "timeframe": "1M",
+                "asset_symbol": chosen_asset,
+                "current_version": 1,
+                "target_config": {"duration_minutes": 5, "duration_candles": 5},
+                "ai_config": {"enabled": True, "min_score": 85, "min_confidence": "HIGH"},
+            }
+
+            # Generate via evaluation pipeline
+            is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
+                pattern_dict=pattern_dict,
+                candles=candles
+            )
+
+            if sig_payload:
+                # Persist to DB
+                new_sig = Signal(
+                    id=sig_payload["id"],
+                    user_id=pattern.user_id if pattern else None,
+                    pattern_id=pattern.id if pattern else None,
+                    pattern_version=1,
+                    pattern_name=pattern_dict["name"],
+                    market_id="digital_options",
+                    asset_symbol=chosen_asset,
+                    direction=sig_payload["direction"],
+                    timeframe="1M",
+                    reference_price=sig_payload["reference_price"],
+                    entry_time=sig_payload["entry_time"],
+                    expiry_time=sig_payload["expiry_time"],
+                    duration_minutes=5,
+                    signal_strength=sig_payload.get("signal_strength", "HIGH"),
+                    ai_score=sig_payload.get("ai_score", 88),
+                    ai_confidence=sig_payload.get("ai_confidence", "HIGH"),
+                    status="ACTIVE",
+                    matched_candle_timestamp=last_ts,
+                    raw_trigger_candles=sig_payload.get("raw_trigger_candles", [])
+                )
+                db.add(new_sig)
+                await db.commit()
+
+                # Dispatch directly to this user and broadcast
+                await telegram_service.send_signal_notification(chat_id, sig_payload)
+            else:
+                await telegram_service.send_message(chat_id, f"ℹ️ Market scanner evaluated {chosen_asset}: conditions currently neutral. Check back shortly!")
+
         # /help command
         elif text.startswith("/help"):
             help_text = (
                 "📖 <b>TradePulse AI Telegram Guide</b>\n\n"
-                "When a pattern on your web dashboard triggers a signal, you receive an instant alert card.\n\n"
+                "When a pattern on your workstation triggers a signal, you receive an instant alert card.\n\n"
+                "<b>Available Commands:</b>\n"
+                "• <code>/signal</code> - Generate an instant live Quotex AI market signal\n"
+                "• <code>/status</code> - Check subscription & bot operational status\n"
+                "• <code>/mute</code> - Pause incoming signal alerts\n"
+                "• <code>/unmute</code> - Resume signal alerts\n\n"
                 "<b>Interactive Card Buttons:</b>\n"
                 "• 🧠 <b>AI Analysis:</b> Full AI confidence breakdown & reasoning\n"
                 "• 📊 <b>Technicals:</b> Live indicator snapshot (RSI, MACD, S/R)\n"

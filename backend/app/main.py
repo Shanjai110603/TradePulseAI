@@ -76,13 +76,13 @@ async def seed_initial_data():
                 timeframe="1M",
                 is_active=True,
                 current_version=1,
-                assets_config=["EUR/USD", "GBP/USD", "USD/JPY"],
-                timeframes_config={"1M": "Any", "5M": "Bearish"},
-                trend_config={"required": "Bearish", "mtf": {"5M": "Bearish"}},
-                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 50, "adx_min": 20, "macd_bias": "Bearish"},
-                volume_config={"type": "above_average", "min_pct_of_ma": 120},
+                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "EUR/USD", "GBP/USD"],
+                timeframes_config={"1M": "Any"},
+                trend_config={},
+                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 60},
+                volume_config={},
                 indicators_config=[
-                    {"indicator": "RSI", "condition": "BELOW", "value": 50.0, "period": 14}
+                    {"indicator": "RSI", "condition": "BELOW", "value": 55.0, "period": 14}
                 ],
                 rules_config={
                     "operator": "AND",
@@ -131,6 +131,48 @@ async def seed_initial_data():
             db.add(v1)
             await db.commit()
             logger.info("Pattern Type 14 seeded successfully.")
+
+        # Seed Quotex OTC High-Frequency Reversal Pattern
+        q_res = await db.execute(
+            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Quotex 1M OTC Momentum")
+        )
+        if not q_res.scalar_one_or_none():
+            logger.info("Seeding Quotex 1M OTC Momentum pattern...")
+            q_pat = Pattern(
+                user_id=demo_user.id,
+                name="Quotex 1M OTC Momentum",
+                description="High-frequency 1-Minute OTC breakout with RSI divergence & EMA trend confirmation",
+                market_id="digital_options",
+                direction="UP",
+                timeframe="1M",
+                is_active=True,
+                current_version=1,
+                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)"],
+                timeframes_config={"1M": "Any"},
+                trend_config={},
+                momentum_config={"rsi_min": 45, "rsi_max": 100},
+                volume_config={},
+                indicators_config=[
+                    {"indicator": "RSI", "condition": "ABOVE", "value": 48.0, "period": 14}
+                ],
+                rules_config={},
+                entry_config={"type": "immediate"},
+                target_config={"duration_type": "time", "duration_minutes": 5, "duration_candles": 5},
+                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BULLISH"},
+                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
+            )
+            db.add(q_pat)
+            await db.flush()
+
+            q_v1 = PatternVersion(
+                pattern_id=q_pat.id,
+                version_number=1,
+                change_summary="Quotex 1M OTC Momentum Strategy",
+                config_snapshot={"name": q_pat.name, "direction": q_pat.direction, "market_id": q_pat.market_id}
+            )
+            db.add(q_v1)
+            await db.commit()
+            logger.info("Quotex 1M OTC Momentum seeded successfully.")
 
 
 
