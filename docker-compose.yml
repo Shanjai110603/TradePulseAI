@@ -4,17 +4,17 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: tradepulse_postgres
-    restart: unless-stopped
+    restart: always
     environment:
-      POSTGRES_USER: tradepulse_user
-      POSTGRES_PASSWORD: tradepulse_password
-      POSTGRES_DB: tradepulse_db
+      POSTGRES_USER: ${POSTGRES_USER:-tradepulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradepulse_secure_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-tradepulse_db}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tradepulse_user -d tradepulse_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tradepulse} -d ${POSTGRES_DB:-tradepulse_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,9 +22,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tradepulse_redis
-    restart: unless-stopped
+    restart: always
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -33,20 +33,21 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: tradepulse_backend
-    restart: unless-stopped
+    restart: always
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://tradepulse_user:tradepulse_password@postgres:5432/tradepulse_db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tradepulse}:${POSTGRES_PASSWORD:-tradepulse_secure_password_2026}@postgres:5432/${POSTGRES_DB:-tradepulse_db}
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: tradepulse_super_secret_jwt_key_change_in_production_2026_x89
-      MARKET_DATA_PROVIDER: mock
-      AI_PROVIDER: mock
-      TELEGRAM_TEST_MODE: "true"
-      TELEGRAM_BOT_TOKEN: ""
-    ports:
-      - "8000:8000"
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-quotex}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8914871985:AAECsQhFgJhgnstQU6v-05IjprYYbGzckBw}
+      TELEGRAM_TEST_MODE: "false"
+    expose:
+      - "8000"
     volumes:
       - ./backend/uploads:/app/uploads
 
@@ -55,14 +56,14 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: tradepulse_frontend
-    restart: unless-stopped
+    restart: always
     depends_on:
       - backend
     ports:
-      - "3000:3000"
-    environment:
-      VITE_API_URL: http://localhost:8000/api/v1
+      - "80:80"
+      - "443:443"
 
 volumes:
   postgres_data:
   redis_data:
+
