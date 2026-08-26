@@ -1,9 +1,11 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 
 class MarketResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     description: Optional[str] = None
@@ -12,11 +14,10 @@ class MarketResponse(BaseModel):
     icon: Optional[str] = None
     features: Dict[str, Any] = {}
 
-    class Config:
-        from_attributes = True
-
 
 class DataSourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     provider_type: str
@@ -26,11 +27,10 @@ class DataSourceResponse(BaseModel):
     supported_markets: List[str] = []
     rate_limit_per_minute: int
 
-    class Config:
-        from_attributes = True
-
 
 class AssetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     symbol: str
     base_asset: str
@@ -42,21 +42,19 @@ class AssetResponse(BaseModel):
     price_precision: int
     min_movement: float
 
-    class Config:
-        from_attributes = True
-
 
 class TimeframeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     seconds: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
-
 
 class CandleSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     timestamp: int  # Unix timestamp in seconds or milliseconds
     open: float
     high: float
@@ -64,5 +62,3 @@ class CandleSchema(BaseModel):
     close: float
     volume: float
 
-    class Config:
-        from_attributes = True

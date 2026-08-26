@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 
 
@@ -19,6 +19,8 @@ class UserLogin(BaseModel):
 
 
 class UserPreferencesSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     default_market_id: Optional[str] = None
     min_ai_score: int = 70
     min_confidence: str = "MODERATE"
@@ -30,20 +32,16 @@ class UserPreferencesSchema(BaseModel):
     quiet_hours_start: Optional[str] = None
     quiet_hours_end: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class UserResponse(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     is_active: bool
     is_admin: bool
     created_at: datetime
     preferences: Optional[UserPreferencesSchema] = None
     is_telegram_linked: bool = False
-
-    class Config:
-        from_attributes = True
 
 
 class Token(BaseModel):

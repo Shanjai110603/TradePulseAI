@@ -1,9 +1,11 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 
 class SignalEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     signal_id: str
     event_type: str
@@ -12,11 +14,10 @@ class SignalEventResponse(BaseModel):
     data: Dict[str, Any] = {}
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class SignalTechnicalSnapshotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     signal_id: str
     rsi: Optional[float] = None
@@ -35,11 +36,10 @@ class SignalTechnicalSnapshotResponse(BaseModel):
     market_structure: Dict[str, Any] = {}
     mtf_summary: Dict[str, Any] = {}
 
-    class Config:
-        from_attributes = True
-
 
 class SignalAIAnalysisResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     signal_id: str
     ai_provider: str
@@ -58,11 +58,10 @@ class SignalAIAnalysisResponse(BaseModel):
     risks: List[str] = []
     invalidating_conditions: List[str] = []
 
-    class Config:
-        from_attributes = True
-
 
 class SignalResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     signal_id: str
     outcome: str
@@ -73,11 +72,10 @@ class SignalResultResponse(BaseModel):
     max_adverse_excursion: Optional[float] = None
     post_analysis_notes: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class SignalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     pattern_id: Optional[str] = None
@@ -105,9 +103,6 @@ class SignalResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class SignalDetailResponse(SignalResponse):
     technical_snapshot: Optional[SignalTechnicalSnapshotResponse] = None
@@ -115,3 +110,4 @@ class SignalDetailResponse(SignalResponse):
     result: Optional[SignalResultResponse] = None
     events: List[SignalEventResponse] = []
     raw_trigger_candles: List[Dict[str, Any]] = []
+

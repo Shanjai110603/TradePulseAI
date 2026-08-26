@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 
@@ -14,6 +14,8 @@ class BacktestRequest(BaseModel):
 
 
 class BacktestTradeRecord(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     timestamp: datetime
     candle_index: int
     direction: str
@@ -27,12 +29,16 @@ class BacktestTradeRecord(BaseModel):
 
 
 class BacktestEquityPoint(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     timestamp: datetime
     equity: float
     trade_number: int
 
 
 class BacktestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     pattern_id: str
@@ -54,8 +60,6 @@ class BacktestResponse(BaseModel):
     average_duration_seconds: Optional[float] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
 
 class BacktestDetailResponse(BacktestResponse):

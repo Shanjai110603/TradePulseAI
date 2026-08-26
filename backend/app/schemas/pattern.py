@@ -1,9 +1,11 @@
 from typing import Optional, List, Dict, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
 
 class PatternImageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     pattern_id: str
     file_path: str
@@ -14,11 +16,10 @@ class PatternImageResponse(BaseModel):
     is_primary: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class PatternVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     pattern_id: str
     version_number: int
@@ -26,8 +27,6 @@ class PatternVersionResponse(BaseModel):
     config_snapshot: Dict[str, Any]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
 
 class TrendConfig(BaseModel):
@@ -146,6 +145,8 @@ class PatternUpdate(BaseModel):
 
 
 class PatternResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     name: str
@@ -175,5 +176,3 @@ class PatternResponse(BaseModel):
     win_rate: Optional[float] = 0.0
     last_signal_time: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
