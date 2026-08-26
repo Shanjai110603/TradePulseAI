@@ -16,6 +16,10 @@ services:
         value: false
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./tradepulse.db
+      - key: SUPABASE_URL
+        value: https://gvtcspyomoxliglxuxjv.supabase.co
+      - key: SUPABASE_KEY
+        value: sb_publishable_X7JOCS41pQfRRJt1aEYMdQ_RRD3sxP3
       - key: SECRET_KEY
         generateValue: true
       - key: TELEGRAM_BOT_TOKEN

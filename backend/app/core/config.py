@@ -11,13 +11,15 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    # Database
-    # Supports Postgres or auto SQLite async fallback
+    # Database & Supabase Integration
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./tradepulse.db",
         description="SQLAlchemy database connection string"
     )
     REDIS_URL: Optional[str] = "redis://localhost:6339/0"
+    SUPABASE_URL: Optional[str] = "https://gvtcspyomoxliglxuxjv.supabase.co"
+    SUPABASE_KEY: Optional[str] = "sb_publishable_X7JOCS41pQfRRJt1aEYMdQ_RRD3sxP3"
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = ""
 
     # Security
     SECRET_KEY: str = "tradepulse_super_secret_jwt_key_change_in_production_2026_x89"
