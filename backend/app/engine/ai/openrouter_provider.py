@@ -82,10 +82,12 @@ Return a strict JSON object with these exact fields:
                     parsed = json.loads(content)
                     parsed["raw_response"] = {"provider": "openrouter", "model": self.model, "usage": data.get("usage", {})}
                     return AIAnalysisResult(**parsed)
+                elif resp.status_code == 402:
+                    logger.debug("OpenRouter account credit limit reached. Using built-in deterministic quantitative AI engine.")
                 else:
-                    logger.warning(f"OpenRouter API returned {resp.status_code}: {resp.text}. Falling back to heuristic AI.")
+                    logger.warning(f"OpenRouter API returned {resp.status_code}. Using built-in AI engine.")
         except Exception as e:
-            logger.error(f"OpenRouter call failed ({e}). Falling back to heuristic AI engine.")
+            logger.debug(f"OpenRouter call: {e}. Using built-in heuristic AI engine.")
 
         return await self._fallback.analyze_signal(candidate_data, technical_snapshot, market_context)
 
