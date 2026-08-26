@@ -29,9 +29,11 @@ services:
       - key: MARKET_DATA_PROVIDER
         value: quotex
       - key: AI_PROVIDER
-        value: mock
+        value: openrouter
+      - key: AI_API_KEY
+        sync: false
       - key: AI_MODEL
-        value: gpt-4o-mini
+        value: openai/gpt-4o-mini
       - key: UPLOAD_DIR
         value: uploads/patterns
 

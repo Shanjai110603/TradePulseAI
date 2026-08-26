@@ -38,9 +38,10 @@ class Settings(BaseSettings):
     MARKET_POLL_INTERVAL_SECONDS: int = 5
 
     # AI Provider
-    AI_PROVIDER: str = "mock"  # mock | openai | anthropic | gemini
+    AI_PROVIDER: str = "openrouter"  # mock | openrouter | openai | anthropic | gemini
     AI_API_KEY: Optional[str] = ""
-    AI_MODEL: str = "gpt-4o-mini"
+    OPENROUTER_API_KEY: Optional[str] = ""
+    AI_MODEL: str = "openai/gpt-4o-mini"
     AI_TEMPERATURE: float = 0.2
 
     # Storage
