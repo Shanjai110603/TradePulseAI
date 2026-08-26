@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
@@ -33,8 +34,10 @@ class TelegramUpdateHandler:
         chat_id = msg.get("chat", {}).get("id")
         user_info = msg.get("from", {})
         telegram_user_id = user_info.get("id")
-        username = user_info.get("username")
-        first_name = user_info.get("first_name", "Trader")
+        raw_first_name = user_info.get("first_name", "Trader")
+        first_name = html.escape(raw_first_name)
+        raw_username = user_info.get("username")
+        username = html.escape(raw_username) if raw_username else None
         text = msg.get("text", "").strip()
 
         if not text or not chat_id:

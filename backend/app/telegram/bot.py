@@ -54,10 +54,20 @@ class TelegramBotService:
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 resp = await client.post(url, json=msg_payload)
-                resp.raise_for_status()
-                return resp.json()
+                if resp.status_code == 200:
+                    return resp.json()
+                
+                # If HTML parsing fails (400 Bad Request), fallback to plain text
+                logger.warning(f"Telegram sendMessage returned {resp.status_code}: {resp.text}. Retrying without HTML formatting...")
+                fallback_payload = {**msg_payload, "parse_mode": None}
+                # Strip basic html tags for cleaner fallback
+                clean_text = text.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "").replace("<i>", "").replace("</i>", "")
+                fallback_payload["text"] = clean_text
+                fallback_resp = await client.post(url, json=fallback_payload)
+                fallback_resp.raise_for_status()
+                return fallback_resp.json()
             except Exception as e:
-                logger.error(f"Failed to send Telegram message: {e}")
+                logger.error(f"Failed to send Telegram message to {chat_id}: {e}")
                 return {"ok": False, "error": str(e)}
 
     async def edit_message_text(

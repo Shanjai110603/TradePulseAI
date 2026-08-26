@@ -76,8 +76,10 @@ class QuotexWebSocketClient:
     """
 
     WS_URLS = [
-        "wss://ws2.quotex.com/socket.io/?EIO=4&transport=websocket",
         "wss://ws.qxbroker.com/socket.io/?EIO=4&transport=websocket",
+        "wss://ws2.qxbroker.com/socket.io/?EIO=4&transport=websocket",
+        "wss://ws.quotex.io/socket.io/?EIO=4&transport=websocket",
+        "wss://ws2.quotex.io/socket.io/?EIO=4&transport=websocket",
     ]
 
     def __init__(self, ssid: str):
