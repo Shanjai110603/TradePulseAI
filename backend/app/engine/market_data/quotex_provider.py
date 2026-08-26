@@ -85,6 +85,7 @@ class QuotexWebSocketClient:
     def __init__(self, ssid: str):
         self.ssid = ssid
         self._candle_cache: Dict[str, List[dict]] = {}
+        self._cooldown_until = 0.0
 
     def _build_cookie_header(self) -> str:
         s = self.ssid.strip()
@@ -98,6 +99,9 @@ class QuotexWebSocketClient:
         Fetch candles from Quotex WebSocket.
         Returns list of dicts with keys: time, open, close, high, low
         """
+        if time.time() < self._cooldown_until:
+            return []
+
         end_time = int(time.time())
         received: List[dict] = []
         success = False
@@ -106,7 +110,7 @@ class QuotexWebSocketClient:
         for ws_url in self.WS_URLS:
             try:
                 headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                     "Cookie": cookie_hdr,
                     "Origin": "https://qxbroker.com",
                 }
@@ -188,7 +192,8 @@ class QuotexWebSocketClient:
                     break
 
             except Exception as e:
-                logger.warning(f"Quotex WS connection to {ws_url} failed: {e}")
+                logger.debug(f"Quotex WS connection to {ws_url} failed: {e}")
+                self._cooldown_until = time.time() + 180  # 3-min cooldown on rate-limit
                 continue
 
         return received
