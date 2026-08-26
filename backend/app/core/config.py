@@ -27,23 +27,23 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # Telegram Bot
-    TELEGRAM_BOT_TOKEN: Optional[str] = ""
+    TELEGRAM_BOT_TOKEN: Optional[str] = "8914871985:AAECsQhFgJhgnstQU6v-05IjprYYbGzckBw"
     TELEGRAM_WEBHOOK_URL: Optional[str] = ""
     TELEGRAM_WEBHOOK_SECRET: Optional[str] = ""
-    TELEGRAM_TEST_MODE: bool = True  # True enables local simulated Telegram test notifications
+    TELEGRAM_TEST_MODE: bool = False  # False connects to real Telegram Bot
 
     # Market Data
     MARKET_DATA_PROVIDER: str = "quotex"  # mock | binance | quotex
     MARKET_DATA_API_KEY: Optional[str] = ""
     MARKET_POLL_INTERVAL_SECONDS: int = 10
 
-    # Quotex Demo Account Credentials
-    QUOTEX_EMAIL: Optional[str] = ""
-    QUOTEX_PASSWORD: Optional[str] = ""
-    QUOTEX_SESSION_TOKEN: Optional[str] = ""  # SSID cookie from browser - enables live data
+    # Quotex Account Credentials
+    QUOTEX_EMAIL: Optional[str] = "logeshpythonbot@gmail.com"
+    QUOTEX_PASSWORD: Optional[str] = "BotForTraining@101"
+    QUOTEX_SESSION_TOKEN: Optional[str] = ""
 
     # AI Provider
-    AI_PROVIDER: str = "openrouter"  # mock | openrouter | openai | anthropic | gemini
+    AI_PROVIDER: str = "mock"  # Built-in deterministic quantitative AI engine
     AI_API_KEY: Optional[str] = ""
     OPENROUTER_API_KEY: Optional[str] = ""
     AI_MODEL: str = "openai/gpt-4o-mini"
