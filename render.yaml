@@ -1,0 +1,53 @@
+services:
+  # 1. FastAPI Backend & Telegram Poller
+  - type: web
+    name: tradepulse-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./tradepulse.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_TEST_MODE
+        value: "false"
+      - key: MARKET_DATA_PROVIDER
+        value: binance
+      - key: AI_PROVIDER
+        value: mock
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: UPLOAD_DIR
+        value: uploads/patterns
+
+  # 2. React + Tailwind Frontend Dashboard
+  - type: web
+    name: tradepulse-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: tradepulse-backend
+          envVarKey: RENDER_EXTERNAL_URL
+          property: host

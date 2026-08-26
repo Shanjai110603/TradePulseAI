@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0b0e14;
+    color: #f3f4f6;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+  }
+}
+
+/* Custom Cyber Glassmorphism & Glow styles */
+.glass-panel {
+  background-color: rgba(18, 23, 33, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid #222f44;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s ease-in-out;
+}
+.glass-panel-hover:hover {
+  border-color: rgba(0, 210, 255, 0.5);
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.25);
+}
+
+.glass-card {
+  background-color: rgba(25, 34, 49, 0.7);
+  border: 1px solid rgba(34, 47, 68, 0.8);
+  border-radius: 0.5rem;
+}
+
+/* Custom Colors & Utilities */
+.text-trade-up {
+  color: #00f298;
+}
+.bg-trade-up {
+  background-color: #00f298;
+}
+.text-trade-down {
+  color: #ff3366;
+}
+.bg-trade-down {
+  background-color: #ff3366;
+}
+.text-primary {
+  color: #00d2ff;
+}
+.bg-primary {
+  background-color: #00d2ff;
+}
+.bg-primary-hover:hover {
+  background-color: #00b4db;
+}
+.bg-surface {
+  background-color: #121721;
+}
+.bg-surface-raised {
+  background-color: #192231;
+}
+.border-surface-border {
+  border-color: #222f44;
+}
+.shadow-glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.25);
+}
+.shadow-glow-green {
+  box-shadow: 0 0 20px rgba(0, 242, 152, 0.25);
+}
+.shadow-glow-red {
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.25);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0e14;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222f44;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00d2ff;
+}
