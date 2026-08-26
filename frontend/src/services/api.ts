@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { AuthResponse, User, UserPreferences, Market, Asset, Candle, Pattern, PatternImage, Signal, BacktestResult, TelegramStatus, PerformanceOverview } from '../types';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://tradepulse-ai-cb07.onrender.com/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE,
