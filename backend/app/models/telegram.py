@@ -11,7 +11,7 @@ class TelegramAccount(Base, TimestampMixin):
     __tablename__ = "telegram_accounts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=False, nullable=True)
     telegram_user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, nullable=False)
     telegram_chat_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     telegram_username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -20,7 +20,7 @@ class TelegramAccount(Base, TimestampMixin):
     is_muted: Mapped[bool] = mapped_column(Boolean, default=False)
     muted_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped["User"] = relationship("User", back_populates="telegram_account")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="telegram_account")
     subscriptions: Mapped[List["SignalSubscription"]] = relationship("SignalSubscription", back_populates="telegram_account", cascade="all, delete-orphan")
 
 

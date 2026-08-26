@@ -50,14 +50,23 @@ class TelegramUpdateHandler:
         tg_acc = existing_res.scalar_one_or_none()
 
         if not tg_acc:
-            # Find default demo/admin user to associate with
+            # Create a virtual user record to guarantee FK & uniqueness compatibility
             from app.models.user import User
-            user_res = await db.execute(select(User).limit(1))
-            primary_user = user_res.scalar_one_or_none()
-            user_id = primary_user.id if primary_user else None
+            tg_email = f"tg_{chat_id}@tradepulse.ai"
+            user_check = await db.execute(select(User).where(User.email == tg_email))
+            tg_user = user_check.scalar_one_or_none()
+            if not tg_user:
+                tg_user = User(
+                    email=tg_email,
+                    hashed_password="!",
+                    full_name=first_name,
+                    is_active=True
+                )
+                db.add(tg_user)
+                await db.flush()
 
             tg_acc = TelegramAccount(
-                user_id=user_id,
+                user_id=tg_user.id,
                 telegram_user_id=telegram_user_id or chat_id,
                 telegram_chat_id=chat_id,
                 telegram_username=username,
