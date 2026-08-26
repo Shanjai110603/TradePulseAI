@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 from typing import AsyncGenerator
@@ -7,33 +8,40 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 
-# Normalize connection URL for async SQLAlchemy / Supabase
-db_url = settings.DATABASE_URL
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
-    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+logger = logging.getLogger(__name__)
 
-# Engine configuration
-engine_kwargs = {"echo": False}
-if "sqlite" in db_url:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
-elif "postgresql" in db_url:
-    engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_size"] = 10
-    engine_kwargs["max_overflow"] = 20
+
+def build_async_engine(database_url: str):
+    db_url = database_url
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
     # Clean pgbouncer parameter from query string if present
     if "?pgbouncer=true" in db_url:
         db_url = db_url.replace("?pgbouncer=true", "")
     elif "&pgbouncer=true" in db_url:
         db_url = db_url.replace("&pgbouncer=true", "")
-    if "pooler.supabase.com" in db_url or "6543" in db_url:
-        engine_kwargs["connect_args"] = {
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0
-        }
 
-async_engine = create_async_engine(db_url, **engine_kwargs)
+    engine_kwargs = {"echo": False}
+    if "sqlite" in db_url:
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+    elif "postgresql" in db_url:
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_size"] = 10
+        engine_kwargs["max_overflow"] = 20
+        if "pooler.supabase.com" in db_url or "6543" in db_url:
+            engine_kwargs["connect_args"] = {
+                "statement_cache_size": 0,
+                "prepared_statement_cache_size": 0
+            }
+
+    return create_async_engine(db_url, **engine_kwargs)
+
+
+# Initialize Primary Engine
+async_engine = build_async_engine(settings.DATABASE_URL)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
@@ -75,6 +83,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """Initializes the database schema and seeds essential data"""
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """
+    Initializes the database schema.
+    If remote PostgreSQL fails (DNS error or wrong password), automatically falls back to local SQLite.
+    """
+    global async_engine, AsyncSessionLocal
+    try:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema initialized successfully.")
+    except Exception as e:
+        logger.warning(f"Remote database connection failed ({e}). Falling back to local SQLite database...")
+        fallback_url = "sqlite+aiosqlite:///./tradepulse.db"
+        async_engine = build_async_engine(fallback_url)
+        AsyncSessionLocal.configure(bind=async_engine)
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Local SQLite database initialized and active.")
