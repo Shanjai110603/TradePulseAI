@@ -52,8 +52,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: tradepulse-backend
-          envVarKey: RENDER_EXTERNAL_URL
-          property: host
+        value: https://tradepulse-ai-cb07.onrender.com/api/v1
