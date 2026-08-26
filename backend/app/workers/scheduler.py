@@ -1,13 +1,16 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import AsyncSessionLocal
 from app.models.pattern import Pattern
 from app.models.signal import Signal, SignalEvent, SignalTechnicalSnapshot, SignalAIAnalysis, SignalResult
 from app.models.telegram import TelegramAccount
+from app.models.user import User
 from app.engine.market_data.manager import market_data_manager
 from app.engine.signals.evaluator import SignalEvaluationPipeline
 from app.engine.signals.tracker import SignalLifecycleTracker
@@ -57,7 +60,9 @@ class BackgroundScheduler:
     async def tick_pattern_evaluation(self):
         """Scans active user patterns against live/mock market data"""
         async with AsyncSessionLocal() as db:
-            query = select(Pattern).where(Pattern.is_active == True)
+            query = select(Pattern).options(
+                selectinload(Pattern.user).selectinload(User.preferences)
+            ).where(Pattern.is_active == True)
             res = await db.execute(query)
             active_patterns = res.scalars().all()
 
@@ -80,7 +85,7 @@ class BackgroundScheduler:
                         last_candle = candles[-1]
                         last_ts = datetime.fromtimestamp(last_candle.timestamp, tz=timezone.utc)
 
-                        dup_check = select(Signal).where(
+                        dup_check = select(Signal.id).where(
                             Signal.pattern_id == pattern.id,
                             Signal.asset_symbol == asset_symbol,
                             Signal.matched_candle_timestamp == last_ts
@@ -107,10 +112,19 @@ class BackgroundScheduler:
                             "ai_config": pattern.ai_config,
                         }
 
+                        user_prefs = None
+                        if pattern.user and pattern.user.preferences:
+                            prefs = pattern.user.preferences
+                            user_prefs = {
+                                "min_confidence_score": prefs.min_confidence_score,
+                                "require_mtf_confirmation": prefs.require_mtf_confirmation,
+                                "risk_per_trade_percent": prefs.risk_per_trade_percent
+                            }
+
                         is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
                             pattern_dict=pattern_dict,
                             candles=candles,
-                            user_preferences=pattern.user.preferences.__dict__ if pattern.user and pattern.user.preferences else None
+                            user_preferences=user_prefs
                         )
 
                         if is_created and sig_payload:
@@ -154,7 +168,7 @@ class BackgroundScheduler:
                             ai_data = sig_payload["ai_analysis"]
                             ai_analysis = SignalAIAnalysis(
                                 signal_id=new_signal.id,
-                                ai_provider=ai_data.get("raw_response", {}).get("engine", "mock_quantitative_ai"),
+                                ai_provider=ai_data.get("raw_response", {}).get("engine", "openrouter_ai"),
                                 bias=ai_data.get("bias", "BEARISH"),
                                 score=ai_data.get("score", 85),
                                 confidence=ai_data.get("confidence", "HIGH"),
@@ -245,28 +259,30 @@ class BackgroundScheduler:
                             data=event_info
                         ))
 
-                    if is_completed and not signal.result:
-                        # Record final result
-                        outcome = event_info.get("outcome", "WIN")
-                        pnl_pct = event_info.get("pnl_percentage", 0.0)
-                        
-                        # Post-signal AI debrief
-                        ai_mock = MockAIProvider()
-                        debrief = await ai_mock.post_signal_analysis(
-                            signal_data={"pattern_name": signal.pattern_name, "direction": signal.direction},
-                            outcome_data={"outcome": outcome, "exit_price": current_price},
-                            historical_candles=[]
-                        )
+                    if is_completed:
+                        # Check if result already recorded
+                        res_check = await db.execute(select(SignalResult).where(SignalResult.signal_id == signal.id))
+                        if not res_check.scalar_one_or_none():
+                            outcome = event_info.get("outcome", "WIN")
+                            pnl_pct = event_info.get("pnl_percentage", 0.0)
 
-                        result_record = SignalResult(
-                            signal_id=signal.id,
-                            outcome=outcome,
-                            exit_price=current_price,
-                            exit_time=datetime.now(timezone.utc),
-                            pnl_percentage=pnl_pct,
-                            post_analysis_notes=f"AI Alignment: {debrief.ai_alignment_score}%. Notes: {debrief.improvement_notes}"
-                        )
-                        db.add(result_record)
+                            # Post-signal AI debrief
+                            ai_mock = MockAIProvider()
+                            debrief = await ai_mock.post_signal_analysis(
+                                signal_data={"pattern_name": signal.pattern_name, "direction": signal.direction},
+                                outcome_data={"outcome": outcome, "exit_price": current_price},
+                                historical_candles=[]
+                            )
+
+                            result_record = SignalResult(
+                                signal_id=signal.id,
+                                outcome=outcome,
+                                exit_price=current_price,
+                                exit_time=datetime.now(timezone.utc),
+                                pnl_percentage=pnl_pct,
+                                post_analysis_notes=f"AI Alignment: {debrief.ai_alignment_score}%. Notes: {debrief.improvement_notes}"
+                            )
+                            db.add(result_record)
 
                     await db.commit()
 
