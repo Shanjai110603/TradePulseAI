@@ -46,6 +46,10 @@ async def seed_initial_data():
 
             prefs = UserPreferences(user_id=demo_user.id)
             db.add(prefs)
+        else:
+            # Ensure password hash is up to date
+            demo_user.hashed_password = get_password_hash("password123")
+            demo_user.is_active = True
 
             # Seed default Pattern Type 14
             p14 = Pattern(
