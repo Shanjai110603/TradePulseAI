@@ -199,19 +199,21 @@ class BackgroundScheduler:
 
                             await db.commit()
 
-                            # Dispatch Telegram notification if user has linked Telegram
+                            # Broadcast signal notification to ALL active Telegram subscribers
                             tg_query = select(TelegramAccount).where(
-                                TelegramAccount.user_id == pattern.user_id,
                                 TelegramAccount.is_active == True,
                                 TelegramAccount.is_muted == False
                             )
                             tg_res = await db.execute(tg_query)
-                            tg_acc = tg_res.scalar_one_or_none()
+                            subscribers = tg_res.scalars().all()
 
-                            if tg_acc:
-                                await telegram_service.send_signal_notification(tg_acc.telegram_chat_id, sig_payload)
+                            for sub in subscribers:
+                                try:
+                                    await telegram_service.send_signal_notification(sub.telegram_chat_id, sig_payload)
+                                except Exception as err:
+                                    logger.error(f"Failed to send signal to chat_id {sub.telegram_chat_id}: {err}")
 
-                            logger.info(f"Generated signal {new_signal.id} for pattern '{pattern.name}' on {asset_symbol}")
+                            logger.info(f"Broadcast signal {new_signal.id} for '{pattern.name}' on {asset_symbol} to {len(subscribers)} Telegram subscriber(s).")
 
                     except Exception as e:
                         logger.error(f"Error evaluating asset {asset_symbol} for pattern {pattern.name}: {e}")

@@ -40,30 +40,53 @@ class TelegramUpdateHandler:
         if not text or not chat_id:
             return
 
+        # Auto-register/subscribe EVERY user who messages the bot
+        existing_q = select(TelegramAccount).where(TelegramAccount.telegram_chat_id == chat_id)
+        existing_res = await db.execute(existing_q)
+        tg_acc = existing_res.scalar_one_or_none()
+
+        if not tg_acc:
+            # Find default demo/admin user to associate with
+            from app.models.user import User
+            user_res = await db.execute(select(User).limit(1))
+            primary_user = user_res.scalar_one_or_none()
+            user_id = primary_user.id if primary_user else None
+
+            tg_acc = TelegramAccount(
+                user_id=user_id,
+                telegram_user_id=telegram_user_id or chat_id,
+                telegram_chat_id=chat_id,
+                telegram_username=username,
+                first_name=first_name,
+                is_active=True,
+                is_muted=False
+            )
+            db.add(tg_acc)
+            await db.commit()
+            logger.info(f"Auto-subscribed new Telegram subscriber: {first_name} (chat_id={chat_id})")
+        else:
+            if not tg_acc.is_active:
+                tg_acc.is_active = True
+                await db.commit()
+
         # /start command
         if text.startswith("/start"):
-            parts = text.split()
-            if len(parts) > 1:
-                # User used deep-link start e.g. /start ABC123
-                link_code = parts[1].strip()
-                await cls._execute_link(chat_id, telegram_user_id, username, first_name, link_code, db)
-                return
-
             welcome = (
-                f"👋 <b>Welcome to TradePulse AI, {first_name}!</b>\n\n"
-                f"This bot delivers personalized, real-time market research and strategy signals directly to your Telegram.\n\n"
-                f"🔗 <b>To link your account:</b>\n"
-                f"1. Open your TradePulse Web Dashboard\n"
-                f"2. Go to <b>Settings > Telegram</b>\n"
-                f"3. Generate a linking code and send: <code>/link &lt;CODE&gt;</code>\n\n"
-                f"<b>Commands:</b>\n"
-                f"• <code>/link &lt;CODE&gt;</code> - Link web account\n"
-                f"• <code>/status</code> - Check connection & subscription status\n"
-                f"• <code>/mute</code> - Mute signal alerts\n"
-                f"• <code>/unmute</code> - Unmute signal alerts\n"
-                f"• <code>/help</code> - View help and guide"
+                f"🚀 <b>Welcome to TradePulse AI Signal Station, {first_name}!</b>\n\n"
+                f"✅ <b>You are automatically subscribed!</b>\n"
+                f"You will receive real-time, high-accuracy Quotex & Forex AI signals directly here as soon as our algorithmic scanners detect high-probability market setups.\n\n"
+                f"📊 <b>Active Market Scanners:</b>\n"
+                f"• Quotex OTC (EUR/USD, GBP/USD, USD/JPY, BTC/USDT, etc.)\n"
+                f"• High-Probability Multi-Timeframe Pattern Recognition\n"
+                f"• GPT-4o / OpenRouter AI Confidence Validation\n\n"
+                f"<b>Bot Commands:</b>\n"
+                f"• <code>/status</code> - Check your live signal subscription\n"
+                f"• <code>/mute</code> - Pause incoming signal alerts\n"
+                f"• <code>/unmute</code> - Resume signal alerts\n"
+                f"• <code>/help</code> - Explanation of signal cards & buttons"
             )
             await telegram_service.send_message(chat_id, welcome)
+            return
 
         # /link <CODE> command
         elif text.startswith("/link"):
