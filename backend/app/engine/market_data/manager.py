@@ -3,18 +3,20 @@ from app.core.config import settings
 from app.engine.market_data.base import MarketDataProvider
 from app.engine.market_data.mock_provider import MockDataProvider
 from app.engine.market_data.binance_provider import BinanceDataProvider
+from app.engine.market_data.quotex_provider import QuotexMarketDataProvider
 
 
 class MarketDataManager:
     """
     Registry and factory for market data providers.
-    Supports seamless switching between Mock, Binance, and future data providers.
+    Supports seamless switching between Mock, Binance, Quotex, and future data providers.
     """
 
     def __init__(self):
         self._providers: Dict[str, MarketDataProvider] = {
             "mock": MockDataProvider(),
             "binance": BinanceDataProvider(),
+            "quotex": QuotexMarketDataProvider(),
         }
         self._default_provider_name = settings.MARKET_DATA_PROVIDER
 

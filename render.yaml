@@ -23,7 +23,7 @@ services:
       - key: TELEGRAM_TEST_MODE
         value: "false"
       - key: MARKET_DATA_PROVIDER
-        value: binance
+        value: quotex
       - key: AI_PROVIDER
         value: mock
       - key: AI_MODEL
