@@ -86,11 +86,28 @@ async def seed_initial_data():
             db.add(p14)
             await db.flush()
 
+            snapshot = {
+                "name": p14.name,
+                "direction": p14.direction,
+                "timeframe": p14.timeframe,
+                "market_id": p14.market_id,
+                "assets_config": p14.assets_config,
+                "timeframes_config": p14.timeframes_config,
+                "trend_config": p14.trend_config,
+                "momentum_config": p14.momentum_config,
+                "volume_config": p14.volume_config,
+                "indicators_config": p14.indicators_config,
+                "rules_config": p14.rules_config,
+                "entry_config": p14.entry_config,
+                "target_config": p14.target_config,
+                "ai_config": p14.ai_config,
+                "notification_config": p14.notification_config
+            }
             v1 = PatternVersion(
                 pattern_id=p14.id,
                 version_number=1,
                 change_summary="System reference Pattern Type 14",
-                config_snapshot=p14.__dict__
+                config_snapshot=snapshot
             )
             db.add(v1)
             await db.commit()
