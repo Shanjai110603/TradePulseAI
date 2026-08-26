@@ -22,8 +22,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       if (token) {
-        const u = await authApi.getMe();
-        setUser(u);
+        // 10s timeout so loading never hangs when Render backend is waking up
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+          const u = await authApi.getMe();
+          clearTimeout(timeoutId);
+          setUser(u);
+        } catch (inner: any) {
+          clearTimeout(timeoutId);
+          // If abort or network error, clear token and redirect to login
+          localStorage.removeItem('tradepulse_token');
+          setToken(null);
+          setUser(null);
+        }
       } else {
         setUser(null);
       }
