@@ -18,6 +18,7 @@ from app.engine.market_data.manager import market_data_manager
 from app.engine.signals.evaluator import SignalEvaluationPipeline
 from app.engine.signals.tracker import SignalLifecycleTracker
 from app.engine.charts.chart_generator import TradeChartGenerator
+from app.engine.ai.mock_ai import MockAIProvider
 from app.telegram.bot import telegram_service
 
 logger = logging.getLogger(__name__)
