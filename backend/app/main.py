@@ -132,6 +132,75 @@ async def seed_initial_data():
             await db.commit()
             logger.info("Pattern Type 1 seeded successfully.")
 
+        # Seed Pattern Type 15 (V-Pattern Resistance Rejection)
+        p15_res = await db.execute(
+            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 15")
+        )
+        if not p15_res.scalar_one_or_none():
+            logger.info("Seeding Pattern Type 15 template...")
+            p15 = Pattern(
+                user_id=demo_user.id,
+                name="Pattern Type 15",
+                description="If market makes a movement in 'V' Pattern and breakout the horizontal line then a sure shot will take place in opposite direction.",
+                market_id="digital_options",
+                direction="DOWN",
+                timeframe="1M",
+                is_active=True,
+                current_version=1,
+                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
+                timeframes_config={"1M": "Any"},
+                trend_config={"required": "Any"},
+                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 75},
+                volume_config={},
+                indicators_config=[],
+                rules_config={
+                    "operator": "AND",
+                    "conditions": [
+                        {
+                            "type": "pattern_type_15",
+                            "params": {
+                                "lookback": 10
+                            }
+                        }
+                    ]
+                },
+                entry_config={"type": "immediate"},
+                target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
+                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
+            )
+            db.add(p15)
+            await db.flush()
+
+            # Attach visual reference image
+            img15 = PatternImage(
+                pattern_id=p15.id,
+                file_path="/uploads/patterns/pattern_type_15.jpg",
+                file_name="pattern_type_15.jpg",
+                file_size=68940,
+                mime_type="image/jpeg",
+                is_primary=True,
+                description="Visual reference for Pattern Type 15: V-Pattern rally rejecting horizontal line with upper wick"
+            )
+            db.add(img15)
+
+            v15 = PatternVersion(
+                pattern_id=p15.id,
+                version_number=1,
+                change_summary="System reference Pattern Type 15 (V-Pattern Reversal)",
+                config_snapshot={
+                    "name": p15.name,
+                    "direction": p15.direction,
+                    "timeframe": p15.timeframe,
+                    "market_id": p15.market_id,
+                    "rules_config": p15.rules_config,
+                    "target_config": p15.target_config
+                }
+            )
+            db.add(v15)
+            await db.commit()
+            logger.info("Pattern Type 15 seeded successfully.")
+
         # Seed Pattern Type 14 only if it doesn't exist yet
         pat_res = await db.execute(
             select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 14")

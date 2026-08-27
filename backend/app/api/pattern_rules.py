@@ -34,6 +34,56 @@ async def get_rule_templates() -> List[Dict[str, Any]]:
             "ai_config": {"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"}
         },
         {
+            "id": "pattern_type_15",
+            "name": "Pattern Type 15 (V-Pattern Resistance Rejection)",
+            "description": "Market completes a 'V' recovery pattern, tests the horizontal resistance line with upper wick rejection, and triggers a high-probability DOWN reversal signal.",
+            "market_id": "digital_options",
+            "direction": "DOWN",
+            "timeframe": "1M",
+            "trend_config": {"required": "Any"},
+            "momentum_config": {"strength": "Strong", "rsi_min": 0, "rsi_max": 75},
+            "volume_config": {},
+            "rules_config": {
+                "operator": "AND",
+                "conditions": [
+                    {
+                        "type": "pattern_type_15",
+                        "params": {
+                            "lookback": 10
+                        }
+                    }
+                ]
+            },
+            "entry_config": {"type": "immediate"},
+            "target_config": {"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+            "ai_config": {"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"}
+        },
+        {
+            "id": "pattern_type_15_inverted",
+            "name": "Inverted Pattern Type 15 (Inverted V Support Bounce)",
+            "description": "Market completes an inverted 'V' drop, tests horizontal support with lower wick bounce, and triggers a high-probability UP reversal signal.",
+            "market_id": "digital_options",
+            "direction": "UP",
+            "timeframe": "1M",
+            "trend_config": {"required": "Any"},
+            "momentum_config": {"strength": "Strong", "rsi_min": 25, "rsi_max": 100},
+            "volume_config": {},
+            "rules_config": {
+                "operator": "AND",
+                "conditions": [
+                    {
+                        "type": "pattern_type_15_inverted",
+                        "params": {
+                            "lookback": 10
+                        }
+                    }
+                ]
+            },
+            "entry_config": {"type": "immediate"},
+            "target_config": {"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+            "ai_config": {"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BULLISH"}
+        },
+        {
             "id": "pattern_type_14",
             "name": "Pattern Type 14 (Breakdown Confirmation)",
             "description": "Bearish initial candle followed by 2 bullish candles establishing a support base, followed by a bearish breakdown closing below support.",
@@ -124,6 +174,20 @@ async def get_rule_primitives() -> Dict[str, Any]:
                 "label": "Pattern Type 1 (2 Green + 1 Red under SMC 10)",
                 "params": [
                     {"name": "smc_period", "type": "int", "default": 10, "label": "SMC Moving Average Period"}
+                ]
+            },
+            {
+                "type": "pattern_type_15",
+                "label": "Pattern Type 15 (V-Pattern Resistance Rejection)",
+                "params": [
+                    {"name": "lookback", "type": "int", "default": 10, "label": "V-Pattern Candle Lookback"}
+                ]
+            },
+            {
+                "type": "pattern_type_15_inverted",
+                "label": "Inverted Pattern Type 15 (Inverted V Support Bounce)",
+                "params": [
+                    {"name": "lookback", "type": "int", "default": 10, "label": "Inverted V Candle Lookback"}
                 ]
             },
             {

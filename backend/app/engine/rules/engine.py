@@ -283,6 +283,14 @@ class PatternRuleEngine:
         if p_type == "pattern_type_1":
             return cls._evaluate_pattern_type_1(candles, params, snapshot)
 
+        # Specialized Pattern Type 15 Primitive (V-Pattern Resistance Rejection)
+        elif p_type == "pattern_type_15":
+            return cls._evaluate_pattern_type_15(candles, params, snapshot)
+
+        # Inverted Pattern Type 15 Primitive (Inverted V Support Bounce for UP Signals)
+        elif p_type == "pattern_type_15_inverted":
+            return cls._evaluate_pattern_type_15_inverted(candles, params, snapshot)
+
         # Specialized Pattern Type 14 Primitive
         elif p_type == "pattern_type_14":
             return cls._evaluate_pattern_type_14(candles, params)
@@ -536,6 +544,113 @@ class PatternRuleEngine:
             "smc_10_line": smc_10_line,
             "resistance_level": smc_10_line,
             "direction": "DOWN",
+            "expiry_duration_minutes": 1,
+            "timeframe": "1M"
+        }
+
+    # ---------------------------------------------------------
+    # Pattern Type 15 Deterministic Evaluator (V-Pattern Rejection)
+    # ---------------------------------------------------------
+
+    @classmethod
+    def _evaluate_pattern_type_15(
+        cls,
+        candles: List[Candle],
+        params: Dict[str, Any],
+        snapshot: Dict[str, Any]
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Pattern Type 15 Specification (V-Pattern Rejection):
+        "If market makes a movement in 'V' Pattern and breakout the horizontal line
+        then a sure shot will take place in opposite direction."
+
+        Rules:
+        1. Requires at least 6-15 candles to form the V-shape.
+        2. Identify left swing high / horizontal resistance level before the drop.
+        3. Identify swing low bottom (vertex of the 'V').
+        4. Right side rallies back up to test / pierce the horizontal line.
+        5. Trigger candle shows upper wick rejection or closes as a reversal red candle.
+        6. Confirms DOWN / PUT signal for 1-minute expiration.
+        """
+        lookback = params.get("lookback", 10)
+        if len(candles) < lookback + 2:
+            return False, f"Pattern Type 15 requires at least {lookback + 2} candles, got {len(candles)}", {}
+
+        trigger_candle = candles[-1]
+        preceding = candles[-(lookback + 2) : -1]
+
+        # Trigger candle must exhibit rejection: bearish candle OR prominent upper shadow
+        upper_wick = trigger_candle.high - max(trigger_candle.open, trigger_candle.close)
+        body = abs(trigger_candle.close - trigger_candle.open)
+
+        if not trigger_candle.is_bearish and upper_wick < (body * 0.4):
+            return False, f"Trigger candle lacks upper wick rejection or bearish close (upper_wick={upper_wick:.5f}, body={body:.5f})", {}
+
+        # Horizontal line from left half of preceding candles
+        half = len(preceding) // 2
+        left_window = preceding[:half]
+        if not left_window:
+            return False, "Insufficient left window for horizontal line", {}
+
+        horizontal_line = max(c.high for c in left_window)
+        swing_low = min(c.low for c in preceding)
+
+        # Trigger candle must reach or pierce horizontal line
+        if trigger_candle.high < horizontal_line * 0.9992:
+            return False, f"Trigger candle high ({trigger_candle.high}) did not reach horizontal resistance ({horizontal_line:.5f})", {}
+
+        return True, f"Pattern Type 15 Confirmed: V-Pattern rally rejected at horizontal line ({horizontal_line:.5f}) with upper wick", {
+            "pattern_name": "Pattern Type 15",
+            "horizontal_line": horizontal_line,
+            "resistance_level": horizontal_line,
+            "swing_low": swing_low,
+            "direction": "DOWN",
+            "expiry_duration_minutes": 1,
+            "timeframe": "1M"
+        }
+
+    @classmethod
+    def _evaluate_pattern_type_15_inverted(
+        cls,
+        candles: List[Candle],
+        params: Dict[str, Any],
+        snapshot: Dict[str, Any]
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Inverted Pattern Type 15 Specification (Inverted V / Mountain Pattern Support Bounce):
+        "If market makes an inverted 'V' Pattern and tests the horizontal support line,
+        a reversal take place in UP direction."
+        """
+        lookback = params.get("lookback", 10)
+        if len(candles) < lookback + 2:
+            return False, f"Inverted Pattern Type 15 requires at least {lookback + 2} candles, got {len(candles)}", {}
+
+        trigger_candle = candles[-1]
+        preceding = candles[-(lookback + 2) : -1]
+
+        lower_wick = min(trigger_candle.open, trigger_candle.close) - trigger_candle.low
+        body = abs(trigger_candle.close - trigger_candle.open)
+
+        if not trigger_candle.is_bullish and lower_wick < (body * 0.4):
+            return False, "Trigger candle lacks lower wick bounce or bullish close", {}
+
+        half = len(preceding) // 2
+        left_window = preceding[:half]
+        if not left_window:
+            return False, "Insufficient left window for horizontal line", {}
+
+        horizontal_line = min(c.low for c in left_window)
+        swing_high = max(c.high for c in preceding)
+
+        if trigger_candle.low > horizontal_line * 1.0008:
+            return False, f"Trigger candle low ({trigger_candle.low}) did not reach horizontal support ({horizontal_line:.5f})", {}
+
+        return True, f"Inverted Pattern Type 15 Confirmed: Inverted V bounce at horizontal line ({horizontal_line:.5f}) with lower wick", {
+            "pattern_name": "Inverted Pattern Type 15",
+            "horizontal_line": horizontal_line,
+            "support_level": horizontal_line,
+            "swing_high": swing_high,
+            "direction": "UP",
             "expiry_duration_minutes": 1,
             "timeframe": "1M"
         }
