@@ -62,22 +62,14 @@ export const Navbar: React.FC = () => {
 
       {/* Right Controls */}
       <div className="flex items-center space-x-4">
-        {/* Telegram Status Badge */}
+        {/* Telegram Broadcast Badge */}
         <Link
           to="/settings/telegram"
-          className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-            tgStatus?.is_linked
-              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/50'
-              : 'bg-surface-raised text-primary border-primary/30 hover:border-primary/60 hover:shadow-glow-cyan'
-          }`}
+          className="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-emerald-950/60 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/60 transition-all shadow-glow-green"
         >
           <Send className="w-3.5 h-3.5" />
-          <span>{tgStatus?.is_linked ? 'Telegram Linked' : 'Connect Telegram'}</span>
-          {tgStatus?.is_linked ? (
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-          )}
+          <span>Telegram Live</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </Link>
 
         {/* User Profile Menu */}

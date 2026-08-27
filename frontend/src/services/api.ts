@@ -148,6 +148,10 @@ export const telegramApi = {
     const res = await api.get('/telegram/status');
     return res.data;
   },
+  getSubscribers: async () => {
+    const res = await api.get('/telegram/subscribers');
+    return res.data;
+  },
   sendTestNotification: async () => {
     const res = await api.post('/telegram/test-notification');
     return res.data;

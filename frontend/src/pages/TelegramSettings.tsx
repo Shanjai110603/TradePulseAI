@@ -3,199 +3,287 @@ import { telegramApi } from '../services/api';
 import { TelegramStatus } from '../types';
 import { 
   Send, 
-  KeyRound, 
-  Copy, 
-  Check, 
+  Users, 
   CheckCircle2, 
   AlertCircle, 
-  Bell, 
+  Radio, 
   ExternalLink, 
+  Zap, 
   ShieldCheck, 
-  Radio 
+  RefreshCw,
+  Clock,
+  Sparkles
 } from 'lucide-react';
+
+interface Subscriber {
+  id: string;
+  telegram_user_id: number;
+  telegram_chat_id: number;
+  telegram_username: string | null;
+  first_name: string | null;
+  is_active: boolean;
+  is_muted: boolean;
+  created_at: string;
+}
 
 export const TelegramSettings: React.FC = () => {
   const [status, setStatus] = useState<TelegramStatus | null>(null);
-  const [linkCode, setLinkCode] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testSent, setTestSent] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-  const loadStatus = async () => {
+  const loadData = async () => {
+    setLoading(true);
     try {
-      const st = await telegramApi.getStatus();
+      const [st, subs] = await Promise.all([
+        telegramApi.getStatus(),
+        telegramApi.getSubscribers()
+      ]);
       setStatus(st);
+      setSubscribers(subs || []);
     } catch (e) {
-      console.error(e);
+      console.error('Failed to load Telegram broadcast data:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadStatus();
+    loadData();
+    const interval = setInterval(loadData, 15000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleGenerateCode = async () => {
-    setGenerating(true);
-    try {
-      const res = await telegramApi.generateLinkCode();
-      setLinkCode(res.code);
-      setExpiresAt(new Date(res.expires_at).toLocaleTimeString());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleCopy = () => {
-    if (linkCode) {
-      navigator.clipboard.writeText(`/link ${linkCode}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleSendTest = async () => {
+  const handleSendBroadcast = async () => {
     setTesting(true);
+    setFeedback(null);
     try {
-      await telegramApi.sendTestNotification();
-      setTestSent(true);
-      setTimeout(() => setTestSent(false), 4000);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to send test notification. Please verify account is linked.');
+      const res = await telegramApi.sendTestNotification();
+      setFeedback(`✅ ${res.message || 'Signal card dispatched to all subscribers!'}`);
+      setTimeout(() => setFeedback(null), 5000);
+      loadData();
+    } catch (err: any) {
+      setFeedback(`⚠️ ${err.response?.data?.detail || 'Failed to dispatch test signal.'}`);
+      setTimeout(() => setFeedback(null), 5000);
     } finally {
       setTesting(false);
     }
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div>
+    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-700/60 flex items-center justify-center text-primary shadow-glow-cyan">
-            <Send className="w-5 h-5" />
+          <div className="w-11 h-11 rounded-xl bg-cyan-950/80 border border-cyan-700/60 flex items-center justify-center text-primary shadow-glow-cyan">
+            <Send className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-wide">Telegram Signal Station</h1>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xl font-bold text-white tracking-wide">Telegram Broadcast Station</h1>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-700/60 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                24/7 AUTO-BROADCAST ACTIVE
+              </span>
+            </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              Securely link your Telegram account to receive real-time research signal cards with interactive buttons.
+              Zero linking codes needed. Every trader who interacts with the bot is instantly subscribed to live Quotex AI signals.
             </p>
           </div>
         </div>
+
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="px-3 py-1.5 bg-surface-dark border border-surface-border text-gray-300 hover:text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <a
+            href={`https://t.me/${status?.bot_username || 'Logutrader_bot'}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow-glow-cyan transition"
+          >
+            <span>Open @{status?.bot_username || 'Logutrader_bot'}</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
       </div>
 
-      {/* Main Connection Card */}
-      <div className="glass-panel p-6 space-y-6">
-        <div className="flex items-center justify-between border-b border-surface-border/80 pb-4">
-          <div className="flex items-center space-x-3">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                status?.is_linked ? 'bg-emerald-400 shadow-glow-green animate-pulse' : 'bg-gray-500'
-              }`}
-            />
-            <div>
-              <h2 className="font-semibold text-sm text-white">Connection Status</h2>
-              <p className="text-xs text-gray-400">
-                {status?.is_linked
-                  ? `Linked to chat ID: ${status.telegram_chat_id}`
-                  : 'No Telegram account currently linked to your session.'}
-              </p>
-            </div>
+      {/* Broadcast Summary Card */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="glass-panel p-5 space-y-2">
+          <div className="flex items-center justify-between text-gray-400 text-xs font-semibold">
+            <span>Broadcasting Bot</span>
+            <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
           </div>
+          <div className="text-xl font-bold text-white tracking-wide flex items-center space-x-2">
+            <span>@{status?.bot_username || 'Logutrader_bot'}</span>
+          </div>
+          <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Connected & Polling 24/7
+          </p>
+        </div>
 
-          <span
-            className={`text-xs font-mono font-bold px-3 py-1 rounded-full ${
-              status?.is_linked
-                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                : 'bg-surface-raised text-gray-400 border border-surface-border'
-            }`}
+        <div className="glass-panel p-5 space-y-2">
+          <div className="flex items-center justify-between text-gray-400 text-xs font-semibold">
+            <span>Active Subscribers</span>
+            <Users className="w-4 h-4 text-blue-400" />
+          </div>
+          <div className="text-2xl font-bold text-white tracking-wide">
+            {subscribers.filter(s => s.is_active && !s.is_muted).length} <span className="text-sm font-normal text-gray-400">Traders</span>
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Auto-subscribed upon sending <code className="text-cyan-300">/start</code>
+          </p>
+        </div>
+
+        <div className="glass-panel p-5 space-y-2">
+          <div className="flex items-center justify-between text-gray-400 text-xs font-semibold">
+            <span>Signal Dispatch Engine</span>
+            <Zap className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-lg font-bold text-white">
+            Quotex 1M OTC Scanner
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Multi-timeframe AI confirmation active
+          </p>
+        </div>
+      </div>
+
+      {/* Instant Broadcast Control */}
+      <div className="glass-panel p-6 space-y-4 border border-cyan-900/40 bg-cyan-950/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-cyan-400" /> Instant Signal Dispatch Test
+            </h3>
+            <p className="text-xs text-gray-300">
+              Dispatches an enriched <b>Pattern Type 14</b> interactive signal card directly to all active Telegram subscribers.
+            </p>
+          </div>
+          <button
+            onClick={handleSendBroadcast}
+            disabled={testing || subscribers.length === 0}
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-glow-green transition whitespace-nowrap"
           >
-            {status?.is_linked ? 'ACTIVE & CONNECTED' : 'NOT LINKED'}
+            {testing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            <span>{testing ? 'Broadcasting...' : 'Broadcast Test Signal Now'}</span>
+          </button>
+        </div>
+
+        {feedback && (
+          <div className={`p-3 rounded-lg text-xs font-medium ${
+            feedback.startsWith('✅') 
+              ? 'bg-emerald-950/80 border border-emerald-700/60 text-emerald-300' 
+              : 'bg-amber-950/80 border border-amber-700/60 text-amber-300'
+          }`}>
+            {feedback}
+          </div>
+        )}
+      </div>
+
+      {/* Subscriber Management Table */}
+      <div className="glass-panel p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-surface-border pb-3">
+          <div className="flex items-center space-x-2">
+            <Users className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+              Subscribed Telegram Traders ({subscribers.length})
+            </h2>
+          </div>
+          <span className="text-xs text-gray-400">
+            Real-time subscriber registry
           </span>
         </div>
 
-        {/* Step-by-Step Linking Instructions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-gray-400">
-              How to Connect:
-            </h3>
-            <ol className="list-decimal list-inside text-xs space-y-2.5 text-gray-300 font-mono">
-              <li>Click the button to generate a secure 6-character linking code.</li>
-              <li>
-                Open the Telegram bot:{' '}
-                <a
-                  href={`https://t.me/${status?.bot_username || 'TradePulseAIBot'}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:underline font-bold inline-flex items-center gap-1"
-                >
-                  @{status?.bot_username || 'TradePulseAIBot'}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-              <li>Send the command: <code className="text-white bg-surface-raised px-1.5 py-0.5 rounded">/link &lt;CODE&gt;</code></li>
-              <li>Your workstation is instantly connected!</li>
-            </ol>
-
-            <button
-              onClick={handleGenerateCode}
-              disabled={generating}
-              className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-black rounded-xl font-bold text-xs font-mono transition-all shadow-glow-cyan flex items-center gap-2"
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>{generating ? 'Generating...' : 'Generate New Linking Code'}</span>
-            </button>
-          </div>
-
-          {/* Code Display Area */}
-          <div className="glass-card p-5 flex flex-col justify-between space-y-4">
-            <div>
-              <span className="text-[10px] font-mono text-gray-500 block">TEMPORARY LINKING CODE</span>
-              {linkCode ? (
-                <div className="mt-2 space-y-2">
-                  <div className="flex items-center justify-between bg-surface p-3 rounded-lg border border-primary/50">
-                    <span className="font-mono text-2xl font-bold tracking-widest text-primary">
-                      {linkCode}
-                    </span>
-                    <button
-                      onClick={handleCopy}
-                      className="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded text-xs font-mono flex items-center gap-1 transition-colors"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Copied!' : 'Copy'}</span>
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-gray-400 font-mono">
-                    Expires at: <span className="text-white">{expiresAt}</span> (Valid for 15 mins)
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-4 py-8 text-center text-gray-500 font-mono text-xs">
-                  Click "Generate New Linking Code" to begin.
-                </div>
-              )}
+        {subscribers.length === 0 ? (
+          <div className="py-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-surface-dark border border-surface-border flex items-center justify-center mx-auto text-gray-500">
+              <Users className="w-6 h-6" />
             </div>
-
-            {/* Test Notification Dispatch Button */}
-            {status?.is_linked && (
-              <div className="pt-3 border-t border-surface-border/60">
-                <button
-                  onClick={handleSendTest}
-                  disabled={testing}
-                  className="w-full py-2 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg text-xs font-mono font-semibold transition-colors flex items-center justify-center gap-2"
-                >
-                  <Radio className="w-3.5 h-3.5" />
-                  <span>{testSent ? 'Alert Dispatched to Telegram!' : 'Send Sample Pattern 14 Alert'}</span>
-                </button>
-              </div>
-            )}
+            <p className="text-sm text-gray-300 font-semibold">No Telegram Subscribers Yet</p>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              Open <b>@{status?.bot_username || 'Logutrader_bot'}</b> on Telegram and tap <b>/start</b> to immediately appear here and receive live signals!
+            </p>
+            <a
+              href={`https://t.me/${status?.bot_username || 'Logutrader_bot'}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/50 text-cyan-300 rounded-lg text-xs font-bold transition"
+            >
+              <span>Open Telegram Bot</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-surface-border text-gray-400">
+                  <th className="pb-3 font-semibold">Trader / Name</th>
+                  <th className="pb-3 font-semibold">Telegram ID</th>
+                  <th className="pb-3 font-semibold">Chat ID</th>
+                  <th className="pb-3 font-semibold">Status</th>
+                  <th className="pb-3 font-semibold">Subscribed Since</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-border/50">
+                {subscribers.map((sub) => (
+                  <tr key={sub.id} className="hover:bg-white/[0.02] transition">
+                    <td className="py-3 font-medium text-white flex items-center space-x-2">
+                      <div className="w-7 h-7 rounded-full bg-cyan-950 border border-cyan-700/60 flex items-center justify-center text-cyan-400 font-bold text-[10px]">
+                        {(sub.first_name || sub.telegram_username || 'T').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div>{sub.first_name || 'Anonymous Trader'}</div>
+                        {sub.telegram_username && (
+                          <div className="text-[10px] text-gray-500">@{sub.telegram_username}</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 text-gray-300 font-mono text-[11px]">{sub.telegram_user_id}</td>
+                    <td className="py-3 text-gray-300 font-mono text-[11px]">{sub.telegram_chat_id}</td>
+                    <td className="py-3">
+                      {sub.is_active && !sub.is_muted ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 rounded-full">
+                          ACTIVE (Receiving)
+                        </span>
+                      ) : sub.is_muted ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-800 rounded-full">
+                          MUTED
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-gray-800 text-gray-400 rounded-full">
+                          PAUSED
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 text-gray-400 text-[11px]">
+                      {new Date(sub.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Information Box */}
+      <div className="glass-panel p-5 border border-surface-border text-xs text-gray-400 space-y-2">
+        <div className="flex items-center space-x-2 text-white font-semibold">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span>How Broadcaster Works</span>
         </div>
+        <p className="leading-relaxed">
+          The background market scanner checks Quotex OTC 1-Minute candles on AWS every 10 seconds. When algorithmic pattern criteria (Momentum, Reversal, or Pattern Type 14) are satisfied and validated by AI confidence score, the server automatically broadcasts rich interactive signal cards to all subscribers listed above simultaneously.
+        </p>
       </div>
     </div>
   );

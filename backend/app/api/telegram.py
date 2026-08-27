@@ -89,22 +89,52 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
     return {"ok": True}
 
 
+@router.get("/subscribers")
+async def get_telegram_subscribers(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns all active Telegram subscribers receiving signals"""
+    query = select(TelegramAccount).order_by(TelegramAccount.created_at.desc())
+    res = await db.execute(query)
+    subscribers = res.scalars().all()
+    return [
+        {
+            "id": s.id,
+            "telegram_user_id": s.telegram_user_id,
+            "telegram_chat_id": s.telegram_chat_id,
+            "telegram_username": s.telegram_username,
+            "first_name": s.first_name,
+            "is_active": s.is_active,
+            "is_muted": s.is_muted,
+            "created_at": s.created_at
+        }
+        for s in subscribers
+    ]
+
+
 @router.post("/test-notification")
 async def trigger_test_notification(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Sends a sample Pattern Type 14 signal alert card to the user's linked Telegram"""
-    query = select(TelegramAccount).where(TelegramAccount.user_id == current_user.id)
+    """Broadcasts a sample Pattern Type 14 signal alert card to ALL active Telegram subscribers"""
+    query = select(TelegramAccount).where(
+        TelegramAccount.is_active == True,
+        TelegramAccount.is_muted == False
+    )
     res = await db.execute(query)
-    tg_acc = res.scalar_one_or_none()
+    subscribers = res.scalars().all()
 
-    if not tg_acc:
-        raise HTTPException(status_code=400, detail="Telegram account is not linked. Generate a code first.")
+    if not subscribers:
+        raise HTTPException(
+            status_code=400, 
+            detail="No active Telegram subscribers found. Open @Logutrader_bot on Telegram and send /start to auto-subscribe!"
+        )
 
     sample_signal = {
         "id": "sample-sig-14",
-        "asset_symbol": "EUR/USD",
+        "asset_symbol": "EUR/USD (OTC)",
         "direction": "DOWN",
         "reference_price": 1.08542,
         "entry_time": datetime.now(timezone.utc),
@@ -137,10 +167,17 @@ async def trigger_test_notification(
             "structure_assessment": "Clean 2-bullish base support breakdown",
             "entry_quality": "High immediate continuation potential",
             "risk_assessment": "Low to Moderate risk with tight invalidation",
-            "reasoning": "Pattern Type 14 detected with strong confluence on EUR/USD.",
-            "risks": ["Potential retest at 1.08560", "News release window at bottom of hour"]
+            "reasoning": "Pattern Type 14 detected with strong confluence on EUR/USD (OTC).",
+            "risks": ["Potential retest at 1.08560", "OTC Volatility Spike"]
         }
     }
 
-    result = await telegram_service.send_signal_notification(tg_acc.telegram_chat_id, sample_signal)
-    return {"message": "Test notification dispatched", "telegram_result": result}
+    dispatched = 0
+    for sub in subscribers:
+        try:
+            await telegram_service.send_signal_notification(sub.telegram_chat_id, sample_signal)
+            dispatched += 1
+        except Exception as e:
+            logger.error(f"Failed to dispatch test signal to chat {sub.telegram_chat_id}: {e}")
+
+    return {"message": f"Test signal alert card dispatched to {dispatched} subscriber(s)", "subscribers_count": dispatched}

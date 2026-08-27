@@ -84,13 +84,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     """
-    Initializes the database schema.
-    If remote PostgreSQL fails (DNS error or wrong password), automatically falls back to local SQLite.
+    Initializes the database schema and performs migrations for BigInteger telegram IDs.
     """
     global async_engine, AsyncSessionLocal
     try:
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # Ensure 64-bit BigInt on PostgreSQL for Telegram accounts
+            if "postgresql" in str(async_engine.url):
+                try:
+                    from sqlalchemy import text
+                    await conn.execute(text("ALTER TABLE telegram_accounts ALTER COLUMN telegram_user_id TYPE BIGINT;"))
+                    await conn.execute(text("ALTER TABLE telegram_accounts ALTER COLUMN telegram_chat_id TYPE BIGINT;"))
+                except Exception as migration_err:
+                    logger.debug(f"PostgreSQL BigInt migration notice: {migration_err}")
         logger.info("Database schema initialized successfully.")
     except Exception as e:
         logger.warning(f"Remote database connection failed ({e}). Falling back to local SQLite database...")

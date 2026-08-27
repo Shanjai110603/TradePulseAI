@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, Boolean, JSON, Integer, ForeignKey, DateTime
+from sqlalchemy import String, Boolean, JSON, Integer, BigInteger, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin
@@ -15,8 +15,8 @@ class TelegramAccount(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=False, nullable=True)
-    telegram_user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, nullable=False)
-    telegram_chat_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     telegram_username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
