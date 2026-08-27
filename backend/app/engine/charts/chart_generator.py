@@ -8,16 +8,26 @@ from app.engine.market_data.base import Candle
 
 
 def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
-    """Robust TrueType font loader across Linux Ubuntu Docker & Windows"""
+    """Robust TrueType font loader with bundled repository fonts"""
+    base_dir = os.path.dirname(__file__)
+    bundled_bold = os.path.join(base_dir, "fonts", "Arial-Bold.ttf")
+    bundled_reg = os.path.join(base_dir, "fonts", "Arial-Regular.ttf")
+
+    if bold and os.path.exists(bundled_bold):
+        try:
+            return ImageFont.truetype(bundled_bold, size)
+        except Exception:
+            pass
+    elif not bold and os.path.exists(bundled_reg):
+        try:
+            return ImageFont.truetype(bundled_reg, size)
+        except Exception:
+            pass
+
     candidates = [
-        "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
-        "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf",
-        "arialbd.ttf" if bold else "arial.ttf",
-        "Arial Bold.ttf" if bold else "Arial.ttf",
-        "FreeSansBold.ttf" if bold else "FreeSans.ttf",
-        "Ubuntu-Bold.ttf" if bold else "Ubuntu-R.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
+        "arialbd.ttf" if bold else "arial.ttf",
         "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
     ]
     for path in candidates:

@@ -77,14 +77,15 @@ class BackgroundScheduler:
             signal_generated_in_tick = False
             now_ts = time.time()
 
-            # Query all active Telegram subscribers
-            tg_query = select(TelegramAccount).where(
-                (TelegramAccount.is_muted == False) | (TelegramAccount.is_muted == None)
-            )
-            tg_res = await db.execute(tg_query)
-            subscribers = tg_res.scalars().all()
+            # Query all registered Telegram subscribers
+            tg_res = await db.execute(select(TelegramAccount))
+            all_accounts = tg_res.scalars().all()
+            subscribers = [
+                acc for acc in all_accounts
+                if acc.telegram_chat_id and getattr(acc, "is_muted", False) is not True
+            ]
 
-            logger.info(f"[SCHEDULER] Active subscribers: {len(subscribers)}. Last broadcast: {now_ts - self._last_broadcast_ts:.1f}s ago.")
+            logger.info(f"[SCHEDULER] Active Telegram subscribers: {len(subscribers)} (IDs: {[s.telegram_chat_id for s in subscribers]}). Last broadcast: {now_ts - self._last_broadcast_ts:.1f}s ago.")
 
             for pattern in active_patterns:
                 assets = pattern.assets_config or ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]

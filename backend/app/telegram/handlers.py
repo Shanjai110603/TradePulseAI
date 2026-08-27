@@ -46,42 +46,63 @@ class TelegramUpdateHandler:
             return
 
         # Auto-register/subscribe EVERY user who messages the bot
-        existing_q = select(TelegramAccount).where(TelegramAccount.telegram_chat_id == chat_id)
+        target_uid = telegram_user_id or chat_id
+        existing_q = select(TelegramAccount).where(
+            (TelegramAccount.telegram_chat_id == chat_id) | (TelegramAccount.telegram_user_id == target_uid)
+        )
         existing_res = await db.execute(existing_q)
-        tg_acc = existing_res.scalar_one_or_none()
+        tg_acc = existing_res.scalars().first()
 
         if not tg_acc:
-            # Create a virtual user record to guarantee FK & uniqueness compatibility
-            from app.models.user import User
-            tg_email = f"tg_{chat_id}@tradepulse.ai"
-            user_check = await db.execute(select(User).where(User.email == tg_email))
-            tg_user = user_check.scalar_one_or_none()
-            if not tg_user:
-                tg_user = User(
-                    email=tg_email,
-                    hashed_password="!",
-                    full_name=first_name,
-                    is_active=True
-                )
-                db.add(tg_user)
-                await db.flush()
+            try:
+                from app.models.user import User
+                tg_email = f"tg_{chat_id}@tradepulse.ai"
+                user_check = await db.execute(select(User).where(User.email == tg_email))
+                tg_user = user_check.scalar_one_or_none()
+                if not tg_user:
+                    tg_user = User(
+                        email=tg_email,
+                        hashed_password="!",
+                        full_name=first_name,
+                        is_active=True
+                    )
+                    db.add(tg_user)
+                    await db.flush()
 
-            tg_acc = TelegramAccount(
-                user_id=tg_user.id,
-                telegram_user_id=telegram_user_id or chat_id,
-                telegram_chat_id=chat_id,
-                telegram_username=username,
-                first_name=first_name,
-                is_active=True,
-                is_muted=False
-            )
-            db.add(tg_acc)
-            await db.commit()
-            logger.info(f"Auto-subscribed new Telegram subscriber: {first_name} (chat_id={chat_id})")
-        else:
-            if not tg_acc.is_active:
-                tg_acc.is_active = True
+                tg_acc = TelegramAccount(
+                    user_id=tg_user.id,
+                    telegram_user_id=target_uid,
+                    telegram_chat_id=chat_id,
+                    telegram_username=username,
+                    first_name=first_name,
+                    is_active=True,
+                    is_muted=False
+                )
+                db.add(tg_acc)
                 await db.commit()
+                logger.info(f"Auto-subscribed new Telegram subscriber: {first_name} (chat_id={chat_id})")
+            except Exception as reg_err:
+                await db.rollback()
+                logger.warning(f"Notice on registering TelegramAccount (chat_id={chat_id}): {reg_err}")
+                # Fallback: update if record already existed
+                fallback_q = select(TelegramAccount).where(
+                    (TelegramAccount.telegram_chat_id == chat_id) | (TelegramAccount.telegram_user_id == target_uid)
+                )
+                tg_acc = (await db.execute(fallback_q)).scalars().first()
+                if tg_acc:
+                    tg_acc.telegram_chat_id = chat_id
+                    tg_acc.telegram_user_id = target_uid
+                    tg_acc.is_active = True
+                    tg_acc.is_muted = False
+                    await db.commit()
+        else:
+            tg_acc.telegram_chat_id = chat_id
+            tg_acc.telegram_user_id = target_uid
+            tg_acc.telegram_username = username
+            tg_acc.first_name = first_name
+            tg_acc.is_active = True
+            tg_acc.is_muted = False
+            await db.commit()
 
         # /start command
         if text.startswith("/start"):
