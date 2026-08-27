@@ -210,15 +210,15 @@ async def seed_initial_data():
             p14 = Pattern(
                 user_id=demo_user.id,
                 name="Pattern Type 14",
-                description="Bearish initial candle -> 2 Bullish base candles creating support -> Bearish pullback -> Support close breakdown -> DOWN Signal",
+                description="Draw a Horizontal Line (SUPPORT LINE) between first 2 Green Candles after the Red Candle and wait for the market to break that support level with a Red candle then trade in the same direction.",
                 market_id="digital_options",
                 direction="DOWN",
                 timeframe="1M",
                 is_active=True,
                 current_version=1,
-                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "EUR/USD", "GBP/USD"],
+                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
                 timeframes_config={"1M": "Any"},
-                trend_config={},
+                trend_config={"required": "Bearish", "strong_breakout_candle": True},
                 momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 60},
                 volume_config={},
                 indicators_config=[
@@ -238,12 +238,24 @@ async def seed_initial_data():
                     ]
                 },
                 entry_config={"type": "immediate"},
-                target_config={"duration_type": "time", "duration_minutes": 5, "duration_candles": 5},
-                ai_config={"enabled": True, "min_score": 80, "min_confidence": "HIGH", "required_bias": "BEARISH"},
+                target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
                 notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
             )
             db.add(p14)
             await db.flush()
+
+            # Attach visual reference image
+            img14 = PatternImage(
+                pattern_id=p14.id,
+                file_path="/uploads/patterns/pattern_type_14.jpg",
+                file_name="pattern_type_14.jpg",
+                file_size=73383,
+                mime_type="image/jpeg",
+                is_primary=True,
+                description="Visual reference for Pattern Type 14: Horizontal Support Breakdown with Strong Red Candle"
+            )
+            db.add(img14)
 
             snapshot = {
                 "name": p14.name,
@@ -258,14 +270,12 @@ async def seed_initial_data():
                 "indicators_config": p14.indicators_config,
                 "rules_config": p14.rules_config,
                 "entry_config": p14.entry_config,
-                "target_config": p14.target_config,
-                "ai_config": p14.ai_config,
-                "notification_config": p14.notification_config
+                "target_config": p14.target_config
             }
             v1 = PatternVersion(
                 pattern_id=p14.id,
                 version_number=1,
-                change_summary="System reference Pattern Type 14",
+                change_summary="System reference Pattern Type 14 (Horizontal Support Breakout)",
                 config_snapshot=snapshot
             )
             db.add(v1)

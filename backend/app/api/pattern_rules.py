@@ -85,14 +85,14 @@ async def get_rule_templates() -> List[Dict[str, Any]]:
         },
         {
             "id": "pattern_type_14",
-            "name": "Pattern Type 14 (Breakdown Confirmation)",
-            "description": "Bearish initial candle followed by 2 bullish candles establishing a support base, followed by a bearish breakdown closing below support.",
+            "name": "Pattern Type 14 (Horizontal Support Breakout)",
+            "description": "Draw a horizontal support line between the first 2 green candles after a red candle. When market breaks support with a strong red candle, enter DOWN in the same direction.",
             "market_id": "digital_options",
             "direction": "DOWN",
             "timeframe": "1M",
-            "trend_config": {"required": "Bearish", "mtf": {"5M": "Bearish"}},
-            "momentum_config": {"strength": "Strong", "rsi_min": 0, "rsi_max": 50, "adx_min": 20, "macd_bias": "Bearish"},
-            "volume_config": {"type": "above_average", "min_pct_of_ma": 120},
+            "trend_config": {"required": "Bearish", "strong_breakout_candle": True},
+            "momentum_config": {"strength": "Strong", "rsi_min": 0, "rsi_max": 55, "adx_min": 20, "macd_bias": "Bearish"},
+            "volume_config": {"type": "above_average", "min_pct_of_ma": 110},
             "rules_config": {
                 "operator": "AND",
                 "conditions": [
@@ -107,8 +107,8 @@ async def get_rule_templates() -> List[Dict[str, Any]]:
                 ]
             },
             "entry_config": {"type": "immediate"},
-            "target_config": {"duration_type": "time", "duration_minutes": 5, "duration_candles": 5},
-            "ai_config": {"enabled": True, "min_score": 80, "min_confidence": "HIGH", "required_bias": "BEARISH"}
+            "target_config": {"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+            "ai_config": {"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"}
         },
         {
             "id": "pattern_type_14_inverted",

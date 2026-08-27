@@ -427,17 +427,23 @@ class PatternRuleEngine:
         # Evaluate support break confirmation
         if confirmation_type == "close_below":
             if trigger_candle.close < support_level:
-                return True, f"Pattern Type 14 Confirmed: Close ({trigger_candle.close}) closed below support level ({support_level:.5f})", {
+                return True, f"Pattern Type 14 Confirmed: Strong breakout close ({trigger_candle.close}) below support level ({support_level:.5f})", {
                     "support_level": support_level,
                     "pattern_name": "Pattern Type 14",
-                    "bullish_base_count": bullish_count_req
+                    "bullish_base_count": bullish_count_req,
+                    "direction": "DOWN",
+                    "expiry_duration_minutes": 1,
+                    "timeframe": "1M"
                 }
             return False, f"Breakout failed: Close ({trigger_candle.close}) did not close below support ({support_level:.5f})", {}
         elif confirmation_type == "wick_below":
             if trigger_candle.low < support_level:
                 return True, f"Pattern Type 14 Confirmed: Wick pierced support level ({support_level:.5f})", {
                     "support_level": support_level,
-                    "pattern_name": "Pattern Type 14"
+                    "pattern_name": "Pattern Type 14",
+                    "direction": "DOWN",
+                    "expiry_duration_minutes": 1,
+                    "timeframe": "1M"
                 }
             return False, f"Breakout failed: Low ({trigger_candle.low}) did not reach below support ({support_level:.5f})", {}
 
