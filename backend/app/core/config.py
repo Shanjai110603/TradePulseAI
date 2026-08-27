@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # Telegram Bot
-    TELEGRAM_BOT_TOKEN: Optional[str] = "8862910637:AAHNwgv4MLBysPRscJ-V30HfC-QI74FgIjU"
+    TELEGRAM_BOT_TOKEN: Optional[str] = ""
     TELEGRAM_WEBHOOK_URL: Optional[str] = ""
     TELEGRAM_WEBHOOK_SECRET: Optional[str] = ""
     TELEGRAM_TEST_MODE: bool = False  # False connects to real Telegram Bot
