@@ -1,6 +1,8 @@
+import os
+import json
 import logging
 import httpx
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from app.core.config import settings
 from app.telegram.formatter import TelegramMessageFormatter
 
@@ -10,7 +12,7 @@ logger = logging.getLogger(__name__)
 class TelegramBotService:
     """
     Manages Telegram Bot communications, message sending, inline keyboards,
-    callback queries, and local test mock simulations.
+    callback queries, photo attachments with strategy graphs, and local test mock simulations.
     """
 
     def __init__(self):
@@ -24,9 +26,93 @@ class TelegramBotService:
         chat_id: int,
         signal_dict: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Dispatches concise main signal message with inline buttons"""
+        """Dispatches concise main signal message with visual chart/diagram and interactive buttons"""
         text, keyboard = TelegramMessageFormatter.format_main_signal(signal_dict)
+
+        # 1. Determine image to attach (Strategy Diagram or Candlestick Graph)
+        photo_path = None
+        pattern_name = str(signal_dict.get("pattern_name", ""))
+        raw_image_path = signal_dict.get("image_path")
+
+        # Resolve known pattern image assets
+        if raw_image_path and os.path.exists(raw_image_path):
+            photo_path = raw_image_path
+        elif raw_image_path and raw_image_path.startswith("/") and os.path.exists(raw_image_path[1:]):
+            photo_path = raw_image_path[1:]
+        elif "Pattern Type 15" in pattern_name and os.path.exists("uploads/patterns/pattern_type_15.jpg"):
+            photo_path = "uploads/patterns/pattern_type_15.jpg"
+        elif "Pattern Type 14" in pattern_name and os.path.exists("uploads/patterns/pattern_type_14.jpg"):
+            photo_path = "uploads/patterns/pattern_type_14.jpg"
+        elif "Pattern Type 1" in pattern_name and os.path.exists("uploads/patterns/pattern_type_1.jpg"):
+            photo_path = "uploads/patterns/pattern_type_1.jpg"
+
+        # 2. Dispatch Photo with rich caption if photo exists
+        if photo_path and os.path.exists(photo_path):
+            try:
+                res = await self.send_photo(
+                    chat_id=chat_id,
+                    photo_path=photo_path,
+                    caption=text,
+                    reply_markup={"inline_keyboard": keyboard}
+                )
+                if res.get("ok"):
+                    return res
+                logger.warning(f"send_photo returned not ok: {res}. Falling back to standard message...")
+            except Exception as err:
+                logger.warning(f"send_photo exception ({err}), falling back to standard message...")
+
         return await self.send_message(chat_id, text, reply_markup={"inline_keyboard": keyboard})
+
+    async def send_photo(
+        self,
+        chat_id: int,
+        photo_path: str,
+        caption: Optional[str] = None,
+        parse_mode: Optional[str] = "HTML",
+        reply_markup: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Sends photo with caption and inline keyboard to a Telegram chat"""
+        if self.test_mode or not self.base_url:
+            self.sent_notifications_log.append({"chat_id": chat_id, "photo": photo_path, "caption": caption})
+            return {"ok": True, "result": {"message_id": 999999, "chat": {"id": chat_id}}}
+
+        if not os.path.exists(photo_path):
+            return {"ok": False, "error": f"File not found: {photo_path}"}
+
+        url = f"{self.base_url}/sendPhoto"
+        data: Dict[str, Any] = {"chat_id": str(chat_id)}
+        if caption:
+            data["caption"] = caption
+        if parse_mode:
+            data["parse_mode"] = parse_mode
+        if reply_markup:
+            data["reply_markup"] = json.dumps(reply_markup)
+
+        try:
+            with open(photo_path, "rb") as f:
+                file_content = f.read()
+
+            files = {"photo": (os.path.basename(photo_path), file_content, "image/jpeg")}
+
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                resp = await client.post(url, data=data, files=files)
+                if resp.status_code == 200:
+                    return resp.json()
+
+                # If HTML parse error occurred on caption, retry with stripped plain text
+                if caption:
+                    clean_caption = caption.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "").replace("<i>", "").replace("</i>", "")
+                    data["caption"] = clean_caption
+                    data.pop("parse_mode", None)
+                    retry_resp = await client.post(url, data=data, files={"photo": (os.path.basename(photo_path), file_content, "image/jpeg")})
+                    if retry_resp.status_code == 200:
+                        return retry_resp.json()
+
+                logger.error(f"Telegram sendPhoto failed: {resp.status_code} - {resp.text}")
+                return {"ok": False, "error": resp.text}
+        except Exception as e:
+            logger.error(f"Failed to send Telegram photo to {chat_id}: {e}")
+            return {"ok": False, "error": str(e)}
 
     async def send_message(
         self,

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from app.core.config import settings
 from app.core.database import init_db, AsyncSessionLocal
@@ -282,89 +282,11 @@ async def seed_initial_data():
             await db.commit()
             logger.info("Pattern Type 14 seeded successfully.")
 
-        # Seed Quotex OTC High-Frequency Reversal Pattern
-        q_res = await db.execute(
-            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Quotex 1M OTC Momentum")
+        # Cleanup legacy generic patterns so bot ONLY evaluates the user's exact strategies
+        await db.execute(
+            delete(Pattern).where(Pattern.name.in_(["Quotex 1M OTC Momentum", "Quotex 1M OTC Reversal"]))
         )
-        if not q_res.scalar_one_or_none():
-            logger.info("Seeding Quotex 1M OTC Momentum pattern...")
-            q_pat = Pattern(
-                user_id=demo_user.id,
-                name="Quotex 1M OTC Momentum",
-                description="High-frequency 1-Minute OTC breakout with RSI divergence & EMA trend confirmation",
-                market_id="digital_options",
-                direction="UP",
-                timeframe="1M",
-                is_active=True,
-                current_version=1,
-                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)"],
-                timeframes_config={"1M": "Any"},
-                trend_config={},
-                momentum_config={"rsi_min": 45, "rsi_max": 100},
-                volume_config={},
-                indicators_config=[
-                    {"indicator": "RSI", "condition": "ABOVE", "value": 48.0, "period": 14}
-                ],
-                rules_config={},
-                entry_config={"type": "immediate"},
-                target_config={"duration_type": "time", "duration_minutes": 5, "duration_candles": 5},
-                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BULLISH"},
-                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
-            )
-            db.add(q_pat)
-            await db.flush()
-
-            q_v1 = PatternVersion(
-                pattern_id=q_pat.id,
-                version_number=1,
-                change_summary="Quotex 1M OTC Momentum Strategy",
-                config_snapshot={"name": q_pat.name, "direction": q_pat.direction, "market_id": q_pat.market_id}
-            )
-            db.add(q_v1)
-            await db.commit()
-            logger.info("Quotex 1M OTC Momentum seeded successfully.")
-
-        # Seed Quotex OTC RSI Reversal (DOWN) Strategy
-        rev_res = await db.execute(
-            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Quotex 1M OTC Reversal")
-        )
-        if not rev_res.scalar_one_or_none():
-            logger.info("Seeding Quotex 1M OTC Reversal pattern...")
-            rev_pat = Pattern(
-                user_id=demo_user.id,
-                name="Quotex 1M OTC Reversal",
-                description="Overbought rejection & swing high reversal for high-payout 1-Minute OTC options",
-                market_id="digital_options",
-                direction="DOWN",
-                timeframe="1M",
-                is_active=True,
-                current_version=1,
-                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "AUD/CAD (OTC)"],
-                timeframes_config={"1M": "Any"},
-                trend_config={},
-                momentum_config={"rsi_min": 0, "rsi_max": 55},
-                volume_config={},
-                indicators_config=[
-                    {"indicator": "RSI", "condition": "BELOW", "value": 52.0, "period": 14}
-                ],
-                rules_config={},
-                entry_config={"type": "immediate"},
-                target_config={"duration_type": "time", "duration_minutes": 5, "duration_candles": 5},
-                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
-                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
-            )
-            db.add(rev_pat)
-            await db.flush()
-
-            rev_v1 = PatternVersion(
-                pattern_id=rev_pat.id,
-                version_number=1,
-                change_summary="Quotex 1M OTC Reversal Strategy",
-                config_snapshot={"name": rev_pat.name, "direction": rev_pat.direction, "market_id": rev_pat.market_id}
-            )
-            db.add(rev_v1)
-            await db.commit()
-            logger.info("Quotex 1M OTC Reversal seeded successfully.")
+        await db.commit()
 
 
 
