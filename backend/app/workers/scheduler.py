@@ -235,9 +235,9 @@ class BackgroundScheduler:
                 if signal_generated_in_tick:
                     break
 
-            # Continuous High-Probability Stream: If no signal generated in the last 35 seconds and subscribers are waiting
+            # Continuous High-Probability Stream: If no signal generated in the last 25 seconds and subscribers are waiting
             now_ts = time.time()
-            if not signal_generated_in_tick and subscribers and (now_ts - self._last_broadcast_ts >= 35.0):
+            if not signal_generated_in_tick and subscribers and (now_ts - self._last_broadcast_ts >= 25.0):
                 try:
                     self._last_broadcast_ts = now_ts
                     chosen_pattern = random.choice(active_patterns)
@@ -292,8 +292,11 @@ class BackgroundScheduler:
                         }
 
                         # Generate live candlestick chart of the actual trade
-                        chart_path = TradeChartGenerator.generate_chart(candles=candles, signal_data=stream_sig_payload)
-                        stream_sig_payload["image_path"] = chart_path
+                        try:
+                            chart_path = TradeChartGenerator.generate_chart(candles=candles, signal_data=stream_sig_payload)
+                            stream_sig_payload["image_path"] = chart_path
+                        except Exception as chart_gen_err:
+                            logger.error(f"Notice generating stream trade chart: {chart_gen_err}")
 
                         # Save to database
                         new_signal = Signal(
