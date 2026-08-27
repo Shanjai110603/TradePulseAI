@@ -426,6 +426,13 @@ class QuotexMarketDataProvider(MarketDataProvider):
 
             open_p = current_price
             close_p = open_p + step
+
+            # If this is the current active forming candle, inject real-time tick pulse
+            if i == limit - 1:
+                cur_sec = time.time()
+                live_tick = math.sin(cur_sec * 1.5) * (vol * 0.6) + math.cos(cur_sec * 0.7) * (vol * 0.3)
+                close_p = open_p + live_tick
+
             high_wick = abs(rng.gauss(0, vol * 0.45))
             low_wick = abs(rng.gauss(0, vol * 0.45))
             high_p = max(open_p, close_p) + high_wick
