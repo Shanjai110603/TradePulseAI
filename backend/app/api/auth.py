@@ -87,16 +87,23 @@ async def login(
     email = None
     password = None
 
-    # Support both JSON payload and Form Data
-    content_type = request.headers.get("content-type", "")
-    if "application/json" in content_type:
+    # 1. Try parsing JSON body
+    try:
         body = await request.json()
-        email = body.get("email") or body.get("username")
-        password = body.get("password")
-    else:
-        form = await request.form()
-        email = form.get("username") or form.get("email")
-        password = form.get("password")
+        if isinstance(body, dict):
+            email = body.get("email") or body.get("username")
+            password = body.get("password")
+    except Exception:
+        pass
+
+    # 2. Try parsing Form / Multipart if JSON was not present
+    if not email or not password:
+        try:
+            form = await request.form()
+            email = form.get("username") or form.get("email")
+            password = form.get("password")
+        except Exception:
+            pass
 
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password are required")

@@ -18,8 +18,8 @@ api.interceptors.request.use((config) => {
 });
 
 export const authApi = {
-  login: async (formData: FormData): Promise<AuthResponse> => {
-    const res = await api.post('/auth/login', formData);
+  login: async (data: any): Promise<AuthResponse> => {
+    const res = await api.post('/auth/login', data);
     return res.data;
   },
   register: async (data: any): Promise<AuthResponse> => {

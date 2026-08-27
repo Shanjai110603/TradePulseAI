@@ -54,10 +54,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token]);
 
   const login = async (email: string, pass: string) => {
-    const formData = new FormData();
-    formData.append('username', email);
-    formData.append('password', pass);
-    const res: AuthResponse = await authApi.login(formData);
+    const cleanEmail = email.trim().toLowerCase();
+    const res: AuthResponse = await authApi.login({
+      email: cleanEmail,
+      username: cleanEmail,
+      password: pass
+    });
     localStorage.setItem('tradepulse_token', res.access_token);
     setToken(res.access_token);
     setUser(res.user);
