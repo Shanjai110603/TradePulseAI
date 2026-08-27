@@ -1,5 +1,6 @@
 import os
 import math
+import functools
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from PIL import Image, ImageDraw, ImageFont
@@ -7,8 +8,9 @@ from PIL import Image, ImageDraw, ImageFont
 from app.engine.market_data.base import Candle
 
 
+@functools.lru_cache(maxsize=32)
 def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
-    """Robust TrueType font loader with bundled repository fonts"""
+    """Robust TrueType font loader with bundled repository fonts & RAM caching"""
     base_dir = os.path.dirname(__file__)
     bundled_bold = os.path.join(base_dir, "fonts", "Arial-Bold.ttf")
     bundled_reg = os.path.join(base_dir, "fonts", "Arial-Regular.ttf")
@@ -39,6 +41,15 @@ def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
         return ImageFont.load_default(size=size)
     except Exception:
         return ImageFont.load_default()
+
+
+def _format_price(price: float, asset: str) -> str:
+    """Formats price decimals according to asset currency/crypto standard"""
+    if "JPY" in asset:
+        return f"{price:.3f}"
+    elif "BTC" in asset or "ETH" in asset:
+        return f"{price:.2f}"
+    return f"{price:.5f}"
 
 
 class TradeChartGenerator:
@@ -135,7 +146,7 @@ class TradeChartGenerator:
             # Grid Line
             draw.line([(chart_left, y_pos), (chart_right, y_pos)], fill=(22, 30, 44), width=1)
             # Right Y-Axis Label
-            draw.text((chart_right + 12, y_pos - 9), f"{p_val:.5f}", fill=(140, 160, 185), font=font_axis)
+            draw.text((chart_right + 12, y_pos - 9), _format_price(p_val, asset), fill=(140, 160, 185), font=font_axis)
 
         # 2. SMC 10 Moving Average Line (Glowing Amber)
         if len(candles) >= 5:
@@ -211,6 +222,7 @@ class TradeChartGenerator:
 
         action_color = (0, 230, 118) if is_call else (255, 59, 48)
         action_text = "CALL (BUY) ⬆️" if is_call else "PUT (SELL) ⬇️"
+        formatted_ref = _format_price(ref_price, asset)
 
         if is_call:
             # Arrow pointing UP
@@ -222,8 +234,8 @@ class TradeChartGenerator:
             ], fill=action_color)
             # Floating Pill Badge
             box_top = tip_y + 26
-            draw.rectangle([(trigger_cx - 95, box_top), (trigger_cx + 95, box_top + 34)], fill=action_color)
-            draw.text((trigger_cx - 86, box_top + 6), f"{action_text} @ {ref_price:.5f}", fill=(0, 0, 0), font=font_entry)
+            draw.rectangle([(trigger_cx - 105, box_top), (trigger_cx + 105, box_top + 34)], fill=action_color)
+            draw.text((trigger_cx - 96, box_top + 6), f"{action_text} @ {formatted_ref}", fill=(0, 0, 0), font=font_entry)
         else:
             # Arrow pointing DOWN
             tip_y = price_to_y(trigger_c.high) - 14
@@ -234,11 +246,10 @@ class TradeChartGenerator:
             ], fill=action_color)
             # Floating Pill Badge
             box_top = tip_y - 62
-            draw.rectangle([(trigger_cx - 95, box_top), (trigger_cx + 95, box_top + 34)], fill=action_color)
-            draw.text((trigger_cx - 86, box_top + 6), f"{action_text} @ {ref_price:.5f}", fill=(255, 255, 255), font=font_entry)
+            draw.rectangle([(trigger_cx - 105, box_top), (trigger_cx + 105, box_top + 34)], fill=action_color)
+            draw.text((trigger_cx - 96, box_top + 6), f"{action_text} @ {formatted_ref}", fill=(255, 255, 255), font=font_entry)
 
         # 6. Header Styling
-        asset = signal_data.get("asset_symbol", "EUR/USD (OTC)")
         pattern_name = signal_data.get("pattern_name", "Pattern Type 14")
         ai_score = signal_data.get("ai_score", 88)
 
@@ -253,7 +264,7 @@ class TradeChartGenerator:
         # Asset & Live Price
         draw.text((230, 26), f"{asset}", fill=(255, 255, 255), font=font_asset)
         draw.text((460, 32), "1M OTC", fill=(140, 160, 185), font=font_header_sub)
-        draw.text((560, 28), f"Price: {ref_price:.5f}", fill=(0, 230, 118), font=font_asset)
+        draw.text((560, 28), f"Price: {formatted_ref}", fill=(0, 230, 118), font=font_asset)
 
         # Right Header Strategy Info & AI Score
         draw.text((width - 480, 18), f"Strategy: {pattern_name}", fill=(255, 215, 0), font=font_strategy)

@@ -143,7 +143,8 @@ class TelegramBotService:
             with open(photo_path, "rb") as f:
                 file_content = f.read()
 
-            files = {"photo": (os.path.basename(photo_path), file_content, "image/jpeg")}
+            mime = "image/png" if photo_path.lower().endswith(".png") else "image/jpeg"
+            files = {"photo": (os.path.basename(photo_path), file_content, mime)}
 
             async with httpx.AsyncClient(timeout=25.0) as client:
                 resp = await client.post(url, data=data, files=files)
@@ -155,7 +156,7 @@ class TelegramBotService:
                     clean_caption = caption.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "").replace("<i>", "").replace("</i>", "")
                     data["caption"] = clean_caption
                     data.pop("parse_mode", None)
-                    retry_resp = await client.post(url, data=data, files={"photo": (os.path.basename(photo_path), file_content, "image/jpeg")})
+                    retry_resp = await client.post(url, data=data, files={"photo": (os.path.basename(photo_path), file_content, mime)})
                     if retry_resp.status_code == 200:
                         return retry_resp.json()
 
