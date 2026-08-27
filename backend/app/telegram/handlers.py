@@ -93,8 +93,9 @@ class TelegramUpdateHandler:
                 f"• High-Probability Multi-Timeframe Pattern Recognition\n"
                 f"• GPT-4o / OpenRouter AI Confidence Validation\n\n"
                 f"<b>Bot Commands:</b>\n"
+                f"• <code>/signal</code> - Request an instant live Quotex AI signal\n"
                 f"• <code>/status</code> - Check your live signal subscription\n"
-                f"• <code>/mute</code> - Pause incoming signal alerts\n"
+                f"• <code>/stop</code> - Pause and unsubscribe from alerts\n"
                 f"• <code>/unmute</code> - Resume signal alerts\n"
                 f"• <code>/help</code> - Explanation of signal cards & buttons"
             )
@@ -141,6 +142,23 @@ class TelegramUpdateHandler:
             else:
                 await telegram_service.send_message(chat_id, "❌ Please link your account first with <code>/link &lt;CODE&gt;</code>.")
 
+        # /stop or /unsubscribe command
+        elif text.startswith("/stop") or text.startswith("/unsubscribe") or text.startswith("/cancel"):
+            query = select(TelegramAccount).where(TelegramAccount.telegram_chat_id == chat_id)
+            result = await db.execute(query)
+            tg_acc = result.scalar_one_or_none()
+            if tg_acc:
+                tg_acc.is_active = False
+                tg_acc.is_muted = True
+                await db.commit()
+            stop_msg = (
+                "🛑 <b>Signal Broadcast Stopped</b>\n\n"
+                "You have unsubscribed from automated Quotex AI market signals.\n\n"
+                "Send <code>/start</code> at any time to reactivate and resume live signals!"
+            )
+            await telegram_service.send_message(chat_id, stop_msg)
+            return
+
         # /unmute command
         elif text.startswith("/unmute"):
             query = select(TelegramAccount).where(TelegramAccount.telegram_user_id == telegram_user_id)
@@ -148,10 +166,11 @@ class TelegramUpdateHandler:
             tg_acc = result.scalar_one_or_none()
             if tg_acc:
                 tg_acc.is_muted = False
+                tg_acc.is_active = True
                 await db.commit()
                 await telegram_service.send_message(chat_id, "🔔 Notifications unmuted and active!")
             else:
-                await telegram_service.send_message(chat_id, "❌ Please link your account first.")
+                await telegram_service.send_message(chat_id, "❌ Please send <code>/start</code> first to subscribe.")
 
         # /signal or /test_signal command - triggers an immediate live AI signal
         elif text.startswith("/signal") or text.startswith("/test_signal") or text.startswith("/alert"):
