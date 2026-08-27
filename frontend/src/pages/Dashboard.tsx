@@ -114,13 +114,14 @@ export const Dashboard: React.FC = () => {
       {/* Main Center Grid: Interactive Chart + Active Patterns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Interactive Chart Column (2 spans) */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" />
-                Live Quotex OTC Chart
-              </h2>
+        <div className="lg:col-span-2 space-y-3">
+          {/* Asset & Timeframe Controls */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-primary" />
+              <h2 className="text-base font-semibold text-white">Live Quotex OTC Chart</h2>
+            </div>
+            <div className="flex items-center gap-2">
               <div className="flex bg-surface-raised rounded-lg p-0.5 border border-surface-border">
                 {['EUR/USD (OTC)', 'GBP/USD (OTC)', 'USD/JPY (OTC)', 'BTC/USDT (OTC)', 'AUD/CAD (OTC)'].map((sym) => (
                   <button
@@ -136,29 +137,29 @@ export const Dashboard: React.FC = () => {
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="flex bg-surface-raised rounded-lg p-0.5 border border-surface-border text-xs font-mono">
-              {['1M', '5M', '15M', '1H'].map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setSelectedTimeframe(tf)}
-                  className={`px-2 py-0.5 rounded transition-colors ${
-                    selectedTimeframe === tf
-                      ? 'bg-surface-border text-white font-bold'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
+              <div className="flex bg-surface-raised rounded-lg p-0.5 border border-surface-border text-xs font-mono">
+                {['1M', '5M', '15M', '1H'].map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setSelectedTimeframe(tf)}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      selectedTimeframe === tf
+                        ? 'bg-primary text-black font-bold'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
+          {/* Real TradingView Live Chart — fills full height */}
           <TradingViewWidget
             symbol={selectedAsset}
             timeframe={selectedTimeframe}
-            height={480}
+            height={500}
           />
         </div>
 
