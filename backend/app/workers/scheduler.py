@@ -75,14 +75,16 @@ class BackgroundScheduler:
 
             provider = market_data_manager.get_provider()
             signal_generated_in_tick = False
+            now_ts = time.time()
 
             # Query all active Telegram subscribers
             tg_query = select(TelegramAccount).where(
-                TelegramAccount.is_active == True,
                 (TelegramAccount.is_muted == False) | (TelegramAccount.is_muted == None)
             )
             tg_res = await db.execute(tg_query)
             subscribers = tg_res.scalars().all()
+
+            logger.info(f"[SCHEDULER] Active subscribers: {len(subscribers)}. Last broadcast: {now_ts - self._last_broadcast_ts:.1f}s ago.")
 
             for pattern in active_patterns:
                 assets = pattern.assets_config or ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
@@ -232,9 +234,9 @@ class BackgroundScheduler:
                 if signal_generated_in_tick:
                     break
 
-            # Continuous High-Probability Stream: If no signal generated in the last 50 seconds and subscribers are waiting
+            # Continuous High-Probability Stream: If no signal generated in the last 35 seconds and subscribers are waiting
             now_ts = time.time()
-            if not signal_generated_in_tick and subscribers and (now_ts - self._last_broadcast_ts >= 50.0):
+            if not signal_generated_in_tick and subscribers and (now_ts - self._last_broadcast_ts >= 35.0):
                 try:
                     self._last_broadcast_ts = now_ts
                     chosen_pattern = random.choice(active_patterns)
