@@ -6,8 +6,33 @@ router = APIRouter(prefix="/pattern-rules", tags=["Pattern Rule Engine"])
 
 @router.get("/templates")
 async def get_rule_templates() -> List[Dict[str, Any]]:
-    """Returns pre-built strategy templates including Pattern Type 14"""
+    """Returns pre-built strategy templates including Pattern Type 1 and Pattern Type 14"""
     return [
+        {
+            "id": "pattern_type_1",
+            "name": "Pattern Type 1 (SMC 10 Line Reversal)",
+            "description": "Two green candles followed by one red candle with normal bodies below the SMC 10 Line. Triggers a high-probability 1-Minute DOWN/PUT signal.",
+            "market_id": "digital_options",
+            "direction": "DOWN",
+            "timeframe": "1M",
+            "trend_config": {"required": "Bearish"},
+            "momentum_config": {"strength": "Strong", "rsi_min": 0, "rsi_max": 65},
+            "volume_config": {},
+            "rules_config": {
+                "operator": "AND",
+                "conditions": [
+                    {
+                        "type": "pattern_type_1",
+                        "params": {
+                            "smc_period": 10
+                        }
+                    }
+                ]
+            },
+            "entry_config": {"type": "immediate"},
+            "target_config": {"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+            "ai_config": {"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"}
+        },
         {
             "id": "pattern_type_14",
             "name": "Pattern Type 14 (Breakdown Confirmation)",
@@ -95,6 +120,13 @@ async def get_rule_primitives() -> Dict[str, Any]:
         "operators": ["AND", "OR", "NOT"],
         "primitives": [
             {
+                "type": "pattern_type_1",
+                "label": "Pattern Type 1 (2 Green + 1 Red under SMC 10)",
+                "params": [
+                    {"name": "smc_period", "type": "int", "default": 10, "label": "SMC Moving Average Period"}
+                ]
+            },
+            {
                 "type": "pattern_type_14",
                 "label": "Pattern Type 14 (Bearish Breakdown)",
                 "params": [
@@ -144,5 +176,5 @@ async def get_rule_primitives() -> Dict[str, Any]:
                 ]
             }
         ],
-        "indicators": ["RSI", "MACD", "EMA_FAST", "EMA_SLOW", "SMA_200", "BOLLINGER", "VWAP", "ATR", "ADX", "STOCHASTIC"]
+        "indicators": ["RSI", "MACD", "EMA_FAST", "EMA_SLOW", "SMA_200", "BOLLINGER", "VWAP", "ATR", "ADX", "STOCHASTIC", "SMC_10"]
     }

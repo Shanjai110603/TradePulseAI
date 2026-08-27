@@ -357,11 +357,13 @@ class TechnicalIndicatorEngine:
                 trend = "BEARISH"
             else:
                 trend = "NEUTRAL"
-        else:
-            trend = "NEUTRAL"
+        # SMC 10 Moving Average
+        smc_10_series = cls.calculate_sma(closes, 10)
+        smc_10_val = round(smc_10_series[-1], 5) if smc_10_series and smc_10_series[-1] is not None else None
 
         return {
             "rsi": round(rsi_series[-1], 2) if rsi_series[-1] is not None else None,
+            "smc_10": smc_10_val,
             "macd": {
                 "macd": round(macd_dict["macd"][-1], 5) if macd_dict["macd"][-1] is not None else None,
                 "signal": round(macd_dict["signal"][-1], 5) if macd_dict["signal"][-1] is not None else None,

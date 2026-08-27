@@ -279,8 +279,12 @@ class PatternRuleEngine:
         p_type = node.get("type", "")
         params = node.get("params", {})
 
+        # Specialized Pattern Type 1 Primitive (2 Green + 1 Red below SMC 10)
+        if p_type == "pattern_type_1":
+            return cls._evaluate_pattern_type_1(candles, params, snapshot)
+
         # Specialized Pattern Type 14 Primitive
-        if p_type == "pattern_type_14":
+        elif p_type == "pattern_type_14":
             return cls._evaluate_pattern_type_14(candles, params)
 
         # Inverted Pattern Type 14 Primitive (for UP Signals)
@@ -477,3 +481,61 @@ class PatternRuleEngine:
             return False, f"Breakout failed: Close ({trigger_candle.close}) did not close above resistance ({resistance_level:.5f})", {}
 
         return False, "Confirmation condition failed", {}
+
+    # ---------------------------------------------------------
+    # Pattern Type 1 Deterministic Evaluator (SMC 10 Line Reversal)
+    # ---------------------------------------------------------
+
+    @classmethod
+    def _evaluate_pattern_type_1(
+        cls,
+        candles: List[Candle],
+        params: Dict[str, Any],
+        snapshot: Dict[str, Any]
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Pattern Type 1 Specification:
+        "If market forms two green candles followed by one red candle with normal bodies
+        below the SMC 10 Line, the entry is a sure shot for a red candle in the opposite direction."
+
+        Rules:
+        1. Preceding 3 candles:
+           - Candle -3 (1st): Green / Bullish
+           - Candle -2 (2nd): Green / Bullish
+           - Candle -1 (3rd): Red / Bearish (Signal Crowd reversal trigger)
+        2. Indicator Condition:
+           - SMC 10 Line (10-period moving average of price).
+           - All 3 candles' bodies/closes are UNDER the SMC 10 Line (close <= smc_10_line).
+        3. Generates DOWN / PUT signal for 1-minute expiration.
+        """
+        smc_period = params.get("smc_period", 10)
+        if len(candles) < max(smc_period, 5):
+            return False, f"Pattern Type 1 requires at least {max(smc_period, 5)} candles, got {len(candles)}", {}
+
+        c1 = candles[-3]  # 1st Green
+        c2 = candles[-2]  # 2nd Green
+        c3 = candles[-1]  # 3rd Red (trigger)
+
+        if not c1.is_bullish:
+            return False, f"First candle must be green (bullish), got {c1.close} vs {c1.open}", {}
+        if not c2.is_bullish:
+            return False, f"Second candle must be green (bullish), got {c2.close} vs {c2.open}", {}
+        if not c3.is_bearish:
+            return False, f"Third trigger candle must be red (bearish), got {c3.close} vs {c3.open}", {}
+
+        # Calculate SMC 10 Line
+        closes = [c.close for c in candles]
+        smc_10_line = sum(closes[-smc_period:]) / float(smc_period)
+
+        # Confirm price is UNDER SMC 10 Line
+        if c1.close > smc_10_line or c2.close > smc_10_line or c3.close > smc_10_line:
+            return False, f"Candles are not below SMC 10 Line ({smc_10_line:.5f})", {}
+
+        return True, f"Pattern Type 1 Confirmed: 2 Green + 1 Red reversal below SMC 10 Line ({smc_10_line:.5f})", {
+            "pattern_name": "Pattern Type 1",
+            "smc_10_line": smc_10_line,
+            "resistance_level": smc_10_line,
+            "direction": "DOWN",
+            "expiry_duration_minutes": 1,
+            "timeframe": "1M"
+        }

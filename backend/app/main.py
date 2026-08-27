@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import init_db, AsyncSessionLocal
 from app.core.security import get_password_hash
 from app.models.user import User, UserPreferences
-from app.models.pattern import Pattern, PatternVersion
+from app.models.pattern import Pattern, PatternVersion, PatternImage
 from app.api.auth import router as auth_router
 from app.api.markets import router as markets_router
 from app.api.patterns import router as patterns_router
@@ -28,7 +28,7 @@ logger = logging.getLogger("tradepulse")
 
 
 async def seed_initial_data():
-    """Seeds default demo user and pre-configured Pattern Type 14 if DB is empty.
+    """Seeds default demo user and pre-configured Pattern Type 1 / 14 if DB is empty.
     Also refreshes demo user password hash on every startup.
     """
     async with AsyncSessionLocal() as db:
@@ -60,6 +60,77 @@ async def seed_initial_data():
             db.add(demo_user)
             await db.commit()
             logger.info("Demo user password hash refreshed.")
+
+        # Seed Pattern Type 1 (SMC 10 Line Reversal)
+        p1_res = await db.execute(
+            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 1")
+        )
+        if not p1_res.scalar_one_or_none():
+            logger.info("Seeding Pattern Type 1 template...")
+            p1 = Pattern(
+                user_id=demo_user.id,
+                name="Pattern Type 1",
+                description="If market forms two green candles followed by one red candle with normal bodies below the SMC 10 Line, the entry is a sure shot for a red candle in the opposite direction.",
+                market_id="digital_options",
+                direction="DOWN",
+                timeframe="1M",
+                is_active=True,
+                current_version=1,
+                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
+                timeframes_config={"1M": "Any"},
+                trend_config={"required": "Bearish"},
+                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 65},
+                volume_config={},
+                indicators_config=[
+                    {"indicator": "SMC_10", "condition": "BELOW", "value": 0.0}
+                ],
+                rules_config={
+                    "operator": "AND",
+                    "conditions": [
+                        {
+                            "type": "pattern_type_1",
+                            "params": {
+                                "smc_period": 10
+                            }
+                        }
+                    ]
+                },
+                entry_config={"type": "immediate"},
+                target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
+                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
+            )
+            db.add(p1)
+            await db.flush()
+
+            # Attach visual reference image
+            img = PatternImage(
+                pattern_id=p1.id,
+                file_path="/uploads/patterns/pattern_type_1.jpg",
+                file_name="pattern_type_1.jpg",
+                file_size=62995,
+                mime_type="image/jpeg",
+                is_primary=True,
+                description="Visual reference for Pattern Type 1: 2 Green Candles + 1 Red Candle under SMC 10 Line"
+            )
+            db.add(img)
+
+            v1 = PatternVersion(
+                pattern_id=p1.id,
+                version_number=1,
+                change_summary="System reference Pattern Type 1 (SMC 10 Under)",
+                config_snapshot={
+                    "name": p1.name,
+                    "direction": p1.direction,
+                    "timeframe": p1.timeframe,
+                    "market_id": p1.market_id,
+                    "rules_config": p1.rules_config,
+                    "target_config": p1.target_config
+                }
+            )
+            db.add(v1)
+            await db.commit()
+            logger.info("Pattern Type 1 seeded successfully.")
 
         # Seed Pattern Type 14 only if it doesn't exist yet
         pat_res = await db.execute(
