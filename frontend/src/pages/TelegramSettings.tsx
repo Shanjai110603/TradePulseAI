@@ -12,7 +12,8 @@ import {
   ShieldCheck, 
   RefreshCw,
   Clock,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 
 interface Subscriber {
@@ -31,6 +32,7 @@ export const TelegramSettings: React.FC = () => {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -71,6 +73,33 @@ export const TelegramSettings: React.FC = () => {
     }
   };
 
+  const handleClearAllSubscribers = async () => {
+    if (!window.confirm('Clear all subscribers from the list? Any active user can re-subscribe by sending /start.')) {
+      return;
+    }
+    setClearing(true);
+    try {
+      await telegramApi.clearSubscribers();
+      setFeedback('✅ All old subscribers cleared! The list is fresh.');
+      setTimeout(() => setFeedback(null), 4000);
+      loadData();
+    } catch (e) {
+      console.error(e);
+      setFeedback('⚠️ Failed to clear subscribers.');
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleDeleteSubscriber = async (id: string) => {
+    try {
+      await telegramApi.deleteSubscriber(id);
+      loadData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
@@ -103,12 +132,12 @@ export const TelegramSettings: React.FC = () => {
             <span>Refresh</span>
           </button>
           <a
-            href={`https://t.me/${status?.bot_username || 'Logutrader_bot'}`}
+            href={`https://t.me/${status?.bot_username || 'TradePulse_101_bot'}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow-glow-cyan transition"
           >
-            <span>Open @{status?.bot_username || 'Logutrader_bot'}</span>
+            <span>Open @{status?.bot_username || 'TradePulse_101_bot'}</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
@@ -122,7 +151,7 @@ export const TelegramSettings: React.FC = () => {
             <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
           </div>
           <div className="text-xl font-bold text-white tracking-wide flex items-center space-x-2">
-            <span>@{status?.bot_username || 'Logutrader_bot'}</span>
+            <span>@{status?.bot_username || 'TradePulse_101_bot'}</span>
           </div>
           <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" /> Connected & Polling 24/7
@@ -197,9 +226,21 @@ export const TelegramSettings: React.FC = () => {
               Subscribed Telegram Traders ({subscribers.length})
             </h2>
           </div>
-          <span className="text-xs text-gray-400">
-            Real-time subscriber registry
-          </span>
+          <div className="flex items-center space-x-2">
+            {subscribers.length > 0 && (
+              <button
+                onClick={handleClearAllSubscribers}
+                disabled={clearing}
+                className="px-3 py-1 bg-red-950/60 hover:bg-red-900/80 border border-red-800/60 text-red-300 rounded-lg text-xs font-medium flex items-center space-x-1.5 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{clearing ? 'Clearing...' : 'Clear Old Subscribers'}</span>
+              </button>
+            )}
+            <span className="text-xs text-gray-400 hidden sm:inline-block">
+              Real-time registry
+            </span>
+          </div>
         </div>
 
         {subscribers.length === 0 ? (
@@ -207,17 +248,17 @@ export const TelegramSettings: React.FC = () => {
             <div className="w-12 h-12 rounded-full bg-surface-dark border border-surface-border flex items-center justify-center mx-auto text-gray-500">
               <Users className="w-6 h-6" />
             </div>
-            <p className="text-sm text-gray-300 font-semibold">No Telegram Subscribers Yet</p>
+            <p className="text-sm text-gray-300 font-semibold">Subscriber Registry is Empty</p>
             <p className="text-xs text-gray-500 max-w-sm mx-auto">
-              Open <b>@{status?.bot_username || 'Logutrader_bot'}</b> on Telegram and tap <b>/start</b> to immediately appear here and receive live signals!
+              Open <b>@{status?.bot_username || 'TradePulse_101_bot'}</b> on Telegram and tap <b>/start</b> to immediately appear here!
             </p>
             <a
-              href={`https://t.me/${status?.bot_username || 'Logutrader_bot'}`}
+              href={`https://t.me/${status?.bot_username || 'TradePulse_101_bot'}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center space-x-2 px-4 py-2 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/50 text-cyan-300 rounded-lg text-xs font-bold transition"
             >
-              <span>Open Telegram Bot</span>
+              <span>Open @{status?.bot_username || 'TradePulse_101_bot'}</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
@@ -231,6 +272,7 @@ export const TelegramSettings: React.FC = () => {
                   <th className="pb-3 font-semibold">Chat ID</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold">Subscribed Since</th>
+                  <th className="pb-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border/50">
@@ -266,6 +308,15 @@ export const TelegramSettings: React.FC = () => {
                     </td>
                     <td className="py-3 text-gray-400 text-[11px]">
                       {new Date(sub.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-3 text-right">
+                      <button
+                        onClick={() => handleDeleteSubscriber(sub.id)}
+                        className="p-1 hover:bg-red-950/60 text-gray-500 hover:text-red-400 rounded transition"
+                        title="Remove subscriber"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))}

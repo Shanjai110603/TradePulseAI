@@ -152,6 +152,14 @@ export const telegramApi = {
     const res = await api.get('/telegram/subscribers');
     return res.data;
   },
+  clearSubscribers: async () => {
+    const res = await api.delete('/telegram/subscribers');
+    return res.data;
+  },
+  deleteSubscriber: async (id: string) => {
+    const res = await api.delete(`/telegram/subscribers/${id}`);
+    return res.data;
+  },
   sendTestNotification: async () => {
     const res = await api.post('/telegram/test-notification');
     return res.data;

@@ -113,6 +113,31 @@ async def get_telegram_subscribers(
     ]
 
 
+@router.delete("/subscribers")
+async def clear_all_subscribers(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Clears all subscribers from the database registry to start fresh"""
+    from sqlalchemy import delete
+    await db.execute(delete(TelegramAccount))
+    await db.commit()
+    return {"message": "All Telegram subscribers cleared successfully"}
+
+
+@router.delete("/subscribers/{subscriber_id}")
+async def delete_single_subscriber(
+    subscriber_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Removes a single subscriber from the registry"""
+    from sqlalchemy import delete
+    await db.execute(delete(TelegramAccount).where(TelegramAccount.id == subscriber_id))
+    await db.commit()
+    return {"message": "Subscriber removed successfully"}
+
+
 @router.post("/test-notification")
 async def trigger_test_notification(
     current_user: User = Depends(get_current_user),
