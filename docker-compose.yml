@@ -46,7 +46,7 @@ services:
       QUOTEX_EMAIL: ${QUOTEX_EMAIL:-logeshpythonbot@gmail.com}
       QUOTEX_PASSWORD: ${QUOTEX_PASSWORD:-BotForTraining@101}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8914871985:AAECsQhFgJhgnstQU6v-05IjprYYbGzckBw}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8862910637:AAHNwgv4MLBysPRscJ-V30HfC-QI74FgIjU}
       TELEGRAM_TEST_MODE: "false"
     expose:
       - "8000"
