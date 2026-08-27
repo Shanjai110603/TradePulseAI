@@ -372,14 +372,36 @@ async def seed_initial_data():
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Initializing TradePulse AI Backend Database schema...")
-    await init_db()
-    await seed_initial_data()
-    background_scheduler.start()
-    telegram_poller.start()
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"Error during init_db: {e}", exc_info=True)
+
+    try:
+        await seed_initial_data()
+    except Exception as e:
+        logger.error(f"Error during seed_initial_data: {e}", exc_info=True)
+
+    try:
+        background_scheduler.start()
+    except Exception as e:
+        logger.error(f"Error starting background scheduler: {e}", exc_info=True)
+
+    try:
+        telegram_poller.start()
+    except Exception as e:
+        logger.error(f"Error starting telegram poller: {e}", exc_info=True)
+
     yield
     # Shutdown
-    telegram_poller.stop()
-    background_scheduler.stop()
+    try:
+        telegram_poller.stop()
+    except Exception:
+        pass
+    try:
+        background_scheduler.stop()
+    except Exception:
+        pass
 
 
 app = FastAPI(

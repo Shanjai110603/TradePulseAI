@@ -90,15 +90,17 @@ async def init_db():
     try:
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Ensure 64-bit BigInt on PostgreSQL for Telegram accounts
-            if "postgresql" in str(async_engine.url):
-                try:
+        logger.info("Database schema initialized successfully.")
+
+        # Non-blocking PostgreSQL schema migration
+        if "postgresql" in str(async_engine.url):
+            try:
+                async with async_engine.begin() as conn:
                     from sqlalchemy import text
                     await conn.execute(text("ALTER TABLE telegram_accounts ALTER COLUMN telegram_user_id TYPE BIGINT;"))
                     await conn.execute(text("ALTER TABLE telegram_accounts ALTER COLUMN telegram_chat_id TYPE BIGINT;"))
-                except Exception as migration_err:
-                    logger.debug(f"PostgreSQL BigInt migration notice: {migration_err}")
-        logger.info("Database schema initialized successfully.")
+            except Exception as migration_err:
+                logger.debug(f"PostgreSQL BigInt migration notice: {migration_err}")
     except Exception as e:
         logger.warning(f"Remote database connection failed ({e}). Falling back to local SQLite database...")
         fallback_url = "sqlite+aiosqlite:///./tradepulse.db"
