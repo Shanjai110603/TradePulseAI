@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -13,6 +14,8 @@ from app.schemas.telegram import TelegramLinkCodeResponse, TelegramStatusRespons
 from app.telegram.bot import telegram_service
 from app.telegram.handlers import TelegramUpdateHandler
 from app.telegram.poller import telegram_poller
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/telegram", tags=["Telegram Integration"])
 
