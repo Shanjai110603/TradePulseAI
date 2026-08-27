@@ -202,14 +202,24 @@ class BackgroundScheduler:
                             # Broadcast signal notification to ALL active Telegram subscribers
                             tg_query = select(TelegramAccount).where(
                                 TelegramAccount.is_active == True,
-                                TelegramAccount.is_muted == False
+                                (TelegramAccount.is_muted == False) | (TelegramAccount.is_muted == None)
                             )
                             tg_res = await db.execute(tg_query)
                             subscribers = tg_res.scalars().all()
 
+                            p_name = pattern.name
+                            if "image_path" not in sig_payload or not sig_payload["image_path"]:
+                                if "15" in p_name:
+                                    sig_payload["image_path"] = "/uploads/patterns/pattern_type_15.jpg"
+                                elif "14" in p_name:
+                                    sig_payload["image_path"] = "/uploads/patterns/pattern_type_14.jpg"
+                                elif "1" in p_name or "SMC" in p_name:
+                                    sig_payload["image_path"] = "/uploads/patterns/pattern_type_1.jpg"
+
                             for sub in subscribers:
                                 try:
-                                    await telegram_service.send_signal_notification(sub.telegram_chat_id, sig_payload)
+                                    chat_id = int(sub.telegram_chat_id)
+                                    await telegram_service.send_signal_notification(chat_id, sig_payload)
                                 except Exception as err:
                                     logger.error(f"Failed to send signal to chat_id {sub.telegram_chat_id}: {err}")
 

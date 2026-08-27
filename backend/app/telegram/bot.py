@@ -9,6 +9,47 @@ from app.telegram.formatter import TelegramMessageFormatter
 logger = logging.getLogger(__name__)
 
 
+def resolve_pattern_image(pattern_name: str, raw_image_path: Optional[str] = None) -> Optional[str]:
+    """
+    Robustly resolves pattern reference diagram from multiple possible paths
+    across local dev, container root /app, and backend mounts.
+    """
+    search_paths = []
+    if raw_image_path:
+        clean = raw_image_path.lstrip("/").replace("\\", "/")
+        search_paths.extend([
+            raw_image_path,
+            clean,
+            f"/app/{clean}",
+            f"/app/backend/{clean}",
+            f"backend/{clean}",
+        ])
+
+    p_num = None
+    p_upper = pattern_name.upper()
+    if "15" in p_upper:
+        p_num = 15
+    elif "14" in p_upper:
+        p_num = 14
+    elif "1" in p_upper or "SMC" in p_upper:
+        p_num = 1
+
+    if p_num:
+        search_paths.extend([
+            f"uploads/patterns/pattern_type_{p_num}.jpg",
+            f"/app/uploads/patterns/pattern_type_{p_num}.jpg",
+            f"/app/backend/uploads/patterns/pattern_type_{p_num}.jpg",
+            f"backend/uploads/patterns/pattern_type_{p_num}.jpg",
+            f"/uploads/patterns/pattern_type_{p_num}.jpg",
+            f"./uploads/patterns/pattern_type_{p_num}.jpg",
+        ])
+
+    for p in search_paths:
+        if p and os.path.exists(p) and os.path.isfile(p):
+            return p
+    return None
+
+
 class TelegramBotService:
     """
     Manages Telegram Bot communications, message sending, inline keyboards,
@@ -30,25 +71,14 @@ class TelegramBotService:
         text, keyboard = TelegramMessageFormatter.format_main_signal(signal_dict)
 
         # 1. Determine image to attach (Strategy Diagram or Candlestick Graph)
-        photo_path = None
         pattern_name = str(signal_dict.get("pattern_name", ""))
         raw_image_path = signal_dict.get("image_path")
-
-        # Resolve known pattern image assets
-        if raw_image_path and os.path.exists(raw_image_path):
-            photo_path = raw_image_path
-        elif raw_image_path and raw_image_path.startswith("/") and os.path.exists(raw_image_path[1:]):
-            photo_path = raw_image_path[1:]
-        elif "Pattern Type 15" in pattern_name and os.path.exists("uploads/patterns/pattern_type_15.jpg"):
-            photo_path = "uploads/patterns/pattern_type_15.jpg"
-        elif "Pattern Type 14" in pattern_name and os.path.exists("uploads/patterns/pattern_type_14.jpg"):
-            photo_path = "uploads/patterns/pattern_type_14.jpg"
-        elif "Pattern Type 1" in pattern_name and os.path.exists("uploads/patterns/pattern_type_1.jpg"):
-            photo_path = "uploads/patterns/pattern_type_1.jpg"
+        photo_path = resolve_pattern_image(pattern_name, raw_image_path)
 
         # 2. Dispatch Photo with rich caption if photo exists
         if photo_path and os.path.exists(photo_path):
             try:
+                logger.info(f"[TELEGRAM] Dispatching visual photo ({photo_path}) to chat {chat_id}...")
                 res = await self.send_photo(
                     chat_id=chat_id,
                     photo_path=photo_path,

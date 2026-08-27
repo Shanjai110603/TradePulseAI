@@ -6,9 +6,10 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code and uploads
 COPY backend/app ./app
-RUN mkdir -p ./uploads
+COPY uploads ./uploads
+COPY backend/uploads ./backend/uploads
 
 # Expose port
 EXPOSE 8000

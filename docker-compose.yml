@@ -51,7 +51,8 @@ services:
     expose:
       - "8000"
     volumes:
-      - ./backend/uploads:/app/uploads
+      - ./uploads:/app/uploads
+      - ./uploads:/app/backend/uploads
 
   frontend:
     build:

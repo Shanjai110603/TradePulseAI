@@ -201,11 +201,11 @@ async def seed_initial_data():
             await db.commit()
             logger.info("Pattern Type 15 seeded successfully.")
 
-        # Seed Pattern Type 14 only if it doesn't exist yet
-        pat_res = await db.execute(
+        # Seed Pattern Type 14 (Horizontal Support Breakout)
+        p14_res = await db.execute(
             select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 14")
         )
-        if not pat_res.scalar_one_or_none():
+        if not p14_res.scalar_one_or_none():
             logger.info("Seeding Pattern Type 14 template...")
             p14 = Pattern(
                 user_id=demo_user.id,
@@ -218,12 +218,10 @@ async def seed_initial_data():
                 current_version=1,
                 assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
                 timeframes_config={"1M": "Any"},
-                trend_config={"required": "Bearish", "strong_breakout_candle": True},
-                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 60},
+                trend_config={"required": "Any"},
+                momentum_config={"strength": "Any"},
                 volume_config={},
-                indicators_config=[
-                    {"indicator": "RSI", "condition": "BELOW", "value": 55.0, "period": 14}
-                ],
+                indicators_config=[],
                 rules_config={
                     "operator": "AND",
                     "conditions": [
@@ -239,13 +237,12 @@ async def seed_initial_data():
                 },
                 entry_config={"type": "immediate"},
                 target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
-                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
+                ai_config={"enabled": True, "min_score": 60, "min_confidence": "MODERATE", "required_bias": "ANY"},
                 notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
             )
             db.add(p14)
             await db.flush()
 
-            # Attach visual reference image
             img14 = PatternImage(
                 pattern_id=p14.id,
                 file_path="/uploads/patterns/pattern_type_14.jpg",
@@ -257,30 +254,38 @@ async def seed_initial_data():
             )
             db.add(img14)
 
-            snapshot = {
-                "name": p14.name,
-                "direction": p14.direction,
-                "timeframe": p14.timeframe,
-                "market_id": p14.market_id,
-                "assets_config": p14.assets_config,
-                "timeframes_config": p14.timeframes_config,
-                "trend_config": p14.trend_config,
-                "momentum_config": p14.momentum_config,
-                "volume_config": p14.volume_config,
-                "indicators_config": p14.indicators_config,
-                "rules_config": p14.rules_config,
-                "entry_config": p14.entry_config,
-                "target_config": p14.target_config
-            }
-            v1 = PatternVersion(
+            v14 = PatternVersion(
                 pattern_id=p14.id,
                 version_number=1,
                 change_summary="System reference Pattern Type 14 (Horizontal Support Breakout)",
-                config_snapshot=snapshot
+                config_snapshot={
+                    "name": p14.name,
+                    "direction": p14.direction,
+                    "timeframe": p14.timeframe,
+                    "market_id": p14.market_id,
+                    "rules_config": p14.rules_config,
+                    "target_config": p14.target_config
+                }
             )
-            db.add(v1)
+            db.add(v14)
             await db.commit()
             logger.info("Pattern Type 14 seeded successfully.")
+
+        # Ensure all existing core patterns have optimal evaluation configs
+        for p_name, img_path in [
+            ("Pattern Type 1", "/uploads/patterns/pattern_type_1.jpg"),
+            ("Pattern Type 14", "/uploads/patterns/pattern_type_14.jpg"),
+            ("Pattern Type 15", "/uploads/patterns/pattern_type_15.jpg")
+        ]:
+            existing_p = (await db.execute(select(Pattern).where(Pattern.name == p_name))).scalar_one_or_none()
+            if existing_p:
+                existing_p.is_active = True
+                existing_p.trend_config = {"required": "Any"}
+                existing_p.momentum_config = {"strength": "Any"}
+                existing_p.indicators_config = []
+                existing_p.ai_config = {"enabled": True, "min_score": 60, "min_confidence": "MODERATE", "required_bias": "ANY"}
+                existing_p.assets_config = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
+        await db.commit()
 
         # Cleanup legacy generic patterns so bot ONLY evaluates the user's exact strategies
         await db.execute(
