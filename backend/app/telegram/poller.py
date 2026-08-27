@@ -44,7 +44,7 @@ class TelegramLongPoller:
         token = settings.TELEGRAM_BOT_TOKEN
         base_url = f"https://api.telegram.org/bot{token}"
 
-        # 1. Verify Bot Token, Clear Old Webhooks, and Fetch Bot Info
+        # 1. Verify Bot Token, Clear Old Webhooks, and Enforce Official Bot Profile
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 # Clear any lingering webhook from previous deployments
@@ -56,8 +56,25 @@ class TelegramLongPoller:
                     logger.info(f"Connected to Telegram Bot: @{self.bot_username} (ID: {me_data.get('id')})")
                 else:
                     logger.warning(f"Telegram getMe failed with status {me_resp.status_code}: {me_resp.text}")
+
+                # Lock and enforce official TradePulse AI description & command menu
+                await client.post(f"{base_url}/setMyName", json={"name": "TradePulse AI"})
+                await client.post(f"{base_url}/setMyDescription", json={
+                    "description": "TradePulse AI - Real-Time Quotex & Forex Algorithmic AI Trading Signals with Live Candlestick Charts."
+                })
+                await client.post(f"{base_url}/setMyShortDescription", json={
+                    "short_description": "Real-time Quotex & Forex AI Signals & Candlestick Charts."
+                })
+                await client.post(f"{base_url}/setMyCommands", json={
+                    "commands": [
+                        {"command": "signal", "description": "Get instant live Quotex AI trade signal"},
+                        {"command": "start", "description": "Subscribe & start live stream"},
+                        {"command": "status", "description": "Check subscription status"},
+                        {"command": "help", "description": "How to read signals & rules"}
+                    ]
+                })
             except Exception as e:
-                logger.error(f"Failed to connect to Telegram getMe: {e}")
+                logger.error(f"Failed during Telegram initialization/profile sync: {e}")
 
         # 2. Continuous Polling Loop
         while self._is_running:
