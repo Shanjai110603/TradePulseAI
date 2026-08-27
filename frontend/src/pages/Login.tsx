@@ -19,7 +19,15 @@ export const Login: React.FC = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Invalid email or password');
+      console.error('Login submission error:', err);
+      const serverDetail = err?.response?.data?.detail;
+      if (typeof serverDetail === 'string') {
+        setError(serverDetail);
+      } else if (Array.isArray(serverDetail) && serverDetail.length > 0) {
+        setError(serverDetail[0]?.msg || 'Validation error');
+      } else {
+        setError(err?.message ? `Login failed (${err.message})` : 'Invalid email or password');
+      }
     } finally {
       setSubmitting(false);
     }

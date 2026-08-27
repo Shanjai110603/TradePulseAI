@@ -151,16 +151,23 @@ async def login(
     tg_res = await db.execute(tg_q)
     is_tg = tg_res.scalar_one_or_none() is not None
 
+    prefs_schema = None
+    try:
+        if user.preferences:
+            prefs_schema = UserPreferencesSchema.model_validate(user.preferences)
+    except Exception:
+        pass
+
     user_resp = UserResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        timezone=user.timezone,
-        is_active=user.is_active,
-        is_admin=user.is_admin,
-        created_at=user.created_at,
+        id=str(user.id),
+        email=user.email or clean_email,
+        full_name=user.full_name or "Demo User",
+        timezone=user.timezone or "UTC",
+        is_active=True,
+        is_admin=bool(user.is_admin),
+        created_at=user.created_at or datetime.utcnow(),
         is_telegram_linked=is_tg,
-        preferences=UserPreferencesSchema.model_validate(user.preferences) if user.preferences else None
+        preferences=prefs_schema
     )
 
     return Token(access_token=access_token, token_type="bearer", user=user_resp)
@@ -172,16 +179,23 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
     tg_res = await db.execute(tg_q)
     is_tg = tg_res.scalar_one_or_none() is not None
 
+    prefs_schema = None
+    try:
+        if current_user.preferences:
+            prefs_schema = UserPreferencesSchema.model_validate(current_user.preferences)
+    except Exception:
+        pass
+
     return UserResponse(
-        id=current_user.id,
+        id=str(current_user.id),
         email=current_user.email,
         full_name=current_user.full_name,
-        timezone=current_user.timezone,
+        timezone=current_user.timezone or "UTC",
         is_active=current_user.is_active,
         is_admin=current_user.is_admin,
-        created_at=current_user.created_at,
+        created_at=current_user.created_at or datetime.utcnow(),
         is_telegram_linked=is_tg,
-        preferences=UserPreferencesSchema.model_validate(current_user.preferences) if current_user.preferences else None
+        preferences=prefs_schema
     )
 
 
