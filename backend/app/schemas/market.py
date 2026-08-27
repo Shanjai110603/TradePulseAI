@@ -62,3 +62,11 @@ class CandleSchema(BaseModel):
     close: float
     volume: float
 
+
+class TickerItem(BaseModel):
+    symbol: str
+    price: float
+    change_pct: float
+    is_up: bool
+    precision: int = 5
+

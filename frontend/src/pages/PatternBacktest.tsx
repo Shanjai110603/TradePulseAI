@@ -174,7 +174,7 @@ export const PatternBacktest: React.FC = () => {
           <div className="glass-panel p-4">
             <span className="text-xs text-gray-500 font-mono block">PROFIT FACTOR</span>
             <p className="text-2xl font-bold text-cyan-400 mt-1">
-              {backtestResult.profit_factor?.toFixed(2) || '2.40'}
+              {backtestResult.profit_factor != null ? backtestResult.profit_factor.toFixed(2) : 'N/A'}
             </p>
             <span className="text-[11px] text-gray-400">Gross Gain / Loss Ratio</span>
           </div>
@@ -182,7 +182,7 @@ export const PatternBacktest: React.FC = () => {
           <div className="glass-panel p-4">
             <span className="text-xs text-gray-500 font-mono block">MAX DRAWDOWN</span>
             <p className="text-2xl font-bold text-trade-down mt-1">
-              {backtestResult.max_drawdown_percentage?.toFixed(2) || '4.20'}%
+              {backtestResult.max_drawdown_percentage != null ? `${backtestResult.max_drawdown_percentage.toFixed(2)}%` : '0.00%'}
             </p>
             <span className="text-[11px] text-gray-400">Peak-to-valley variance</span>
           </div>

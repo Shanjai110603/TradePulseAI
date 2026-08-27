@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { telegramApi } from '../../services/api';
-import { TelegramStatus } from '../../types';
+import { telegramApi, marketsApi } from '../../services/api';
+import { TelegramStatus, TickerItem } from '../../types';
 import { Activity, Bell, Send, Shield, User as UserIcon, LogOut, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [tgStatus, setTgStatus] = useState<TelegramStatus | null>(null);
+  const [tickers, setTickers] = useState<TickerItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
@@ -16,6 +17,15 @@ export const Navbar: React.FC = () => {
       telegramApi.getStatus().then(setTgStatus).catch(console.error);
     }
   }, [user]);
+
+  useEffect(() => {
+    const fetchTickers = () => {
+      marketsApi.getTickers().then(setTickers).catch(console.error);
+    };
+    fetchTickers();
+    const interval = setInterval(fetchTickers, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <header className="h-16 border-b border-surface-border bg-surface/90 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between">
@@ -41,22 +51,25 @@ export const Navbar: React.FC = () => {
         </Link>
 
         {/* Live Mini Market Bar */}
-        <div className="hidden lg:flex items-center space-x-4 pl-6 border-l border-surface-border/60 text-xs font-mono">
-          <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40">
-            <span className="text-gray-400">EUR/USD (OTC)</span>
-            <span className="text-trade-up font-semibold">1.08542</span>
-            <span className="text-[10px] text-trade-up font-medium">+0.18%</span>
-          </div>
-          <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40">
-            <span className="text-gray-400">BTC/USDT (OTC)</span>
-            <span className="text-trade-up font-semibold">67,520.40</span>
-            <span className="text-[10px] text-trade-up font-medium">+2.45%</span>
-          </div>
-          <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40">
-            <span className="text-gray-400">GBP/USD (OTC)</span>
-            <span className="text-trade-down font-semibold">1.27180</span>
-            <span className="text-[10px] text-trade-down font-medium">-0.05%</span>
-          </div>
+        <div className="hidden lg:flex items-center space-x-3 pl-6 border-l border-surface-border/60 text-xs font-mono">
+          {tickers.length > 0 ? (
+            tickers.slice(0, 3).map((t) => (
+              <div key={t.symbol} className="flex items-center space-x-2 bg-surface-raised/60 px-2.5 py-1.5 rounded-lg border border-surface-border/40">
+                <span className="text-gray-400">{t.symbol}</span>
+                <span className={`font-semibold ${t.is_up ? 'text-trade-up' : 'text-trade-down'}`}>
+                  {t.price.toLocaleString(undefined, { minimumFractionDigits: t.precision, maximumFractionDigits: t.precision })}
+                </span>
+                <span className={`text-[10px] font-medium ${t.is_up ? 'text-trade-up' : 'text-trade-down'}`}>
+                  {t.change_pct >= 0 ? `+${t.change_pct}%` : `${t.change_pct}%`}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40 text-gray-500">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Connecting live feeds...</span>
+            </div>
+          )}
         </div>
       </div>
 

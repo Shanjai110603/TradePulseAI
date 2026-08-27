@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { patternsApi, signalsApi, telegramApi } from '../services/api';
-import { Pattern, Signal, TelegramStatus } from '../types';
+import { patternsApi, signalsApi, telegramApi, performanceApi } from '../services/api';
+import { Pattern, Signal, TelegramStatus, PerformanceOverview } from '../types';
 import { TradingViewWidget } from '../components/charts/TradingViewWidget';
 import { 
   Activity, 
@@ -23,6 +23,7 @@ import {
 export const Dashboard: React.FC = () => {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [perfOverview, setPerfOverview] = useState<PerformanceOverview | null>(null);
   const [selectedAsset, setSelectedAsset] = useState('EUR/USD (OTC)');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1M');
   const [tgStatus, setTgStatus] = useState<TelegramStatus | null>(null);
@@ -31,14 +32,16 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [pList, sList, tg] = await Promise.all([
+        const [pList, sList, tg, perf] = await Promise.all([
           patternsApi.getPatterns(),
           signalsApi.getSignals({ limit: 15 }),
           telegramApi.getStatus().catch(() => null),
+          performanceApi.getOverview().catch(() => null),
         ]);
         setPatterns(pList);
         setSignals(sList);
         if (tg) setTgStatus(tg);
+        if (perf) setPerfOverview(perf);
       } catch (err) {
         console.error('Error loading dashboard data', err);
       } finally {
@@ -86,8 +89,14 @@ export const Dashboard: React.FC = () => {
         <div className="glass-panel p-4 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-400 font-mono">HISTORICAL WIN RATE</p>
-            <p className="text-2xl font-bold text-trade-up mt-1">84.2%</p>
-            <p className="text-[11px] text-gray-400 mt-1">Quotex 1M OTC Momentum</p>
+            <p className="text-2xl font-bold text-trade-up mt-1">
+              {perfOverview ? `${perfOverview.overall_win_rate}%` : '---'}
+            </p>
+            <p className="text-[11px] text-gray-400 mt-1 truncate max-w-[150px]">
+              {perfOverview?.pattern_stats?.[0]?.pattern_name 
+                ? `${perfOverview.pattern_stats[0].pattern_name}`
+                : 'Verified Signal Outcomes'}
+            </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-trade-up shadow-glow-green">
             <Percent className="w-6 h-6" />

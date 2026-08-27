@@ -5,10 +5,49 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.models.market import Market, Asset, DataSource, Timeframe
-from app.schemas.market import MarketResponse, AssetResponse, DataSourceResponse, TimeframeResponse, CandleSchema
+from app.schemas.market import MarketResponse, AssetResponse, DataSourceResponse, TimeframeResponse, CandleSchema, TickerItem
 from app.engine.market_data.manager import market_data_manager
 
 router = APIRouter(prefix="/markets", tags=["Markets & Assets"])
+
+
+@router.get("/tickers", response_model=List[TickerItem])
+async def get_live_tickers():
+    provider = market_data_manager.get_provider()
+    watch_symbols = [
+        ("EUR/USD (OTC)", 5),
+        ("BTC/USDT (OTC)", 2),
+        ("GBP/USD (OTC)", 5),
+        ("USD/JPY (OTC)", 3),
+        ("AUD/CAD (OTC)", 5),
+    ]
+    tickers = []
+    for sym, prec in watch_symbols:
+        try:
+            candles = await provider.get_candles(sym, timeframe="1M", limit=2)
+            if len(candles) >= 2:
+                prev_c = candles[-2].close
+                curr_c = candles[-1].close
+                change = ((curr_c - prev_c) / prev_c) * 100.0 if prev_c > 0 else 0.0
+                tickers.append(TickerItem(
+                    symbol=sym,
+                    price=round(curr_c, prec),
+                    change_pct=round(change, 2),
+                    is_up=curr_c >= prev_c,
+                    precision=prec
+                ))
+            elif len(candles) == 1:
+                curr_c = candles[0].close
+                tickers.append(TickerItem(
+                    symbol=sym,
+                    price=round(curr_c, prec),
+                    change_pct=0.0,
+                    is_up=True,
+                    precision=prec
+                ))
+        except Exception:
+            continue
+    return tickers
 
 
 @router.get("", response_model=List[MarketResponse])
@@ -64,6 +103,6 @@ async def get_market_candles(
 @router.get("/data-sources", response_model=List[DataSourceResponse])
 async def list_data_sources():
     return [
-        DataSourceResponse(id="mock", name="Deterministic Simulation Engine", provider_type="mock", is_active=True, is_live=False, is_free=True, supported_markets=["digital_options", "crypto", "forex", "stocks"], rate_limit_per_minute=1000),
+        DataSourceResponse(id="quotex", name="Quotex OTC Live / Engine", provider_type="live", is_active=True, is_live=True, is_free=True, supported_markets=["digital_options", "forex", "crypto"], rate_limit_per_minute=2000),
         DataSourceResponse(id="binance", name="Binance Public API", provider_type="live", is_active=True, is_live=True, is_free=True, supported_markets=["crypto"], rate_limit_per_minute=1200),
     ]

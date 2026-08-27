@@ -78,7 +78,7 @@ export const PatternDetail: React.FC = () => {
           <div className="h-64 rounded-xl bg-surface-raised/60 border border-surface-border/80 flex items-center justify-center overflow-hidden">
             {primaryImage ? (
               <img
-                src={`http://localhost:8000${primaryImage.file_path}`}
+                src={primaryImage.file_path}
                 alt={pattern.name}
                 className="w-full h-full object-contain"
               />

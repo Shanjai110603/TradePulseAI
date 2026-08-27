@@ -83,17 +83,25 @@ export const Performance: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border/50">
-              {data.pattern_stats.map((p) => (
-                <tr key={p.pattern_id} className="hover:bg-surface-raised/40">
-                  <td className="py-3 font-bold text-white">{p.pattern_name}</td>
-                  <td className="py-3 text-gray-300">{p.total_signals}</td>
-                  <td className="py-3 text-trade-up font-semibold">{p.wins}</td>
-                  <td className="py-3 text-trade-down font-semibold">{p.losses}</td>
-                  <td className="py-3 text-trade-up font-bold">{p.win_rate}%</td>
-                  <td className="py-3 text-cyan-300">{p.best_asset} ({p.best_timeframe})</td>
-                  <td className="py-3 text-right text-primary font-semibold">{p.average_ai_score}/100</td>
+              {data.pattern_stats.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-gray-500 font-mono">
+                    No evaluated signals yet. Live signals and backtest outcomes will dynamically calculate stats here.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                data.pattern_stats.map((p) => (
+                  <tr key={p.pattern_id} className="hover:bg-surface-raised/40">
+                    <td className="py-3 font-bold text-white">{p.pattern_name}</td>
+                    <td className="py-3 text-gray-300">{p.total_signals}</td>
+                    <td className="py-3 text-trade-up font-semibold">{p.wins}</td>
+                    <td className="py-3 text-trade-down font-semibold">{p.losses}</td>
+                    <td className="py-3 text-trade-up font-bold">{p.win_rate}%</td>
+                    <td className="py-3 text-cyan-300">{p.best_asset || 'EUR/USD (OTC)'} {p.best_timeframe ? `(${p.best_timeframe})` : ''}</td>
+                    <td className="py-3 text-right text-primary font-semibold">{p.average_ai_score ? `${p.average_ai_score}/100` : '---'}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

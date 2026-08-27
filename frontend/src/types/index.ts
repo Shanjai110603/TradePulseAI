@@ -61,6 +61,14 @@ export interface Candle {
   volume: number;
 }
 
+export interface TickerItem {
+  symbol: string;
+  price: number;
+  change_pct: number;
+  is_up: boolean;
+  precision: number;
+}
+
 export interface PatternImage {
   id: string;
   pattern_id: string;

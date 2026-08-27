@@ -68,13 +68,19 @@ async def get_system_metrics(
     patterns_count = (await db.execute(select(func.count(Pattern.id)).where(Pattern.is_active == True))).scalar() or 0
     signals_count = (await db.execute(select(func.count(Signal.id)))).scalar() or 0
 
+    now_utc = datetime.now(timezone.utc)
+    today_start = datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=timezone.utc)
+    signals_today_count = (await db.execute(
+        select(func.count(Signal.id)).where(Signal.created_at >= today_start)
+    )).scalar() or 0
+
     process = psutil.Process(os.getpid()) if hasattr(psutil, "Process") else None
     mem_mb = (process.memory_info().rss / 1024 / 1024) if process else 45.0
 
     return SystemMetricsResponse(
         total_users=users_count,
         total_active_patterns=patterns_count,
-        total_signals_today=min(signals_count, 12),
+        total_signals_today=signals_today_count,
         total_signals_all_time=signals_count,
         uptime_seconds=time.time() - _start_time,
         memory_usage_mb=round(mem_mb, 2)

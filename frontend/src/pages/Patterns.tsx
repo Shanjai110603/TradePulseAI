@@ -108,11 +108,11 @@ export const Patterns: React.FC = () => {
               <div className="relative h-44 bg-surface-raised/80 border-b border-surface-border/60 flex items-center justify-center overflow-hidden group">
                 {primaryImage ? (
                   <img
-                    src={`http://localhost:8000${primaryImage.file_path}`}
+                    src={primaryImage.file_path}
                     alt={p.name}
                     className="w-full h-full object-cover transition-transform group-hover:scale-105"
                     onError={(e) => {
-                      // Fallback if local image not found
+                      // Fallback if image not found
                       e.currentTarget.style.display = 'none';
                     }}
                   />

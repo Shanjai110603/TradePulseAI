@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, UserPreferences, Market, Asset, Candle, Pattern, PatternImage, Signal, BacktestResult, TelegramStatus, PerformanceOverview } from '../types';
+import { AuthResponse, User, UserPreferences, Market, Asset, Candle, TickerItem, Pattern, PatternImage, Signal, BacktestResult, TelegramStatus, PerformanceOverview } from '../types';
 
 // Dynamic API Base - uses local reverse proxy by default
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -43,6 +43,10 @@ export const marketsApi = {
   },
   getAssets: async (marketId: string): Promise<Asset[]> => {
     const res = await api.get(`/markets/${marketId}/assets`);
+    return res.data;
+  },
+  getTickers: async (): Promise<TickerItem[]> => {
+    const res = await api.get('/markets/tickers');
     return res.data;
   },
   getCandles: async (symbol: string, timeframe: string = '1M', limit: number = 100): Promise<Candle[]> => {

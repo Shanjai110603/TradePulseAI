@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { signalsApi, marketsApi } from '../services/api';
-import { Signal, Candle } from '../types';
-import { TradingViewChart } from '../components/charts/TradingViewChart';
+import { signalsApi } from '../services/api';
+import { Signal } from '../types';
+import { TradingViewWidget } from '../components/charts/TradingViewWidget';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -18,18 +18,12 @@ import {
 export const SignalDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [signal, setSignal] = useState<Signal | null>(null);
-  const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (id) {
       signalsApi.getSignal(id).then((sig) => {
         setSignal(sig);
-        if (sig.raw_trigger_candles && sig.raw_trigger_candles.length > 0) {
-          setCandles(sig.raw_trigger_candles);
-        } else {
-          marketsApi.getCandles(sig.asset_symbol, sig.timeframe, 60).then(setCandles).catch(console.error);
-        }
       }).catch(console.error).finally(() => setLoading(false));
     }
   }, [id]);
@@ -93,19 +87,10 @@ export const SignalDetail: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Candlestick Chart */}
         <div className="lg:col-span-2 space-y-4">
-          <TradingViewChart
-            candles={candles}
+          <TradingViewWidget
             symbol={signal.asset_symbol}
             timeframe={signal.timeframe}
             height={460}
-            supportLevels={tech?.support_levels || []}
-            resistanceLevels={tech?.resistance_levels || []}
-            signalMarker={{
-              timestamp: candles.length > 0 ? candles[candles.length - 1].timestamp : Math.floor(new Date(signal.entry_time).getTime() / 1000),
-              price: signal.reference_price,
-              direction: signal.direction as any,
-              text: `${signal.direction} @ ${signal.reference_price}`
-            }}
           />
 
           {/* Pricing Metrics Grid */}
