@@ -72,6 +72,7 @@ class TradeChartGenerator:
 
         width = 1280
         height = 720
+        asset = signal_data.get("asset_symbol", "EUR/USD (OTC)")
 
         # Fonts
         font_logo = _load_font(20, bold=True)
