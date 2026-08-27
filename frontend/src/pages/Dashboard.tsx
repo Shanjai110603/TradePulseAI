@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { patternsApi, signalsApi, marketsApi, telegramApi } from '../services/api';
-import { Pattern, Signal, Candle, TelegramStatus } from '../types';
-import { TradingViewChart } from '../components/charts/TradingViewChart';
+import { patternsApi, signalsApi, telegramApi } from '../services/api';
+import { Pattern, Signal, TelegramStatus } from '../types';
+import { TradingViewWidget } from '../components/charts/TradingViewWidget';
 import { 
   Activity, 
   Layers, 
@@ -23,7 +23,6 @@ import {
 export const Dashboard: React.FC = () => {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [candles, setCandles] = useState<Candle[]>([]);
   const [selectedAsset, setSelectedAsset] = useState('EUR/USD (OTC)');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1M');
   const [tgStatus, setTgStatus] = useState<TelegramStatus | null>(null);
@@ -32,15 +31,13 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [pList, sList, cList, tg] = await Promise.all([
+        const [pList, sList, tg] = await Promise.all([
           patternsApi.getPatterns(),
           signalsApi.getSignals({ limit: 15 }),
-          marketsApi.getCandles(selectedAsset, selectedTimeframe, 80),
           telegramApi.getStatus().catch(() => null),
         ]);
         setPatterns(pList);
         setSignals(sList);
-        setCandles(cList);
         if (tg) setTgStatus(tg);
       } catch (err) {
         console.error('Error loading dashboard data', err);
@@ -50,10 +47,9 @@ export const Dashboard: React.FC = () => {
     };
 
     loadData();
-    // 3-second live market tick poller
-    const interval = setInterval(loadData, 3000);
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
-  }, [selectedAsset, selectedTimeframe]);
+  }, []);
 
   const activePatterns = patterns.filter((p) => p.is_active);
   const activeSignals = signals.filter((s) => s.status === 'ACTIVE');
@@ -159,16 +155,10 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <TradingViewChart
-            candles={candles}
+          <TradingViewWidget
             symbol={selectedAsset}
             timeframe={selectedTimeframe}
-            height={440}
-            supportLevels={
-              signals.length > 0 && signals[0].technical_snapshot?.support_levels
-                ? signals[0].technical_snapshot.support_levels
-                : [1.0852, 1.0848]
-            }
+            height={480}
           />
         </div>
 
