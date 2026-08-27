@@ -67,18 +67,39 @@ class TelegramBotService:
         chat_id: int,
         signal_dict: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Dispatches concise main signal message with visual chart/diagram and interactive buttons"""
+        """Dispatches concise main signal message with live trade candlestick chart and interactive buttons"""
         text, keyboard = TelegramMessageFormatter.format_main_signal(signal_dict)
 
-        # 1. Determine image to attach (Strategy Diagram or Candlestick Graph)
+        # 1. Determine image to attach (Live Trade Candlestick Chart or Reference Diagram)
         pattern_name = str(signal_dict.get("pattern_name", ""))
         raw_image_path = signal_dict.get("image_path")
-        photo_path = resolve_pattern_image(pattern_name, raw_image_path)
+        photo_path = None
+
+        if raw_image_path and os.path.exists(raw_image_path) and os.path.isfile(raw_image_path):
+            photo_path = raw_image_path
+        elif raw_image_path and os.path.exists(raw_image_path.lstrip("/")) and os.path.isfile(raw_image_path.lstrip("/")):
+            photo_path = raw_image_path.lstrip("/")
+        elif raw_image_path and os.path.exists(f"/app/{raw_image_path.lstrip('/')}") and os.path.isfile(f"/app/{raw_image_path.lstrip('/')}"):
+            photo_path = f"/app/{raw_image_path.lstrip('/')}"
+        else:
+            # Generate trade candlestick chart on the fly if raw trigger candles are present
+            raw_candles = signal_dict.get("raw_trigger_candles", [])
+            if raw_candles:
+                try:
+                    from app.engine.charts.chart_generator import TradeChartGenerator
+                    from app.engine.market_data.base import Candle
+                    c_objects = [Candle(**c) if isinstance(c, dict) else c for c in raw_candles]
+                    photo_path = TradeChartGenerator.generate_chart(candles=c_objects, signal_data=signal_dict)
+                except Exception as gen_err:
+                    logger.debug(f"On-the-fly trade chart generation notice: {gen_err}")
+
+            if not photo_path or not os.path.exists(photo_path):
+                photo_path = resolve_pattern_image(pattern_name, raw_image_path)
 
         # 2. Dispatch Photo with rich caption if photo exists
         if photo_path and os.path.exists(photo_path):
             try:
-                logger.info(f"[TELEGRAM] Dispatching visual photo ({photo_path}) to chat {chat_id}...")
+                logger.info(f"[TELEGRAM] Dispatching trade chart photo ({photo_path}) to chat {chat_id}...")
                 res = await self.send_photo(
                     chat_id=chat_id,
                     photo_path=photo_path,

@@ -71,8 +71,10 @@ class BackgroundScheduler:
 
             provider = market_data_manager.get_provider()
 
+            signal_generated_in_tick = False
+
             for pattern in active_patterns:
-                assets = pattern.assets_config or ["EUR/USD"]
+                assets = pattern.assets_config or ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
                 tf = pattern.timeframe or "1M"
 
                 for asset_symbol in assets:
@@ -102,14 +104,14 @@ class BackgroundScheduler:
                             "timeframe": tf,
                             "asset_symbol": asset_symbol,
                             "current_version": pattern.current_version,
-                            "trend_config": pattern.trend_config,
-                            "momentum_config": pattern.momentum_config,
-                            "volume_config": pattern.volume_config,
-                            "indicators_config": pattern.indicators_config,
-                            "rules_config": pattern.rules_config,
-                            "entry_config": pattern.entry_config,
-                            "target_config": pattern.target_config,
-                            "ai_config": pattern.ai_config,
+                            "trend_config": pattern.trend_config or {},
+                            "momentum_config": pattern.momentum_config or {},
+                            "volume_config": pattern.volume_config or {},
+                            "indicators_config": pattern.indicators_config or [],
+                            "rules_config": pattern.rules_config or {},
+                            "entry_config": pattern.entry_config or {"type": "immediate"},
+                            "target_config": pattern.target_config or {"duration_minutes": 1, "duration_candles": 1},
+                            "ai_config": pattern.ai_config or {"enabled": True, "min_score": 60, "min_confidence": "MODERATE"},
                         }
 
                         user_prefs = None
@@ -128,6 +130,7 @@ class BackgroundScheduler:
                         )
 
                         if is_created and sig_payload:
+                            signal_generated_in_tick = True
                             # Persist Signal to DB
                             new_signal = Signal(
                                 id=sig_payload["id"],
@@ -206,15 +209,6 @@ class BackgroundScheduler:
                             )
                             tg_res = await db.execute(tg_query)
                             subscribers = tg_res.scalars().all()
-
-                            p_name = pattern.name
-                            if "image_path" not in sig_payload or not sig_payload["image_path"]:
-                                if "15" in p_name:
-                                    sig_payload["image_path"] = "/uploads/patterns/pattern_type_15.jpg"
-                                elif "14" in p_name:
-                                    sig_payload["image_path"] = "/uploads/patterns/pattern_type_14.jpg"
-                                elif "1" in p_name or "SMC" in p_name:
-                                    sig_payload["image_path"] = "/uploads/patterns/pattern_type_1.jpg"
 
                             for sub in subscribers:
                                 try:

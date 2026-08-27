@@ -122,6 +122,8 @@ class SignalEvaluationPipeline:
             "direction": direction,
             "timeframe": timeframe,
             "reference_price": reference_price,
+            "support_level": rule_result.get("support_level") or technical_snapshot.get("support_levels", [None])[-1],
+            "resistance_level": rule_result.get("resistance_level") or technical_snapshot.get("resistance_levels", [None])[-1],
             "entry_time": entry_time,
             "expiry_time": expiry_time,
             "duration_minutes": duration_minutes,
@@ -138,5 +140,13 @@ class SignalEvaluationPipeline:
             "ai_analysis": ai_analysis.model_dump(),
             "raw_trigger_candles": [c.model_dump() for c in candles[-10:]]
         }
+
+        # Render live trade candlestick chart snapshot
+        try:
+            from app.engine.charts.chart_generator import TradeChartGenerator
+            chart_path = TradeChartGenerator.generate_chart(candles=candles, signal_data=signal_payload)
+            signal_payload["image_path"] = chart_path
+        except Exception as chart_err:
+            pass
 
         return True, signal_payload, "Signal validated and generated", audit_trail
