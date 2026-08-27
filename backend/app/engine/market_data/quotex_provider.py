@@ -405,50 +405,55 @@ class QuotexMarketDataProvider(MarketDataProvider):
 
         is_crypto = "BTC" in symbol or "ETH" in symbol
         is_jpy = "JPY" in symbol
-        vol = 0.00035 if not is_crypto else 0.0025
+        vol = 0.00025 if not is_crypto else 0.0020
         if is_jpy:
-            vol = 0.045
+            vol = 0.035
         if is_crypto:
-            vol = 25.0 if "BTC" in symbol else 1.5
+            vol = 18.0 if "BTC" in symbol else 1.2
+        precision = 2 if is_crypto else (3 if is_jpy else 5)
 
-        # Seeded RNG for deterministic continuity within the same hour
-        seed_val = int(abs(hash(symbol))) % 100000
-        rng = random.Random(seed_val + (start_ts // 3600))
+        seed_base = int(abs(hash(symbol))) % 100000
+        start_index = start_ts // seconds_step
+
+        # Pre-walk starting price stably from epoch index
+        running_price = base_price
+        for idx in range(start_index - 30, start_index):
+            r = random.Random(seed_base ^ (idx * 31))
+            drift = math.sin(idx / 18.0) * (vol * 0.3)
+            running_price += r.gauss(0, vol * 0.5) + drift
 
         candles: List[Candle] = []
-        current_price = base_price
-
         for i in range(limit):
             t = start_ts + (i * seconds_step)
-            # Sine-wave drift for realistic trending behaviour
-            drift = math.sin(i / 14.0) * (vol * 0.35) + math.sin(i / 47.0) * (vol * 0.15)
-            step = rng.gauss(0, vol * 0.8) + drift
+            idx = t // seconds_step
+            r = random.Random(seed_base ^ (idx * 31))
 
-            open_p = current_price
+            drift = math.sin(idx / 18.0) * (vol * 0.3) + math.sin(idx / 53.0) * (vol * 0.15)
+            step = r.gauss(0, vol * 0.5) + drift
+
+            open_p = running_price
             close_p = open_p + step
 
-            # If this is the current active forming candle, inject real-time tick pulse
+            # If current active forming candle, inject smooth live tick pulse
             if i == limit - 1:
                 cur_sec = time.time()
-                live_tick = math.sin(cur_sec * 1.5) * (vol * 0.6) + math.cos(cur_sec * 0.7) * (vol * 0.3)
+                live_tick = math.sin(cur_sec * 1.5) * (vol * 0.35)
                 close_p = open_p + live_tick
 
-            high_wick = abs(rng.gauss(0, vol * 0.45))
-            low_wick = abs(rng.gauss(0, vol * 0.45))
+            high_wick = abs(r.gauss(0, vol * 0.3))
+            low_wick = abs(r.gauss(0, vol * 0.3))
             high_p = max(open_p, close_p) + high_wick
             low_p = min(open_p, close_p) - low_wick
-            volume = rng.uniform(800, 3200)
 
-            precision = 2 if is_crypto else (3 if is_jpy else 5)
             candles.append(Candle(
                 timestamp=t,
                 open=round(open_p, precision),
                 high=round(high_p, precision),
                 low=round(low_p, precision),
                 close=round(close_p, precision),
-                volume=round(volume, 2),
+                volume=round(r.uniform(900, 2800), 2),
             ))
-            current_price = close_p
+            running_price = open_p + step
 
         if candles:
             self._price_cache[symbol] = candles[-1].close

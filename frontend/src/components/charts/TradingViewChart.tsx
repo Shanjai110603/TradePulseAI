@@ -32,8 +32,10 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const priceLinesRef = useRef<any[]>([]);
+  const lastSymbolRef = useRef<string>('');
+  const lastCandleTimestampRef = useRef<number>(0);
 
-  // 1. Initialize Chart Instance ONCE on mount / container resize
+  // 1. Initialize Chart Instance ONCE
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
@@ -63,19 +65,19 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       },
       rightPriceScale: {
         borderColor: '#222f44',
-        scaleMargins: { top: 0.1, bottom: 0.1 },
+        scaleMargins: { top: 0.12, bottom: 0.12 },
         autoScale: true,
       },
       timeScale: {
         borderColor: '#222f44',
         timeVisible: true,
-        secondsVisible: true,
+        secondsVisible: false,
+        shiftVisibleRangeOnNewBar: true,
       },
     });
 
     chartRef.current = chart;
 
-    // Add Candlestick series
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#00f298',
       downColor: '#ff3366',
@@ -85,6 +87,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
     });
 
     candleSeriesRef.current = candleSeries;
+    lastSymbolRef.current = '';
 
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -103,7 +106,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
     };
   }, [height]);
 
-  // 2. Real-time Live Data Streamer & Smooth Candle Updates
+  // 2. Smooth Candle Updates without Resetting View
   useEffect(() => {
     if (!candleSeriesRef.current || !candles || candles.length === 0) return;
 
@@ -123,17 +126,30 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       }))
       .sort((a, b) => (a.time as number) - (b.time as number));
 
-    if (formattedData.length > 0) {
+    if (formattedData.length === 0) return;
+
+    const latestCandle = formattedData[formattedData.length - 1];
+    const latestTimestamp = latestCandle.time as number;
+
+    // If symbol changed or first load for this symbol
+    if (lastSymbolRef.current !== symbol) {
       candleSeriesRef.current.setData(formattedData);
+      chartRef.current?.timeScale().fitContent();
+      lastSymbolRef.current = symbol;
+      lastCandleTimestampRef.current = latestTimestamp;
+    } else {
+      // If updating the active forming candle in real-time
+      if (latestTimestamp === lastCandleTimestampRef.current) {
+        candleSeriesRef.current.update(latestCandle);
+      } else {
+        // A new candle has just spawned
+        candleSeriesRef.current.update(latestCandle);
+        lastCandleTimestampRef.current = latestTimestamp;
+      }
+    }
 
-      // Re-apply support/resistance lines without flickering
-      priceLinesRef.current.forEach((line) => {
-        try {
-          candleSeriesRef.current?.removePriceLine(line);
-        } catch (e) {}
-      });
-      priceLinesRef.current = [];
-
+    // Static Support/Resistance Price Lines
+    if (priceLinesRef.current.length === 0 && supportLevels.length > 0) {
       supportLevels.forEach((s) => {
         if (candleSeriesRef.current) {
           const line = candleSeriesRef.current.createPriceLine({
@@ -161,22 +177,22 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
           priceLinesRef.current.push(line);
         }
       });
-
-      if (signalMarker && candleSeriesRef.current) {
-        const isDown = signalMarker.direction === 'DOWN' || signalMarker.direction === 'SELL';
-        (candleSeriesRef.current as any).setMarkers?.([
-          {
-            time: Math.floor(signalMarker.timestamp) as Time,
-            position: isDown ? 'aboveBar' : 'belowBar',
-            color: isDown ? '#ff3366' : '#00f298',
-            shape: isDown ? 'arrowDown' : 'arrowUp',
-            text: signalMarker.text || (isDown ? '🔴 PUT' : '🟢 CALL'),
-            size: 2,
-          },
-        ]);
-      }
     }
-  }, [candles, supportLevels, resistanceLevels, signalMarker]);
+
+    if (signalMarker && candleSeriesRef.current) {
+      const isDown = signalMarker.direction === 'DOWN' || signalMarker.direction === 'SELL';
+      (candleSeriesRef.current as any).setMarkers?.([
+        {
+          time: Math.floor(signalMarker.timestamp) as Time,
+          position: isDown ? 'aboveBar' : 'belowBar',
+          color: isDown ? '#ff3366' : '#00f298',
+          shape: isDown ? 'arrowDown' : 'arrowUp',
+          text: signalMarker.text || (isDown ? '🔴 PUT' : '🟢 CALL'),
+          size: 2,
+        },
+      ]);
+    }
+  }, [candles, symbol, supportLevels, resistanceLevels, signalMarker]);
 
   const latestCandle = candles && candles.length > 0 ? candles[candles.length - 1] : null;
   const isUp = latestCandle ? latestCandle.close >= latestCandle.open : true;
@@ -190,9 +206,9 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
           <span className="text-[10px] px-2 py-0.5 rounded bg-primary/20 text-primary font-mono font-semibold border border-primary/30">
             {timeframe}
           </span>
-          <span className="text-[11px] text-gray-400 font-mono flex items-center gap-1.5">
+          <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            LIVE STREAM ({candles.length} Candles)
+            LIVE STREAM
           </span>
         </div>
         <div className="flex items-center space-x-3 text-xs font-mono">
