@@ -349,6 +349,7 @@ class TechnicalIndicatorEngine:
         last_close = closes[-1]
         fast_val = ema_fast[-1]
         slow_val = ema_slow[-1]
+        trend = "NEUTRAL"
         
         if fast_val and slow_val:
             if fast_val > slow_val and last_close > fast_val:
@@ -357,6 +358,11 @@ class TechnicalIndicatorEngine:
                 trend = "BEARISH"
             else:
                 trend = "NEUTRAL"
+        elif fast_val and last_close:
+            if last_close > fast_val:
+                trend = "BULLISH"
+            elif last_close < fast_val:
+                trend = "BEARISH"
         # SMC 10 Moving Average
         smc_10_series = cls.calculate_sma(closes, 10)
         smc_10_val = round(smc_10_series[-1], 5) if smc_10_series and smc_10_series[-1] is not None else None
