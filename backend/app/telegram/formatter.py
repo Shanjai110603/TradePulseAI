@@ -4,24 +4,24 @@ from typing import Dict, Any, List, Optional, Tuple
 
 class TelegramMessageFormatter:
     """
-    Renders clean, professional, concise Telegram messages and detailed sub-views.
-    Uses Telegram HTML / Markdown formatting with interactive keyboard layouts.
+    Renders clean, professional, concise, and high-impact Telegram messages and interactive sub-views.
+    Uses Telegram HTML formatting with sleek interactive keyboard layouts.
     """
 
     @classmethod
     def format_main_signal(cls, signal: Dict[str, Any]) -> Tuple[str, List[List[Dict[str, str]]]]:
         """
-        Formats concise, high-impact main signal alert as specified in prompt.
+        Formats a sleek, high-impact premium VIP signal card.
         """
         sig_id = signal.get("id", "")
-        asset = signal.get("asset_symbol", "EUR/USD")
+        asset = signal.get("asset_symbol", "EUR/USD (OTC)")
         direction = signal.get("direction", "DOWN").upper()
         ref_price = signal.get("reference_price", 0.0)
-        pattern_name = signal.get("pattern_name", "Pattern Type 14")
-        ai_score = signal.get("ai_score", 85)
+        pattern_name = signal.get("pattern_name", "Quotex 1M OTC Momentum")
+        ai_score = signal.get("ai_score", 88)
         strength = signal.get("signal_strength", "HIGH")
         status = signal.get("status", "ACTIVE")
-        duration = signal.get("duration_minutes", 5)
+        duration = signal.get("duration_minutes", 1)
 
         entry_time = signal.get("entry_time")
         if isinstance(entry_time, datetime):
@@ -33,23 +33,26 @@ class TelegramMessageFormatter:
         if isinstance(expiry_time, datetime):
             expiry_str = expiry_time.strftime("%H:%M:%S")
         else:
-            expiry_str = str(expiry_time)[11:19] if expiry_time else "10:40:20"
+            expiry_str = str(expiry_time)[11:19] if expiry_time else "10:36:20"
 
-        dir_emoji = "🔴" if direction in ["DOWN", "SHORT", "SELL"] else "🟢"
-        dir_text = "DOWN" if direction in ["DOWN", "SHORT", "SELL"] else "UP"
+        is_call = direction in ["UP", "LONG", "BUY", "CALL"]
+        dir_badge = "🟢 CALL / UP ⬆️" if is_call else "🔴 PUT / DOWN ⬇️"
+        action_text = "CALL (BUY)" if is_call else "PUT (SELL)"
 
         text = (
-            f"🚨 <b>NEW RESEARCH SIGNAL</b>\n\n"
-            f"💎 <b>{asset}</b>\n\n"
-            f"{dir_emoji} <b>{dir_text}</b>\n\n"
-            f"💰 <b>Reference Price</b>\n<code>{ref_price}</code>\n\n"
-            f"⏰ <b>Entry</b>\n<code>{entry_str}</code>\n\n"
-            f"⌛ <b>Expiry</b>\n<code>{expiry_str}</code>\n\n"
-            f"⏱ <b>Duration</b>\n{duration} Minutes\n\n"
-            f"🔷 <b>Pattern</b>\n{pattern_name}\n\n"
-            f"🧠 <b>AI Score</b>\n{ai_score}/100\n\n"
-            f"📊 <b>Signal Strength</b>\n{strength}\n\n"
-            f"📌 <b>Status</b>\n{status}"
+            f"⚡ <b>TRADEPULSE AI SIGNAL ALERT</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💎 <b>Asset:</b> <code>{asset}</code>\n"
+            f"🎯 <b>Action:</b> <b>{dir_badge}</b>\n"
+            f"⏱ <b>Expiry:</b> <b>{duration} MINUTE(S)</b>\n"
+            f"💵 <b>Entry Price:</b> <code>{ref_price}</code>\n"
+            f"⏰ <b>Window:</b> <code>{entry_str}</code> ➔ <code>{expiry_str}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 <b>Pattern:</b> {pattern_name}\n"
+            f"🧠 <b>AI Confidence:</b> <b>{ai_score}% ({strength})</b>\n"
+            f"📌 <b>Status:</b> 🟢 {status}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 <i>Click buttons below for live multi-factor analysis:</i>"
         )
 
         keyboard = [
@@ -58,12 +61,8 @@ class TelegramMessageFormatter:
                 {"text": "📊 Technicals", "callback_data": f"tech:{sig_id}"}
             ],
             [
-                {"text": "📈 Live Signal", "callback_data": f"live:{sig_id}"},
-                {"text": "📋 Full Details", "callback_data": f"details:{sig_id}"}
-            ],
-            [
-                {"text": "🔔 Follow Signal", "callback_data": f"follow:{sig_id}"},
-                {"text": "🔕 Mute", "callback_data": f"mute:{sig_id}"}
+                {"text": "📈 Live Price", "callback_data": f"live:{sig_id}"},
+                {"text": "📋 Audit Details", "callback_data": f"details:{sig_id}"}
             ]
         ]
 
@@ -73,33 +72,35 @@ class TelegramMessageFormatter:
     def format_ai_analysis_view(cls, signal: Dict[str, Any]) -> Tuple[str, List[List[Dict[str, str]]]]:
         sig_id = signal.get("id", "")
         ai = signal.get("ai_analysis", {})
-        asset = signal.get("asset_symbol", "EUR/USD")
+        asset = signal.get("asset_symbol", "EUR/USD (OTC)")
 
         bias = ai.get("bias", "BEARISH")
-        score = ai.get("score", 85)
+        score = ai.get("score", 88)
         conf = ai.get("confidence", "HIGH")
-        trend = ai.get("trend_assessment", "Bearish momentum on 1M/5M")
-        mom = ai.get("momentum_assessment", "RSI confirms downward pressure")
-        vol = ai.get("volume_assessment", "Volume is 125% of average")
-        structure = ai.get("structure_assessment", "Confirmed support breakdown")
-        entry_q = ai.get("entry_quality", "Optimal breakout close entry")
-        risk_q = ai.get("risk_assessment", "Moderate risk, strict invalidation")
-        reasoning = ai.get("reasoning", "Pattern confirmed with high confluence.")
-        risks = ai.get("risks", ["Spread expansion", "Macro news volatility"])
+        trend = ai.get("trend_assessment", "Momentum continuation on 1M OTC candles")
+        mom = ai.get("momentum_assessment", "RSI divergence confirms directional push")
+        vol = ai.get("volume_assessment", "Volume is 135% of 20-period moving average")
+        structure = ai.get("structure_assessment", "Clean breakout at key price level")
+        entry_q = ai.get("entry_quality", "Immediate continuation close")
+        risk_q = ai.get("risk_assessment", "Low to Moderate Risk")
+        reasoning = ai.get("reasoning", "Strong multi-timeframe pattern confirmation with quantitative algorithmic backing.")
+        risks = ai.get("risks", ["OTC micro-volatility spike", "Retest of broken level"])
 
         risks_formatted = "\n".join([f"• {r}" for r in risks])
 
         text = (
-            f"🧠 <b>AI RESEARCH ANALYSIS</b>\n"
-            f"💎 <b>{asset}</b> | Score: <b>{score}/100</b> ({conf} Confidence)\n\n"
-            f"🎯 <b>Bias:</b> {bias}\n"
-            f"📈 <b>Trend:</b> {trend}\n"
+            f"🧠 <b>AI RESEARCH BREAKDOWN</b>\n"
+            f"💎 <b>{asset}</b> | Score: <b>{score}% ({conf} Confidence)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎯 <b>Directional Bias:</b> {bias}\n"
+            f"📈 <b>Trend Assessment:</b> {trend}\n"
             f"⚡ <b>Momentum:</b> {mom}\n"
             f"📊 <b>Volume:</b> {vol}\n"
             f"🏗 <b>Structure:</b> {structure}\n"
             f"🎯 <b>Entry Quality:</b> {entry_q}\n"
-            f"🛡 <b>Risk Rating:</b> {risk_q}\n\n"
-            f"💡 <b>AI Reasoning:</b>\n{reasoning}\n\n"
+            f"🛡 <b>Risk Rating:</b> {risk_q}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 <b>Algorithmic Reasoning:</b>\n{reasoning}\n\n"
             f"⚠️ <b>Key Risks:</b>\n{risks_formatted}"
         )
 
@@ -112,7 +113,7 @@ class TelegramMessageFormatter:
     def format_technicals_view(cls, signal: Dict[str, Any]) -> Tuple[str, List[List[Dict[str, str]]]]:
         sig_id = signal.get("id", "")
         tech = signal.get("technical_snapshot", {})
-        asset = signal.get("asset_symbol", "EUR/USD")
+        asset = signal.get("asset_symbol", "EUR/USD (OTC)")
         timeframe = signal.get("timeframe", "1M")
 
         rsi = tech.get("rsi", "N/A")
@@ -120,30 +121,26 @@ class TelegramMessageFormatter:
         ema_fast = tech.get("ema_fast", "N/A")
         ema_slow = tech.get("ema_slow", "N/A")
         bb = tech.get("bollinger_bands", {})
-        atr = tech.get("atr", "N/A")
-        adx = tech.get("adx", "N/A")
-        stoch = tech.get("stochastic", {})
         vol_ratio = tech.get("volume_ratio", 1.0)
         supports = tech.get("support_levels", [])
         resistances = tech.get("resistance_levels", [])
 
-        supp_str = ", ".join(str(s) for s in supports) if supports else "None"
-        res_str = ", ".join(str(r) for r in resistances) if resistances else "None"
+        supp_str = ", ".join(str(s) for s in supports) if supports else "Dynamic Support"
+        res_str = ", ".join(str(r) for r in resistances) if resistances else "Dynamic Resistance"
 
         text = (
             f"📊 <b>TECHNICAL SNAPSHOT ({timeframe})</b>\n"
-            f"💎 <b>{asset}</b>\n\n"
-            f"• <b>RSI (14):</b> {rsi}\n"
-            f"• <b>MACD:</b> {macd.get('macd', 'N/A')} | Signal: {macd.get('signal', 'N/A')}\n"
-            f"• <b>EMA Fast (9):</b> {ema_fast}\n"
-            f"• <b>EMA Slow (21):</b> {ema_slow}\n"
+            f"💎 <b>{asset}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>RSI (14):</b> <code>{rsi}</code>\n"
+            f"• <b>MACD:</b> {macd.get('macd', 'N/A')} | Sig: {macd.get('signal', 'N/A')}\n"
+            f"• <b>EMA Fast (9):</b> <code>{ema_fast}</code>\n"
+            f"• <b>EMA Slow (21):</b> <code>{ema_slow}</code>\n"
             f"• <b>Bollinger Bands:</b> Upper {bb.get('upper', 'N/A')} | Lower {bb.get('lower', 'N/A')}\n"
-            f"• <b>ATR (14):</b> {atr}\n"
-            f"• <b>ADX (14):</b> {adx}\n"
-            f"• <b>Stochastic:</b> %K {stoch.get('k', 'N/A')} | %D {stoch.get('d', 'N/A')}\n"
-            f"• <b>Volume Ratio:</b> {vol_ratio}x of 20 SMA\n"
-            f"• <b>Key Supports:</b> {supp_str}\n"
-            f"• <b>Key Resistances:</b> {res_str}"
+            f"• <b>Relative Volume:</b> {vol_ratio}x of 20 SMA\n"
+            f"• <b>Key Supports:</b> <code>{supp_str}</code>\n"
+            f"• <b>Key Resistances:</b> <code>{res_str}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
         )
 
         keyboard = [
@@ -154,7 +151,7 @@ class TelegramMessageFormatter:
     @classmethod
     def format_live_signal_view(cls, signal: Dict[str, Any], current_price: float) -> Tuple[str, List[List[Dict[str, str]]]]:
         sig_id = signal.get("id", "")
-        asset = signal.get("asset_symbol", "EUR/USD")
+        asset = signal.get("asset_symbol", "EUR/USD (OTC)")
         direction = signal.get("direction", "DOWN")
         ref_price = signal.get("reference_price", 0.0)
         status = signal.get("status", "ACTIVE")
@@ -162,20 +159,22 @@ class TelegramMessageFormatter:
         diff = current_price - ref_price
         diff_pct = (diff / ref_price * 100) if ref_price > 0 else 0.0
 
-        if direction in ["DOWN", "SHORT", "SELL"]:
+        if direction in ["DOWN", "SHORT", "SELL", "PUT"]:
             in_profit = current_price < ref_price
         else:
             in_profit = current_price > ref_price
 
-        profit_indicator = "🟢 IN PROFIT ZONE" if in_profit else "🔴 OUT OF PROFIT ZONE"
+        profit_indicator = "🟢 IN PROFIT" if in_profit else "🔴 OUT OF MONEY"
 
         text = (
-            f"📈 <b>LIVE SIGNAL TRACKING</b>\n"
-            f"💎 <b>{asset}</b> | Direction: <b>{direction}</b>\n\n"
-            f"💰 <b>Reference Price:</b> <code>{ref_price}</code>\n"
-            f"⚡ <b>Current Price:</b> <code>{current_price}</code>\n"
+            f"📈 <b>LIVE PRICE TRACKING</b>\n"
+            f"💎 <b>{asset}</b> | Direction: <b>{direction}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 <b>Entry Price:</b> <code>{ref_price}</code>\n"
+            f"⚡ <b>Live Price:</b>  <code>{current_price}</code>\n"
             f"📊 <b>Delta:</b> {diff:+.5f} ({diff_pct:+.2f}%)\n"
-            f"🎯 <b>Status:</b> {status} ({profit_indicator})\n\n"
+            f"🎯 <b>Status:</b> <b>{profit_indicator}</b> ({status})\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
             f"<i>Live ticks are updated continuously.</i>"
         )
 
@@ -188,20 +187,21 @@ class TelegramMessageFormatter:
     @classmethod
     def format_full_details_view(cls, signal: Dict[str, Any]) -> Tuple[str, List[List[Dict[str, str]]]]:
         sig_id = signal.get("id", "")
-        pattern_name = signal.get("pattern_name", "")
+        pattern_name = signal.get("pattern_name", "Quotex 1M OTC Momentum")
         version = signal.get("pattern_version", 1)
-        market = signal.get("market_id", "")
-        timeframe = signal.get("timeframe", "")
+        market = signal.get("market_id", "digital_options")
+        timeframe = signal.get("timeframe", "1M")
 
         text = (
-            f"📋 <b>FULL AUDIT DETAILS</b>\n\n"
-            f"• <b>Signal ID:</b> <code>{sig_id}</code>\n"
+            f"📋 <b>STRATEGY & SIGNAL AUDIT</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Signal ID:</b> <code>{sig_id[:12]}...</code>\n"
             f"• <b>Pattern:</b> {pattern_name} (v{version})\n"
             f"• <b>Market Type:</b> {market}\n"
             f"• <b>Timeframe:</b> {timeframe}\n"
-            f"• <b>SL / TP Configured:</b> {signal.get('stop_loss', 'N/A')} / {signal.get('tp1', 'N/A')}\n"
-            f"• <b>Risk/Reward:</b> {signal.get('risk_reward_ratio', 'N/A')}\n"
+            f"• <b>Duration:</b> {signal.get('duration_minutes', 1)} Minute(s)\n"
             f"• <b>Created At:</b> {str(signal.get('created_at', ''))[:19]}\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
         )
 
         keyboard = [
