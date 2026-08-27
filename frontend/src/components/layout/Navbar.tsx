@@ -43,17 +43,17 @@ export const Navbar: React.FC = () => {
         {/* Live Mini Market Bar */}
         <div className="hidden lg:flex items-center space-x-4 pl-6 border-l border-surface-border/60 text-xs font-mono">
           <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40">
-            <span className="text-gray-400">EUR/USD</span>
+            <span className="text-gray-400">EUR/USD (OTC)</span>
             <span className="text-trade-up font-semibold">1.08542</span>
             <span className="text-[10px] text-trade-up font-medium">+0.18%</span>
           </div>
           <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40">
-            <span className="text-gray-400">BTC/USDT</span>
+            <span className="text-gray-400">BTC/USDT (OTC)</span>
             <span className="text-trade-up font-semibold">67,520.40</span>
             <span className="text-[10px] text-trade-up font-medium">+2.45%</span>
           </div>
           <div className="flex items-center space-x-2 bg-surface-raised/60 px-3 py-1.5 rounded-lg border border-surface-border/40">
-            <span className="text-gray-400">GBP/USD</span>
+            <span className="text-gray-400">GBP/USD (OTC)</span>
             <span className="text-trade-down font-semibold">1.27180</span>
             <span className="text-[10px] text-trade-down font-medium">-0.05%</span>
           </div>
