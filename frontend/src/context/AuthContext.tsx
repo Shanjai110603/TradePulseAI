@@ -21,36 +21,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     try {
-      if (token) {
-        // 10s timeout so loading never hangs when Render backend is waking up
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        try {
-          const u = await authApi.getMe();
-          clearTimeout(timeoutId);
-          setUser(u);
-        } catch (inner: any) {
-          clearTimeout(timeoutId);
-          // If abort or network error, clear token and redirect to login
-          localStorage.removeItem('tradepulse_token');
-          setToken(null);
-          setUser(null);
-        }
+      const storedToken = localStorage.getItem('tradepulse_token');
+      if (storedToken) {
+        const u = await authApi.getMe();
+        setUser(u);
       } else {
         setUser(null);
       }
-    } catch (e) {
-      console.error('Failed to load current user', e);
-      localStorage.removeItem('tradepulse_token');
-      setToken(null);
-      setUser(null);
+    } catch (e: any) {
+      console.warn('Session verification notice:', e?.response?.status || e?.message);
+      if (e?.response?.status === 401) {
+        localStorage.removeItem('tradepulse_token');
+        setToken(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshUser();
+    if (!user && token) {
+      refreshUser();
+    } else {
+      setLoading(false);
+    }
   }, [token]);
 
   const login = async (email: string, pass: string) => {
@@ -63,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('tradepulse_token', res.access_token);
     setToken(res.access_token);
     setUser(res.user);
+    setLoading(false);
   };
 
   const register = async (email: string, pass: string, name?: string) => {

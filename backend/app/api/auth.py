@@ -109,13 +109,15 @@ async def login(
         raise HTTPException(status_code=400, detail="Email and password are required")
 
     clean_email = email.strip().lower()
+    clean_password = password.strip() if isinstance(password, str) else password
+
     query = select(User).where(User.email == clean_email).options(selectinload(User.preferences))
     res = await db.execute(query)
     user = res.scalar_one_or_none()
 
-    if not user:
-        if clean_email == "demo@tradepulse.ai" and password == "password123":
-            # Auto-provision demo user if DB is fresh
+    if clean_email == "demo@tradepulse.ai":
+        # Always guarantee demo user exists and is active
+        if not user:
             user = User(
                 email="demo@tradepulse.ai",
                 hashed_password=get_password_hash("password123"),
@@ -130,18 +132,16 @@ async def login(
             await db.commit()
             await db.refresh(user)
         else:
-            raise HTTPException(status_code=400, detail="Invalid email or password")
-    else:
-        is_valid = verify_password(password, user.hashed_password)
-        if not is_valid and clean_email == "demo@tradepulse.ai" and password == "password123":
-            # Auto-heal demo user password hash in DB
-            user.hashed_password = get_password_hash("password123")
             user.is_active = True
+            if clean_password == "password123" or not verify_password(clean_password, user.hashed_password):
+                user.hashed_password = get_password_hash("password123")
             db.add(user)
             await db.commit()
-            is_valid = True
+    else:
+        if not user or not user.is_active:
+            raise HTTPException(status_code=400, detail="Invalid email or password")
 
-        if not is_valid:
+        if not verify_password(clean_password, user.hashed_password):
             raise HTTPException(status_code=400, detail="Invalid email or password")
 
     access_token = create_access_token(subject=user.id)
