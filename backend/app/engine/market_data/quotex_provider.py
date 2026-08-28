@@ -288,8 +288,8 @@ class QuotexMarketDataProvider(MarketDataProvider):
 
     async def login_with_credentials(self, email: Optional[str] = None, password: Optional[str] = None) -> bool:
         """
-        Attempts automated login to Quotex web endpoint using email and password,
-        extracting the session cookies automatically.
+        Attempts automated login to Quotex using QuotexSessionRenewer (Headless Browser / HTTP flow),
+        extracting and renewing the session cookies automatically without manual user action.
         """
         target_email = email or self._email
         target_password = password or self._password
@@ -297,49 +297,18 @@ class QuotexMarketDataProvider(MarketDataProvider):
         if not target_email or not target_password:
             return False
 
-        endpoints = [
-            "https://qxbroker.com/en/sign-in",
-            "https://quotex.io/en/sign-in",
-            "https://market-qx.pro/en/sign-in"
-        ]
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=6.0) as client:
-            for url in endpoints:
-                try:
-                    # 1. GET page to get CSRF token and initial cookie
-                    get_resp = await client.get(url)
-                    cookies_str = "; ".join([f"{k}={v}" for k, v in client.cookies.items()])
-                    
-                    # 2. POST login credentials
-                    payload = {
-                        "email": target_email,
-                        "password": target_password,
-                        "remember": "1"
-                    }
-                    post_resp = await client.post(url, data=payload, headers={"Referer": url})
-                    
-                    # 3. Extract SSID / session cookies
-                    extracted_token = ""
-                    for cookie_key, cookie_val in client.cookies.items():
-                        if cookie_key in ["ssid", "laravel_session", "token"]:
-                            extracted_token += f"{cookie_key}={cookie_val}; "
-                    
-                    if extracted_token and len(extracted_token) > 10:
-                        self._ssid = extracted_token.strip("; ")
-                        self._live_mode = True
-                        if HAS_WEBSOCKETS:
-                            self._ws_client = QuotexWebSocketClient(self._ssid)
-                        logger.info("QuotexMarketDataProvider: Automated Email/Password login successful! Connected to live feed.")
-                        return True
-                except Exception as e:
-                    logger.debug(f"Quotex direct sign-in via {url} timed out or blocked: {e}")
-                    continue
+        try:
+            from app.engine.market_data.session_renewer import QuotexSessionRenewer
+            token = await QuotexSessionRenewer.get_session_cookies(target_email, target_password)
+            if token and len(token) > 5:
+                self._ssid = token
+                self._live_mode = True
+                if HAS_WEBSOCKETS:
+                    self._ws_client = QuotexWebSocketClient(self._ssid)
+                logger.info("QuotexMarketDataProvider: Automated login & session renewal successful! Connected to live feed.")
+                return True
+        except Exception as e:
+            logger.debug(f"Quotex automated session renewal notice: {e}")
 
         logger.info("QuotexMarketDataProvider: Using high-precision continuous OTC price engine.")
         return False
