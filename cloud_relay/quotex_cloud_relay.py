@@ -73,6 +73,8 @@ async def run_relay():
                         while asyncio.get_event_loop().time() < deadline:
                             try:
                                 raw = await asyncio.wait_for(ws.recv(), timeout=2)
+                                if isinstance(raw, bytes):
+                                    raw = raw.decode("utf-8", errors="ignore")
                                 if raw == "2":
                                     await ws.send("3")
                                     continue
