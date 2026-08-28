@@ -24,7 +24,7 @@ jobs:
 
       - name: Run Live Quotex Relay for 4 minutes
         run: |
-          python cloud_relay/quotex_cloud_relay.py &
+          python -u cloud_relay/quotex_cloud_relay.py &
           RELAY_PID=$!
           sleep 240
           kill $RELAY_PID || true
