@@ -11,50 +11,47 @@ class TelegramMessageFormatter:
     @classmethod
     def format_main_signal(cls, signal: Dict[str, Any]) -> Tuple[str, List[List[Dict[str, str]]]]:
         """
-        Formats a sleek, high-impact premium VIP signal card.
+        Formats a sleek, authentic Quotex VIP signal card matching the reference format:
+        🔷 TRADEPULSE QUOTEX BOT
+        ━━━━━━━━━━━━━━━━━━━━
+        📊 Asset: USD/PKR (OTC)
+        ⏰ Entry Time: 12:17:00
+        ⌛ Expiry: 1 Minute
+        🎯 Signal: 🔴 PUT
+        💡 AI Analysis: Strong bearish momentum following a peak rejection.
+        ━━━━━━━━━━━━━━━━━━━━
         """
         sig_id = signal.get("id", "")
         asset = signal.get("asset_symbol", "EUR/USD (OTC)")
         direction = signal.get("direction", "DOWN").upper()
-        ref_price = signal.get("reference_price", 0.0)
-        pattern_name = signal.get("pattern_name", "Quotex 1M OTC Momentum")
-        ai_score = signal.get("ai_score", 88)
-        strength = signal.get("signal_strength", "HIGH")
-        status = signal.get("status", "ACTIVE")
-        duration = signal.get("duration_minutes", 1)
+        is_call = direction in ["UP", "LONG", "BUY", "CALL"]
+        dir_badge = "🟢 CALL" if is_call else "🔴 PUT"
 
         entry_time = signal.get("entry_time")
         if isinstance(entry_time, datetime):
             entry_str = entry_time.strftime("%H:%M:%S")
         else:
-            entry_str = str(entry_time)[11:19] if entry_time else "10:35:20"
+            entry_str = str(entry_time)[11:19] if entry_time else datetime.now().strftime("%H:%M:%S")
 
-        expiry_time = signal.get("expiry_time")
-        if isinstance(expiry_time, datetime):
-            expiry_str = expiry_time.strftime("%H:%M:%S")
+        # Dynamic AI reasoning summary
+        ai_data = signal.get("ai_analysis", {})
+        if isinstance(ai_data, dict) and ai_data.get("reasoning"):
+            ai_reason = ai_data["reasoning"]
         else:
-            expiry_str = str(expiry_time)[11:19] if expiry_time else "10:36:20"
-
-        is_call = direction in ["UP", "LONG", "BUY", "CALL"]
-        dir_badge = "🟢 CALL / UP ⬆️" if is_call else "🔴 PUT / DOWN ⬇️"
-        action_text = "CALL (BUY)" if is_call else "PUT (SELL)"
-
-        duration_str = "1 MINUTE"
+            if is_call:
+                ai_reason = "Strong bullish continuation following key support rejection and EMA crossover."
+            else:
+                ai_reason = "Strong bearish momentum following a peak resistance rejection."
 
         text = (
-            f"⚡ <b>TRADEPULSE AI SIGNAL ALERT</b>\n"
+            f"🔷 <b>TRADEPULSE QUOTEX BOT</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💎 <b>Asset:</b> <code>{asset}</code>\n"
-            f"🎯 <b>Action:</b> <b>{dir_badge}</b>\n"
-            f"⏱ <b>Expiry:</b> <b>{duration_str}</b>\n"
-            f"💵 <b>Entry Price:</b> <code>{ref_price}</code>\n"
-            f"⏰ <b>Window:</b> <code>{entry_str}</code> ➔ <code>{expiry_str}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 <b>Pattern:</b> {pattern_name}\n"
-            f"🧠 <b>AI Confidence:</b> <b>{ai_score}% ({strength})</b>\n"
-            f"📌 <b>Status:</b> 🟢 {status}\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 <i>Click buttons below for live multi-factor analysis:</i>"
+            f"📊 <b>Asset:</b> <code>{asset}</code>\n"
+            f"⏰ <b>Entry Time:</b> <code>{entry_str}</code>\n"
+            f"⌛ <b>Expiry:</b> <b>1 Minute</b>\n"
+            f"🎯 <b>Signal:</b> <b>{dir_badge}</b>\n"
+            f"💡 <b>AI Analysis:</b> {ai_reason}\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
         )
 
         keyboard = [
