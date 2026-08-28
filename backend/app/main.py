@@ -107,8 +107,8 @@ async def seed_initial_data():
             img = PatternImage(
                 pattern_id=p1.id,
                 file_path="/uploads/patterns/pattern_type_1.jpg",
-                file_name="pattern_type_1.jpg",
-                file_size=62995,
+                filename="pattern_type_1.jpg",
+                file_size_bytes=62995,
                 mime_type="image/jpeg",
                 is_primary=True,
                 description="Visual reference for Pattern Type 1: 2 Green Candles + 1 Red Candle under SMC 10 Line"
@@ -176,8 +176,8 @@ async def seed_initial_data():
             img15 = PatternImage(
                 pattern_id=p15.id,
                 file_path="/uploads/patterns/pattern_type_15.jpg",
-                file_name="pattern_type_15.jpg",
-                file_size=68940,
+                filename="pattern_type_15.jpg",
+                file_size_bytes=68940,
                 mime_type="image/jpeg",
                 is_primary=True,
                 description="Visual reference for Pattern Type 15: V-Pattern rally rejecting horizontal line with upper wick"
@@ -246,8 +246,8 @@ async def seed_initial_data():
             img14 = PatternImage(
                 pattern_id=p14.id,
                 file_path="/uploads/patterns/pattern_type_14.jpg",
-                file_name="pattern_type_14.jpg",
-                file_size=73383,
+                filename="pattern_type_14.jpg",
+                file_size_bytes=73383,
                 mime_type="image/jpeg",
                 is_primary=True,
                 description="Visual reference for Pattern Type 14: Horizontal Support Breakdown with Strong Red Candle"
