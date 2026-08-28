@@ -150,24 +150,9 @@ class TradeChartGenerator:
             draw.line([(cx, chart_top), (cx, chart_bottom)], fill=(18, 23, 33), width=1)
 
         # 5. Top-Left Quotex Terminal Watermark
-        draw.text((chart_left + 10, 16), f"{asset} ({payout}%) | TF: M1", fill=(190, 205, 225), font=font_watermark)
+        draw.text((chart_left + 10, 16), f"{asset} ({payout}%) | TF: M1", fill=(210, 225, 245), font=font_watermark)
 
-        # 6. SMC 10 Line (Smooth Quotex Moving Average Ribbon)
-        if len(display_candles) >= 5:
-            closes = [c.close for c in display_candles]
-            smc_points = []
-            for idx in range(num_candles):
-                lookback = min(idx + 1, 10)
-                smc_val = sum(closes[idx - lookback + 1 : idx + 1]) / float(lookback)
-                cx = int(chart_left + (idx + 0.5) * candle_step)
-                cy = price_to_y(smc_val)
-                smc_points.append((cx, cy))
-
-            if len(smc_points) >= 2:
-                for j in range(len(smc_points) - 1):
-                    draw.line([smc_points[j], smc_points[j + 1]], fill=(255, 179, 0), width=2)
-
-        # 7. Candlesticks (Quotex Neon Green / Coral Red)
+        # 6. Candlesticks (Quotex Neon Green / Coral Red)
         body_w = max(int(candle_step * 0.72), 8)
 
         for i, c in enumerate(display_candles):
