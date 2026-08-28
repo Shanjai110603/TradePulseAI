@@ -101,9 +101,10 @@ BASE_PRICES = {
     "GBP/JPY (OTC)": 196.520, "AUD/CAD (OTC)": 0.89340, "AUD/JPY (OTC)": 101.240,
     "CAD/JPY (OTC)": 113.120, "CHF/JPY (OTC)": 174.850, "EUR/AUD (OTC)": 1.65600,
     "EUR/CAD (OTC)": 1.48420, "EUR/CHF (OTC)": 0.95880, "GBP/AUD (OTC)": 1.94250,
-    "GBP/CAD (OTC)": 1.74100, "GBP/CHF (OTC)": 1.12480, "NZD/JPY (OTC)": 92.480,
-    "NZD/CAD (OTC)": 0.81850, "USD/INR (OTC)": 83.920, "USD/BRL (OTC)": 5.4850,
-    "USD/TRY (OTC)": 32.8450, "USD/MXN (OTC)": 18.2540,
+    "GBP/CAD (OTC)": 1.74100, "GBP/CHF (OTC)": 1.12480, "NZD/JPY (OTC)": 95.039,
+    "NZD/CAD (OTC)": 0.82410, "USD/INR (OTC)": 83.920, "USD/BRL (OTC)": 0.20184,
+    "EUR/NZD (OTC)": 2.00411, "USD/ARS (OTC)": 1620.37, "USD/TRY (OTC)": 32.8450, "USD/MXN (OTC)": 18.2540,
+    "USD/EGP (OTC)": 48.550, "USD/IDR (OTC)": 15820.0, "USD/PHP (OTC)": 56.420,
     "BTC/USDT (OTC)": 67500.0, "ETH/USDT (OTC)": 3520.0, "LTC/USDT (OTC)": 84.50,
     "XRP/USDT (OTC)": 0.5840, "SOL/USDT (OTC)": 154.20, "DOGE/USDT (OTC)": 0.12450,
     "GOLD (OTC)": 2412.50, "SILVER (OTC)": 29.450, "US CRUDE (OTC)": 78.40,
@@ -521,18 +522,13 @@ class QuotexMarketDataProvider(MarketDataProvider):
                 pass
 
         if symbol in self._price_cache:
-            base = self._price_cache[symbol]
-            is_crypto = "BTC" in symbol or "ETH" in symbol
-            is_jpy = "JPY" in symbol
-            if is_crypto:
-                delta = random.uniform(-5.0, 5.0)
-            elif is_jpy:
-                delta = random.uniform(-0.005, 0.005)
-            else:
-                delta = random.uniform(-0.00005, 0.00005)
-            return round(base + delta, 2 if is_crypto else (3 if is_jpy else 5))
+            return self._price_cache[symbol]
 
-        candles = await self.get_candles(symbol, limit=2)
+        cache_key = f"{symbol}_1M"
+        if cache_key in self._ingested_candles and self._ingested_candles[cache_key]:
+            return self._ingested_candles[cache_key][-1].close
+
+        candles = await self.get_candles(symbol, limit=2, strict_live_only=False)
         return candles[-1].close if candles else BASE_PRICES.get(symbol, 1.08500)
 
     def get_supported_timeframes(self) -> List[str]:
