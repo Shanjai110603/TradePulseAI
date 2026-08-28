@@ -309,6 +309,7 @@ class TelegramUpdateHandler:
                     # Find active strategies
                     p_res = await db.execute(select(Pattern).where(Pattern.is_active == True))
                     patterns = p_res.scalars().all()
+                    top_pattern = patterns[0] if patterns else None
 
                     provider = market_data_manager.get_provider()
                     all_assets = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
