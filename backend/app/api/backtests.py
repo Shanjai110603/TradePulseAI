@@ -29,7 +29,7 @@ async def run_backtest(
         raise HTTPException(status_code=404, detail="Pattern not found")
 
     provider = market_data_manager.get_provider()
-    candles = await provider.get_candles(req.asset_symbol, timeframe=req.timeframe, limit=req.candle_count)
+    candles = await provider.get_candles(req.asset_symbol, timeframe=req.timeframe, limit=req.candle_count, strict_live_only=False)
 
     pattern_dict = {
         "id": pattern.id,

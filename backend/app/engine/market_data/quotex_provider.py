@@ -345,19 +345,21 @@ class QuotexMarketDataProvider(MarketDataProvider):
         symbol: str,
         timeframe: str = "1M",
         limit: int = 100,
-        end_time=None
+        end_time=None,
+        strict_live_only: bool = True
     ) -> List[Candle]:
-        """Fetch candles — real from Ingestion Relay, Quotex WS, or synthetic continuity."""
-        # 1. Check if we have freshly ingested real candles from cloud relay (within last 60s)
+        """Fetch candles — real from Ingestion Relay or Quotex WS. Returns empty if live data unavailable."""
+        # 1. Check if we have freshly ingested real candles from cloud relay (within last 180s)
         cache_key = f"{symbol}_{timeframe}"
         if cache_key in self._ingested_candles:
             last_ts = self._last_ingest_ts.get(cache_key, 0.0)
-            if (time.time() - last_ts) < 90:
+            if (time.time() - last_ts) < 180:
                 candles = self._ingested_candles[cache_key][-limit:]
-                if candles:
+                if candles and len(candles) >= 5:
                     self._price_cache[symbol] = candles[-1].close
                     return candles
 
+        # 2. Check if direct live WebSocket client has candles
         if self._live_mode and self._ws_client:
             ws_asset = SYMBOL_TO_WS.get(symbol, symbol.replace("/", "").replace(" (OTC)", "_OTC"))
             period = PERIOD_MAP.get(timeframe, 60)
@@ -374,19 +376,21 @@ class QuotexMarketDataProvider(MarketDataProvider):
                             high=c["high"],
                             low=c["low"],
                             close=c["close"],
-                            volume=random.uniform(800, 3200),
+                            volume=float(c.get("volume", 1200)),
                         )
                         for c in sorted(raw, key=lambda x: x["time"])
                     ]
                     if candles:
                         self._price_cache[symbol] = candles[-1].close
-                        logger.debug(f"Live candles fetched for {symbol}: {len(candles)} candles")
                         return candles
-                logger.warning(f"No live candles received for {symbol}, falling back to simulation")
-            except Exception as e:
-                logger.warning(f"Live candle fetch failed for {symbol}: {e}, using simulation")
+            except Exception:
+                pass
 
-        # Deterministic simulation — realistic OTC price generation
+        # Strict Live Mode: Do NOT generate fake/synthetic candles
+        if strict_live_only:
+            return []
+
+        # Only for offline test suites when explicitly requested (strict_live_only=False)
         return self._generate_synthetic_candles(symbol, timeframe, limit, end_time)
 
     def _generate_synthetic_candles(

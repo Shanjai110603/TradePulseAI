@@ -17,7 +17,7 @@ async def test_quotex_provider_assets():
 @pytest.mark.asyncio
 async def test_quotex_provider_candles():
     provider = QuotexMarketDataProvider()
-    candles = await provider.get_candles("EUR/USD (OTC)", timeframe="1M", limit=50)
+    candles = await provider.get_candles("EUR/USD (OTC)", timeframe="1M", limit=50, strict_live_only=False)
     assert len(candles) == 50
     assert candles[0].timestamp < candles[-1].timestamp
     for c in candles:
