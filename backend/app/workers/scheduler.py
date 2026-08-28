@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import AsyncSessionLocal
 from app.models.pattern import Pattern
 from app.models.signal import Signal, SignalEvent, SignalTechnicalSnapshot, SignalAIAnalysis, SignalResult
-from app.models.telegram import TelegramAccount
+from app.models.telegram import TelegramAccount, SignalSubscription
 from app.models.user import User
 from app.engine.market_data.manager import market_data_manager
 from app.engine.signals.evaluator import SignalEvaluationPipeline
