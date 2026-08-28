@@ -61,45 +61,46 @@ async def run_relay():
                     # Wait for namespace 40
                     msg = await asyncio.wait_for(ws.recv(), timeout=5)
                     
-                    # Request live 1M candles for each asset
-                    for symbol, ws_asset in WATCH_ASSETS:
-                        end_time = int(time.time())
-                        req = json.dumps(["history/load", {"asset": ws_asset, "period": 60, "time": end_time, "count": 50}])
-                        await ws.send(f"42{req}")
-                        await asyncio.sleep(0.5)
+                    # Continuously fetch and push fresh live candles
+                    while True:
+                        for symbol, ws_asset in WATCH_ASSETS:
+                            end_time = int(time.time())
+                            req = json.dumps(["history/load", {"asset": ws_asset, "period": 60, "time": end_time, "count": 50}])
+                            await ws.send(f"42{req}")
+                            await asyncio.sleep(0.2)
 
-                    deadline = asyncio.get_event_loop().time() + 60
-                    while asyncio.get_event_loop().time() < deadline:
-                        try:
-                            raw = await asyncio.wait_for(ws.recv(), timeout=5)
-                            if raw == "2":
-                                await ws.send("3")
-                                continue
-                            if raw.startswith("42"):
-                                data = json.loads(raw[2:])
-                                if isinstance(data, list) and len(data) >= 2:
-                                    event = str(data[0])
-                                    payload = data[1]
-                                    if "history" in event and isinstance(payload, dict):
-                                        candles_raw = payload.get("candles", [])
-                                        asset_name = payload.get("asset", "")
-                                        matched_symbol = next((s for s, a in WATCH_ASSETS if a == asset_name), "EUR/USD (OTC)")
-                                        if candles_raw:
-                                            converted = [
-                                                {
-                                                    "time": int(c[0]),
-                                                    "open": float(c[1]),
-                                                    "close": float(c[2]),
-                                                    "high": float(c[3]),
-                                                    "low": float(c[4]),
-                                                    "volume": 1200
-                                                }
-                                                for c in candles_raw if isinstance(c, (list, tuple)) and len(c) >= 5
-                                            ]
-                                            if converted:
-                                                await push_candles_to_ec2(matched_symbol, "1M", converted)
-                        except asyncio.TimeoutError:
-                            break
+                        deadline = asyncio.get_event_loop().time() + 10
+                        while asyncio.get_event_loop().time() < deadline:
+                            try:
+                                raw = await asyncio.wait_for(ws.recv(), timeout=2)
+                                if raw == "2":
+                                    await ws.send("3")
+                                    continue
+                                if raw.startswith("42"):
+                                    data = json.loads(raw[2:])
+                                    if isinstance(data, list) and len(data) >= 2:
+                                        event = str(data[0])
+                                        payload = data[1]
+                                        if "history" in event and isinstance(payload, dict):
+                                            candles_raw = payload.get("candles", [])
+                                            asset_name = payload.get("asset", "")
+                                            matched_symbol = next((s for s, a in WATCH_ASSETS if a == asset_name), "EUR/USD (OTC)")
+                                            if candles_raw:
+                                                converted = [
+                                                    {
+                                                        "time": int(c[0]),
+                                                        "open": float(c[1]),
+                                                        "close": float(c[2]),
+                                                        "high": float(c[3]),
+                                                        "low": float(c[4]),
+                                                        "volume": 1200
+                                                    }
+                                                    for c in candles_raw if isinstance(c, (list, tuple)) and len(c) >= 5
+                                                ]
+                                                if converted:
+                                                    await push_candles_to_ec2(matched_symbol, "1M", converted)
+                            except asyncio.TimeoutError:
+                                break
 
             except Exception as err:
                 print(f"[WS DISCONNECT] {err}. Reconnecting in 5 seconds...")

@@ -319,9 +319,18 @@ class TelegramUpdateHandler:
                     chosen_asset = random.choice(live_assets) if live_assets else random.choice(all_assets)
 
                     candles = await provider.get_candles(chosen_asset, timeframe="1M", limit=50)
-                    last_c = candles[-1] if candles else None
-                    ref_p = last_c.close if last_c else 1.08500
-                    matched_ts = datetime.fromtimestamp(last_c.timestamp, tz=timezone.utc) if last_c else datetime.now(timezone.utc)
+                    if not candles or len(candles) < 5:
+                        sync_msg = (
+                            "📡 <b>Live Relay Syncing...</b>\n\n"
+                            "⏳ Waiting for the next live data batch from the Quotex cloud relay.\n\n"
+                            "<i>🔒 Strict Live Guarantee: Fake and simulated signals are strictly disabled. Your bot only evaluates 100% genuine market candles.</i>"
+                        )
+                        await telegram_service.send_message(chat_id, sync_msg)
+                        return
+
+                    last_c = candles[-1]
+                    ref_p = last_c.close
+                    matched_ts = datetime.fromtimestamp(last_c.timestamp, tz=timezone.utc)
 
                     entry_time = datetime.now(timezone.utc)
                     expiry_time = entry_time + timedelta(minutes=1)

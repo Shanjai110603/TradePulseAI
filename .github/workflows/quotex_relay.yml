@@ -22,11 +22,8 @@ jobs:
         run: |
           pip install httpx websockets
 
-      - name: Run Live Quotex Relay for 4 minutes
+      - name: Run Live Quotex Continuous Relay
         run: |
-          python -u cloud_relay/quotex_cloud_relay.py &
-          RELAY_PID=$!
-          sleep 240
-          kill $RELAY_PID || true
+          python -u cloud_relay/quotex_cloud_relay.py
         env:
           BACKEND_INGEST_URL: "http://13.48.58.176:8000/api/v1/markets/candles/ingest"
