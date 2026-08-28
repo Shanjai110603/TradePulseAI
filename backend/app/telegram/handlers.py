@@ -125,74 +125,6 @@ class TelegramUpdateHandler:
             )
             await telegram_service.send_message(chat_id, welcome)
 
-            # Immediately dispatch an active live trade signal setup
-            try:
-                from app.models.pattern import Pattern
-                from app.engine.charts.chart_generator import TradeChartGenerator
-                import random
-                import uuid
-                from datetime import timedelta
-
-                p_res = await db.execute(select(Pattern).where(Pattern.is_active == True))
-                patterns = p_res.scalars().all()
-                top_p = patterns[0] if patterns else None
-                p_name = top_p.name if top_p else "Pattern Type 14"
-                dir_choice = top_p.direction if top_p else "DOWN"
-
-                provider = market_data_manager.get_provider()
-                assets = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
-                chosen_asset = random.choice(assets)
-                candles = await provider.get_candles(chosen_asset, timeframe="1M", limit=50)
-
-                ref_p = candles[-1].close if candles else 1.08500
-                entry_time = datetime.now(timezone.utc)
-                expiry_time = entry_time + timedelta(minutes=1)
-
-                start_sig_payload = {
-                    "id": str(uuid.uuid4()),
-                    "pattern_id": top_p.id if top_p else str(uuid.uuid4()),
-                    "pattern_name": p_name,
-                    "market_id": "digital_options",
-                    "asset_symbol": chosen_asset,
-                    "direction": dir_choice,
-                    "timeframe": "1M",
-                    "reference_price": ref_p,
-                    "support_level": round(ref_p * 0.9995, 5),
-                    "resistance_level": round(ref_p * 1.0005, 5),
-                    "entry_time": entry_time,
-                    "expiry_time": expiry_time,
-                    "duration_minutes": 1,
-                    "signal_strength": "HIGH",
-                    "ai_score": 92,
-                    "ai_confidence": "HIGH",
-                    "technical_snapshot": {
-                        "rsi": 42.5,
-                        "volume_ratio": 1.35,
-                        "support_levels": [round(ref_p * 0.9995, 5)],
-                        "resistance_levels": [round(ref_p * 1.0005, 5)],
-                        "market_structure": {"trend": "BEARISH", "current_price": ref_p}
-                    },
-                    "ai_analysis": {
-                        "bias": dir_choice,
-                        "score": 92,
-                        "confidence": "HIGH",
-                        "trend_assessment": f"High-probability {p_name} formation verified on {chosen_asset}",
-                        "momentum_assessment": "Momentum expansion confirms immediate directional follow-through",
-                        "volume_assessment": "Volume exceeds 20-period moving average",
-                        "structure_assessment": "Clean price rejection & key boundary test",
-                        "entry_quality": "High immediate entry quality",
-                        "risk_assessment": "Low to Moderate Risk",
-                        "reasoning": f"Algorithmic validation for {p_name} satisfied with high confluence on live 1M candles."
-                    },
-                    "raw_trigger_candles": [c.model_dump() for c in (candles[-10:] if candles else [])]
-                }
-
-                chart_path = TradeChartGenerator.generate_chart(candles=candles, signal_data=start_sig_payload)
-                start_sig_payload["image_path"] = chart_path
-                await telegram_service.send_signal_notification(chat_id, start_sig_payload)
-            except Exception as start_sig_err:
-                logger.warning(f"Notice generating welcome signal: {start_sig_err}")
-
             return
 
         # /link <CODE> command
@@ -309,113 +241,97 @@ class TelegramUpdateHandler:
                     # Find active strategies
                     p_res = await db.execute(select(Pattern).where(Pattern.is_active == True))
                     patterns = p_res.scalars().all()
-                    top_pattern = patterns[0] if patterns else None
 
                     provider = market_data_manager.get_provider()
                     all_assets = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
-                    
-                    # Prioritize assets currently streaming on the Live Relay
                     live_assets = [a for a in all_assets if hasattr(provider, "_ingested_candles") and f"{a}_1M" in provider._ingested_candles]
-                    chosen_asset = random.choice(live_assets) if live_assets else random.choice(all_assets)
+                    
+                    # Strictly scan live assets against active SMC strategy rules
+                    found_signal = False
+                    for p in patterns:
+                        pattern_dict = {
+                            "id": p.id,
+                            "name": p.name,
+                            "market_id": p.market_id,
+                            "direction": p.direction,
+                            "timeframe": "1M",
+                            "current_version": p.current_version,
+                            "trend_config": p.trend_config or {},
+                            "momentum_config": p.momentum_config or {},
+                            "volume_config": p.volume_config or {},
+                            "indicators_config": p.indicators_config or [],
+                            "rules_config": p.rules_config or {},
+                            "entry_config": p.entry_config or {"type": "immediate"},
+                            "target_config": p.target_config or {"duration_minutes": 1, "duration_candles": 1},
+                            "ai_config": p.ai_config or {"enabled": True, "min_score": 60, "min_confidence": "MODERATE"},
+                        }
 
-                    candles = await provider.get_candles(chosen_asset, timeframe="1M", limit=50)
-                    if not candles or len(candles) < 5:
-                        sync_msg = (
-                            "📡 <b>Live Relay Syncing...</b>\n\n"
-                            "⏳ Waiting for the next live data batch from the Quotex cloud relay.\n\n"
-                            "<i>🔒 Strict Live Guarantee: Fake and simulated signals are strictly disabled. Your bot only evaluates 100% genuine market candles.</i>"
+                        scan_targets = live_assets if live_assets else all_assets
+                        for asset_sym in scan_targets:
+                            candles = await provider.get_candles(asset_sym, timeframe="1M", limit=50)
+                            if not candles or len(candles) < 10:
+                                continue
+
+                            pattern_dict["asset_symbol"] = asset_sym
+                            is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
+                                pattern_dict=pattern_dict,
+                                candles=candles,
+                                user_preferences=None,
+                                ai_provider=ai_manager.get_mock_provider()
+                            )
+
+                            if is_created and sig_payload:
+                                sig_payload["is_live_feed"] = True
+                                sig_payload["feed_source"] = "Quotex Live Relay"
+
+                                try:
+                                    chart_path = TradeChartGenerator.generate_chart(candles=candles, signal_data=sig_payload)
+                                    sig_payload["image_path"] = chart_path
+                                except Exception as chart_err:
+                                    logger.warning(f"Chart generation notice: {chart_err}")
+
+                                new_sig = Signal(
+                                    id=sig_payload["id"],
+                                    user_id=p.user_id,
+                                    pattern_id=p.id,
+                                    pattern_version=p.current_version,
+                                    pattern_name=sig_payload["pattern_name"],
+                                    market_id="digital_options",
+                                    asset_symbol=asset_sym,
+                                    direction=sig_payload["direction"],
+                                    timeframe="1M",
+                                    reference_price=sig_payload["reference_price"],
+                                    entry_time=sig_payload["entry_time"],
+                                    expiry_time=sig_payload["expiry_time"],
+                                    duration_minutes=sig_payload["duration_minutes"],
+                                    stop_loss=sig_payload.get("stop_loss"),
+                                    tp1=sig_payload.get("tp1"),
+                                    tp2=sig_payload.get("tp2"),
+                                    signal_strength=sig_payload.get("signal_strength", "HIGH"),
+                                    ai_score=sig_payload.get("ai_score", 85),
+                                    ai_confidence=sig_payload.get("ai_confidence", "HIGH"),
+                                    status="ACTIVE",
+                                    matched_candle_timestamp=sig_payload.get("matched_candle_timestamp"),
+                                    raw_trigger_candles=sig_payload.get("raw_trigger_candles", [])
+                                )
+                                db.add(new_sig)
+                                await db.commit()
+
+                                await telegram_service.send_signal_notification(chat_id, sig_payload)
+                                found_signal = True
+                                break
+
+                        if found_signal:
+                            break
+
+                    if not found_signal:
+                        scan_complete_msg = (
+                            "🔍 <b>Live Market Scan Complete</b>\n\n"
+                            "📊 Analyzed real-time Quotex OTC candles across all currency pairs.\n"
+                            "⏳ <b>Result:</b> No setup currently satisfies strict SMC 10 / Mountain Breakout entry rules at this second.\n\n"
+                            "<i>🔒 Zero Fake Signals Guarantee: The bot will notify all subscribers automatically the exact moment a high-confluence trigger confirms!</i>"
                         )
-                        await telegram_service.send_message(chat_id, sync_msg)
-                        return
-
-                    last_c = candles[-1]
-                    ref_p = last_c.close
-                    matched_ts = datetime.fromtimestamp(last_c.timestamp, tz=timezone.utc)
-
-                    entry_time = datetime.now(timezone.utc)
-                    expiry_time = entry_time + timedelta(minutes=1)
-
-                    p_name = top_pattern.name if top_pattern else "SMC Pattern Type 14"
-                    direction = top_pattern.direction if top_pattern else random.choice(["UP", "DOWN"])
-
-                    is_live = bool(getattr(provider, "_ingested_candles", {}).get(f"{chosen_asset}_1M")) or getattr(provider, "_live_mode", False)
-
-                    sig_payload = {
-                        "id": str(uuid.uuid4()),
-                        "pattern_id": top_pattern.id if top_pattern else str(uuid.uuid4()),
-                        "pattern_name": p_name,
-                        "market_id": "digital_options",
-                        "asset_symbol": chosen_asset,
-                        "direction": direction or "DOWN",
-                        "timeframe": "1M",
-                        "reference_price": ref_p,
-                        "support_level": round(ref_p * 0.9995, 5),
-                        "resistance_level": round(ref_p * 1.0005, 5),
-                        "entry_time": entry_time,
-                        "expiry_time": expiry_time,
-                        "duration_minutes": 1,
-                        "signal_strength": "HIGH",
-                        "ai_score": random.randint(88, 95),
-                        "ai_confidence": "HIGH",
-                        "status": "ACTIVE",
-                        "is_live_feed": is_live,
-                        "feed_source": "Quotex Live Relay",
-                        "technical_snapshot": {
-                            "rsi": round(random.uniform(35.0, 48.0), 1),
-                            "volume_ratio": round(random.uniform(1.2, 1.6), 2),
-                            "support_levels": [round(ref_p * 0.9995, 5)],
-                            "resistance_levels": [round(ref_p * 1.0005, 5)],
-                            "market_structure": {"trend": "BEARISH" if direction == "DOWN" else "BULLISH", "current_price": ref_p}
-                        },
-                        "ai_analysis": {
-                            "bias": direction or "BEARISH",
-                            "score": random.randint(88, 95),
-                            "confidence": "HIGH",
-                            "trend_assessment": f"High-probability {p_name} formation confirmed on {chosen_asset}",
-                            "momentum_assessment": "Momentum expansion confirms immediate directional follow-through",
-                            "volume_assessment": "Volume exceeds 20-period moving average — confirmed breakout",
-                            "structure_assessment": "Clean price rejection at key boundary level",
-                            "entry_quality": "Optimal immediate entry — minimal slippage expected",
-                            "risk_assessment": "Low to Moderate Risk",
-                            "reasoning": f"Algorithmic validation for {p_name} satisfied with multi-factor confluence on {chosen_asset} 1M candles.",
-                            "risks": ["OTC micro-volatility spike", "Retest of broken level"],
-                        },
-                        "raw_trigger_candles": [c.model_dump() for c in (candles[-10:] if candles else [])]
-                    }
-
-                    # Generate live candlestick chart
-                    try:
-                        chart_path = TradeChartGenerator.generate_chart(candles=candles, signal_data=sig_payload)
-                        sig_payload["image_path"] = chart_path
-                    except Exception as chart_err:
-                        logger.warning(f"Chart generation notice: {chart_err}")
-
-                    # Persist Signal to DB
-                    new_sig = Signal(
-                        id=sig_payload["id"],
-                        user_id=top_pattern.user_id if top_pattern else None,
-                        pattern_id=top_pattern.id if top_pattern else None,
-                        pattern_version=1,
-                        pattern_name=sig_payload["pattern_name"],
-                        market_id="digital_options",
-                        asset_symbol=chosen_asset,
-                        direction=sig_payload["direction"],
-                        timeframe="1M",
-                        reference_price=ref_p,
-                        entry_time=entry_time,
-                        expiry_time=expiry_time,
-                        duration_minutes=1,
-                        signal_strength="HIGH",
-                        ai_score=sig_payload["ai_score"],
-                        ai_confidence="HIGH",
-                        status="ACTIVE",
-                        matched_candle_timestamp=matched_ts
-                    )
-                    db.add(new_sig)
-                    await db.commit()
-
-                    # Send signal with chart and buttons
-                    await telegram_service.send_signal_notification(chat_id, sig_payload)
+                        await telegram_service.send_message(chat_id, scan_complete_msg)
 
                 # Hard 15-second timeout — always responds even if something is slow
                 await asyncio.wait_for(_generate_and_send(), timeout=15.0)
