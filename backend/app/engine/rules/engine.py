@@ -285,28 +285,8 @@ class PatternRuleEngine:
         p_type = node.get("type", "")
         params = node.get("params", {})
 
-        # Specialized Pattern Type 1 Primitive (2 Green + 1 Red below SMC 10)
-        if p_type == "pattern_type_1":
-            return cls._evaluate_pattern_type_1(candles, params, snapshot)
-
-        # Specialized Pattern Type 15 Primitive (V-Pattern Resistance Rejection)
-        elif p_type == "pattern_type_15":
-            return cls._evaluate_pattern_type_15(candles, params, snapshot)
-
-        # Inverted Pattern Type 15 Primitive (Inverted V Support Bounce for UP Signals)
-        elif p_type == "pattern_type_15_inverted":
-            return cls._evaluate_pattern_type_15_inverted(candles, params, snapshot)
-
-        # Specialized Pattern Type 14 Primitive
-        elif p_type == "pattern_type_14":
-            return cls._evaluate_pattern_type_14(candles, params)
-
-        # Inverted Pattern Type 14 Primitive (for UP Signals)
-        elif p_type == "pattern_type_14_inverted":
-            return cls._evaluate_pattern_type_14_inverted(candles, params)
-
         # Candle Color Primitive
-        elif p_type == "candle_color":
+        if p_type == "candle_color":
             idx = params.get("index", -1)
             target_color = params.get("color", "bearish").lower()
             if abs(idx) > len(candles):
@@ -402,324 +382,6 @@ class PatternRuleEngine:
             return cls._evaluate_momentum_alignment(candles, params, snapshot)
 
         return False, f"Unknown primitive type: {p_type}", {}
-
-    # ---------------------------------------------------------
-    # Pattern Type 14 Enhanced Adaptive Evaluator
-    # ---------------------------------------------------------
-
-    @classmethod
-    def _evaluate_pattern_type_14(cls, candles: List[Candle], params: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
-        """
-        Adaptive Pattern Type 14 (Horizontal Support Breakdown):
-        Reference Strategy: Horizontal support line formed by green base candles after a red candle,
-        followed by a mountain crest, and broken by a strong red trigger candle.
-
-        Adaptive Market Implementation:
-        - Flexible base length (1 to 4 green base candles).
-        - Adaptive horizontal tolerance so micro-pips do not invalidate valid setups.
-        - Verifies mountain crest (intermediate rally above support).
-        - Verifies strong bearish trigger candle closing below support.
-        """
-        lookback = min(len(candles), params.get("lookback", 22))
-        if len(candles) < 5:
-            return False, f"Pattern Type 14 requires at least 5 candles, got {len(candles)}", {}
-
-        trigger_candle = candles[-1]
-        if not trigger_candle.is_bearish:
-            return False, f"Trigger candle must be bearish (Red), got close={trigger_candle.close} open={trigger_candle.open}", {}
-
-        target_base_len = params.get("bullish_count")
-        base_lengths = [target_base_len] if target_base_len else [2, 1, 3, 4]
-
-        best_match = None
-        best_support = None
-        best_crest_height = 0.0
-        best_base_len = 2
-
-        for base_len in base_lengths:
-            for i in range(len(candles) - 3, max(1, len(candles) - lookback), -1):
-                if i <= 0 or (i + base_len >= len(candles) - 1):
-                    continue
-
-                base_candles = candles[i : i + base_len]
-                if len(base_candles) < base_len or not all(c.is_bullish for c in base_candles):
-                    continue
-
-                prior_candle = candles[i - 1]
-                if not prior_candle.is_bearish:
-                    continue
-
-                # Establish horizontal support level
-                support_level = min(c.low for c in base_candles)
-
-                # Check intermediate candles (mountain crest above support)
-                intermediate_candles = candles[i + base_len : -1]
-                if not intermediate_candles:
-                    continue
-
-                max_intermediate_high = max(c.high for c in intermediate_candles)
-                if max_intermediate_high <= support_level:
-                    continue
-
-                # Breakout confirmation strictly requires body closing below support level
-                if trigger_candle.close < support_level:
-                    crest_height = max_intermediate_high - support_level
-                    if crest_height > best_crest_height:
-                        best_crest_height = crest_height
-                        best_support = support_level
-                        best_base_len = base_len
-                        best_match = (i, len(intermediate_candles))
-
-        if best_support is not None:
-            trigger_body = trigger_candle.open - trigger_candle.close
-            trigger_range = trigger_candle.high - trigger_candle.low
-            body_ratio = (trigger_body / trigger_range) if trigger_range > 0 else 1.0
-
-            return True, f"Pattern Type 14 Confirmed: Red breakout close ({trigger_candle.close:.5f}) below horizontal support ({best_support:.5f})", {
-                "support_level": best_support,
-                "resistance_level": best_support,
-                "pattern_name": "Pattern Type 14",
-                "bullish_base_count": best_base_len,
-                "direction": "DOWN",
-                "expiry_duration_minutes": 1,
-                "timeframe": "1M",
-                "breakout_strength": f"{body_ratio * 100:.1f}%"
-            }
-
-        return False, "No valid Pattern 14 support breakout structure matched in recent price action", {}
-
-    @classmethod
-    def _evaluate_pattern_type_14_inverted(cls, candles: List[Candle], params: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
-        """Adaptive Inverted Pattern Type 14 for UP signals (Bearish Base -> Resistance Line -> Bullish Breakout)"""
-        lookback = min(len(candles), params.get("lookback", 22))
-        if len(candles) < 5:
-            return False, f"Inverted Pattern 14 requires at least 5 candles, got {len(candles)}", {}
-
-        trigger_candle = candles[-1]
-        if not trigger_candle.is_bullish:
-            return False, "Trigger candle must be bullish (Green) for UP signal", {}
-
-        target_base_len = params.get("bearish_count")
-        base_lengths = [target_base_len] if target_base_len else [2, 1, 3, 4]
-
-        best_resistance = None
-        best_trough_depth = 0.0
-        best_base_len = 2
-
-        for base_len in base_lengths:
-            for i in range(len(candles) - 3, max(1, len(candles) - lookback), -1):
-                if i <= 0 or (i + base_len >= len(candles) - 1):
-                    continue
-
-                base_candles = candles[i : i + base_len]
-                if len(base_candles) < base_len or not all(c.is_bearish for c in base_candles):
-                    continue
-
-                prior_candle = candles[i - 1]
-                if not prior_candle.is_bullish:
-                    continue
-
-                resistance_level = max(c.high for c in base_candles)
-                intermediate_candles = candles[i + base_len : -1]
-                if not intermediate_candles:
-                    continue
-
-                min_intermediate_low = min(c.low for c in intermediate_candles)
-                if min_intermediate_low >= resistance_level:
-                    continue
-
-                if trigger_candle.close > resistance_level:
-                    trough_depth = resistance_level - min_intermediate_low
-                    if trough_depth > best_trough_depth:
-                        best_trough_depth = trough_depth
-                        best_resistance = resistance_level
-                        best_base_len = base_len
-
-        if best_resistance is not None:
-            return True, f"Inverted Pattern Type 14 Confirmed: Green breakout close ({trigger_candle.close:.5f}) above horizontal resistance ({best_resistance:.5f})", {
-                "resistance_level": best_resistance,
-                "support_level": best_resistance,
-                "pattern_name": "Inverted Pattern Type 14",
-                "direction": "UP",
-                "bearish_base_count": best_base_len,
-                "expiry_duration_minutes": 1,
-                "timeframe": "1M"
-            }
-
-        return False, "No valid Inverted Pattern 14 breakout structure matched", {}
-
-    # ---------------------------------------------------------
-    # Pattern Type 1 Enhanced Adaptive Evaluator (SMC 10 Line Reversal)
-    # ---------------------------------------------------------
-
-    @classmethod
-    def _evaluate_pattern_type_1(
-        cls,
-        candles: List[Candle],
-        params: Dict[str, Any],
-        snapshot: Dict[str, Any]
-    ) -> Tuple[bool, str, Dict[str, Any]]:
-        """
-        Adaptive Pattern Type 1 (SMC 10 Reversal):
-        Reference Strategy: Green accumulation candles followed by a Red reversal candle below/interacting with the SMC 10 Line.
-        Adaptive logic allows 1, 2, or 3 green candles with adaptive price proximity.
-        """
-        smc_period = params.get("smc_period", 10)
-        if len(candles) < max(smc_period, 4):
-            return False, f"Pattern Type 1 requires at least {max(smc_period, 4)} candles, got {len(candles)}", {}
-
-        c_trigger = candles[-1]
-        if not c_trigger.is_bearish:
-            return False, f"Trigger candle must be red (bearish), got {c_trigger.close} vs {c_trigger.open}", {}
-
-        # Calculate SMC 10 Line
-        closes = [c.close for c in candles]
-        smc_10_line = sum(closes[-smc_period:]) / float(smc_period)
-        tolerance = smc_10_line * 0.00025  # ~2.5 pips adaptive tolerance
-
-        # Test preceding 2 to 3 candles
-        c1 = candles[-3] if len(candles) >= 3 else None
-        c2 = candles[-2]
-
-        if not c2.is_bullish:
-            return False, f"Candle before trigger must be green (bullish), got {c2.close} vs {c2.open}", {}
-
-        # Ensure close is under or interacting at SMC line
-        if c2.close > (smc_10_line + tolerance) or c_trigger.close > (smc_10_line + tolerance):
-            return False, f"Candle closes exceed SMC 10 Line ({smc_10_line:.5f})", {}
-
-        line_proximity = abs(c2.high - smc_10_line) / smc_10_line
-
-        return True, f"Pattern Type 1 Confirmed: Green accumulation + Red reversal below SMC 10 Line ({smc_10_line:.5f})", {
-            "pattern_name": "Pattern Type 1",
-            "smc_10_line": smc_10_line,
-            "resistance_level": smc_10_line,
-            "direction": "DOWN",
-            "expiry_duration_minutes": 1,
-            "timeframe": "1M",
-            "line_proximity": f"{line_proximity*100:.3f}%"
-        }
-
-    # ---------------------------------------------------------
-    # Pattern Type 15 Enhanced Adaptive Evaluator (V-Pattern Rejection)
-    # ---------------------------------------------------------
-
-    @classmethod
-    def _evaluate_pattern_type_15(
-        cls,
-        candles: List[Candle],
-        params: Dict[str, Any],
-        snapshot: Dict[str, Any]
-    ) -> Tuple[bool, str, Dict[str, Any]]:
-        """
-        Adaptive Pattern Type 15 (V-Pattern & Double-Top Resistance Rejection):
-        Reference Strategy: Market forms a V-pattern rally or double top, tests the horizontal ceiling,
-        and prints an upper wick rejection or reversal candle.
-        """
-        max_lookback = min(len(candles), params.get("lookback", 22))
-        if len(candles) < 5:
-            return False, f"Pattern Type 15 requires at least 5 candles, got {len(candles)}", {}
-
-        trigger_candle = candles[-1]
-        upper_wick = trigger_candle.high - max(trigger_candle.open, trigger_candle.close)
-        rng = trigger_candle.high - trigger_candle.low
-
-        has_upper_rejection = trigger_candle.is_bearish or (rng > 0 and (upper_wick / rng) >= 0.20)
-        if not has_upper_rejection:
-            return False, f"Trigger candle lacks upper wick rejection or bearish close (wick={upper_wick:.5f})", {}
-
-        best_horizontal = None
-        best_v_depth = 0.0
-
-        for w_size in range(5, max_lookback + 1):
-            preceding = candles[-w_size : -1]
-            if len(preceding) < 4:
-                continue
-
-            half = max(1, len(preceding) // 2)
-            left_window = preceding[:half]
-            if not left_window:
-                continue
-            horizontal_ceiling = max(c.high for c in left_window)
-            swing_low_bottom = min(c.low for c in preceding)
-            v_depth = horizontal_ceiling - swing_low_bottom
-
-            if v_depth < (horizontal_ceiling * 0.00008):
-                continue
-
-            if trigger_candle.high >= (horizontal_ceiling * 0.9992):
-                if v_depth > best_v_depth:
-                    best_v_depth = v_depth
-                    best_horizontal = horizontal_ceiling
-
-        if best_horizontal is not None:
-            return True, f"Pattern Type 15 Confirmed: V-Pattern rally rejected at horizontal line ({best_horizontal:.5f}) with upper wick", {
-                "pattern_name": "Pattern Type 15",
-                "horizontal_line": best_horizontal,
-                "resistance_level": best_horizontal,
-                "v_depth": best_v_depth,
-                "direction": "DOWN",
-                "expiry_duration_minutes": 1,
-                "timeframe": "1M"
-            }
-
-        return False, "No valid V-Pattern resistance rejection structure found in current window", {}
-
-    @classmethod
-    def _evaluate_pattern_type_15_inverted(
-        cls,
-        candles: List[Candle],
-        params: Dict[str, Any],
-        snapshot: Dict[str, Any]
-    ) -> Tuple[bool, str, Dict[str, Any]]:
-        """Enhanced Inverted Pattern Type 15 (Inverted V / Mountain Support Bounce)"""
-        max_lookback = min(len(candles), params.get("lookback", 20))
-        if len(candles) < 6:
-            return False, f"Inverted Pattern Type 15 requires at least 6 candles, got {len(candles)}", {}
-
-        trigger_candle = candles[-1]
-        lower_wick = min(trigger_candle.open, trigger_candle.close) - trigger_candle.low
-        rng = trigger_candle.high - trigger_candle.low
-
-        has_lower_rejection = trigger_candle.is_bullish or (rng > 0 and (lower_wick / rng) >= 0.25)
-        if not has_lower_rejection:
-            return False, "Trigger candle lacks lower wick bounce or bullish close", {}
-
-        best_horizontal = None
-        best_inverted_depth = 0.0
-
-        for w_size in range(6, max_lookback + 1):
-            preceding = candles[-w_size : -1]
-            if len(preceding) < 5:
-                continue
-
-            half = max(1, len(preceding) // 2)
-            left_window = preceding[:half]
-            if not left_window:
-                continue
-            horizontal_floor = min(c.low for c in left_window)
-            swing_high_top = max(c.high for c in preceding)
-            inverted_depth = swing_high_top - horizontal_floor
-
-            if inverted_depth < (horizontal_floor * 0.0001):
-                continue
-
-            if trigger_candle.low <= (horizontal_floor * 1.0005):
-                if inverted_depth > best_inverted_depth:
-                    best_inverted_depth = inverted_depth
-                    best_horizontal = horizontal_floor
-
-        if best_horizontal is not None:
-            return True, f"Inverted Pattern Type 15 Confirmed: Inverted V bounce at horizontal line ({best_horizontal:.5f}) with lower wick", {
-                "pattern_name": "Inverted Pattern Type 15",
-                "horizontal_line": best_horizontal,
-                "support_level": best_horizontal,
-                "direction": "UP",
-                "expiry_duration_minutes": 1,
-                "timeframe": "1M"
-            }
-
-        return False, "No valid Inverted V-Pattern support bounce found", {}
 
     # ---------------------------------------------------------
     # SMC Fair Value Gap (FVG) Evaluator
@@ -870,13 +532,15 @@ class PatternRuleEngine:
         Detects Institutional Order Block (OB) mitigation and continuation.
         """
         lookback = min(len(candles) - 1, params.get("lookback", 15))
-        if len(candles) < 6:
-            return False, "Order Block requires at least 6 candles", {}
+        if len(candles) < 4:
+            return False, "Order Block requires at least 4 candles", {}
 
         direction = params.get("direction", "DOWN").upper()
         trigger_c = candles[-1]
 
-        for i in range(len(candles) - 3, max(1, len(candles) - lookback), -1):
+        for i in range(len(candles) - 2):
+            if i + 1 >= len(candles):
+                continue
             ob_candle = candles[i]
             impulse_c = candles[i + 1]
 
@@ -884,8 +548,8 @@ class PatternRuleEngine:
                 if ob_candle.is_bullish and impulse_c.is_bearish and (impulse_c.close < ob_candle.low):
                     ob_top = ob_candle.high
                     ob_bottom = ob_candle.low
-                    if trigger_c.high >= ob_bottom and trigger_c.close <= ob_top and trigger_c.is_bearish:
-                        return True, f"Bearish Order Block Confirmed: Mitigation at [{ob_bottom:.5f} - {ob_top:.5f}] with downward rejection", {
+                    if trigger_c.high >= ob_bottom and trigger_c.close <= (ob_top * 1.0005):
+                        return True, f"Bearish Order Block Mitigation Confirmed: Mitigation at [{ob_bottom:.5f} - {ob_top:.5f}] with downward rejection", {
                             "pattern_name": "SMC Bearish Order Block",
                             "ob_top": ob_top,
                             "ob_bottom": ob_bottom,

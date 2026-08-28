@@ -61,235 +61,117 @@ async def seed_initial_data():
             await db.commit()
             logger.info("Demo user password hash refreshed.")
 
-        # Seed Pattern Type 1 (SMC 10 Line Reversal)
-        p1_res = await db.execute(
-            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 1")
+        # Seed Modern Institutional SMC & Quotex Strategies
+        strategies_to_seed = [
+            {
+                "name": "SMC Liquidity Sweep",
+                "description": "Smart Money Concepts: Detects stop-hunt liquidity grabs past key highs/lows with instant shadow rejection.",
+                "direction": "DOWN",
+                "type": "liquidity_sweep",
+                "params": {"direction": "DOWN", "lookback": 15}
+            },
+            {
+                "name": "SMC Fair Value Gap",
+                "description": "Smart Money Concepts: Detects 3-candle price imbalance mitigation zones for high-probability entries.",
+                "direction": "DOWN",
+                "type": "fair_value_gap",
+                "params": {"direction": "DOWN", "lookback": 10}
+            },
+            {
+                "name": "SMC Break of Structure",
+                "description": "Smart Money Concepts: Confirms structural swing break and trend expansion.",
+                "direction": "DOWN",
+                "type": "break_of_structure",
+                "params": {"direction": "DOWN", "lookback": 20}
+            },
+            {
+                "name": "Quotex Wick Rejection",
+                "description": "High-Probability Quotex Price Action: Long shadow wick rejection (>=40%) at key dynamic support/resistance.",
+                "direction": "DOWN",
+                "type": "wick_rejection",
+                "params": {"direction": "DOWN", "min_wick_ratio": 0.40}
+            },
+            {
+                "name": "Quotex EMA Trend Bounce",
+                "description": "Quotex Multi-Timeframe Trend Continuation: Pullback test and dynamic bounce at EMA 20.",
+                "direction": "DOWN",
+                "type": "ema_trend_bounce",
+                "params": {"direction": "DOWN", "ema_period": 20}
+            },
+            {
+                "name": "Quotex Momentum Alignment",
+                "description": "Quotex 2-Candle Trend Expansion: Strong consecutive momentum expansion in trend direction.",
+                "direction": "DOWN",
+                "type": "momentum_alignment",
+                "params": {"direction": "DOWN"}
+            }
+        ]
+
+        # Deactivate any legacy pattern templates
+        legacy_patterns_res = await db.execute(
+            select(Pattern).where(Pattern.name.in_(["Pattern Type 1", "Pattern Type 14", "Pattern Type 15", "Inverted Pattern Type 14"]))
         )
-        if not p1_res.scalar_one_or_none():
-            logger.info("Seeding Pattern Type 1 template...")
-            p1 = Pattern(
-                user_id=demo_user.id,
-                name="Pattern Type 1",
-                description="If market forms two green candles followed by one red candle with normal bodies below the SMC 10 Line, the entry is a sure shot for a red candle in the opposite direction.",
-                market_id="digital_options",
-                direction="DOWN",
-                timeframe="1M",
-                is_active=True,
-                current_version=1,
-                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
-                timeframes_config={"1M": "Any"},
-                trend_config={"required": "Bearish"},
-                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 65},
-                volume_config={},
-                indicators_config=[
-                    {"indicator": "SMC_10", "condition": "BELOW", "value": 0.0}
-                ],
-                rules_config={
-                    "operator": "AND",
-                    "conditions": [
-                        {
-                            "type": "pattern_type_1",
-                            "params": {
-                                "smc_period": 10
+        for legacy_p in legacy_patterns_res.scalars().all():
+            legacy_p.is_active = False
+
+        for strat in strategies_to_seed:
+            strat_res = await db.execute(
+                select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == strat["name"])
+            )
+            if not strat_res.scalar_one_or_none():
+                logger.info(f"Seeding {strat['name']} strategy...")
+                p_new = Pattern(
+                    user_id=demo_user.id,
+                    name=strat["name"],
+                    description=strat["description"],
+                    market_id="digital_options",
+                    direction=strat["direction"],
+                    timeframe="1M",
+                    is_active=True,
+                    current_version=1,
+                    assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "USD/BRL (OTC)", "EUR/NZD (OTC)", "BTC/USDT (OTC)", "USD/ARS (OTC)"],
+                    timeframes_config={"1M": "Any"},
+                    trend_config={"required": "Any"},
+                    momentum_config={"strength": "Any"},
+                    volume_config={},
+                    indicators_config=[],
+                    rules_config={
+                        "operator": "AND",
+                        "conditions": [
+                            {
+                                "type": strat["type"],
+                                "params": strat["params"]
                             }
-                        }
-                    ]
-                },
-                entry_config={"type": "immediate"},
-                target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
-                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
-                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
-            )
-            db.add(p1)
-            await db.flush()
+                        ]
+                    },
+                    entry_config={"type": "immediate"},
+                    target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+                    ai_config={"enabled": True, "min_score": 65, "min_confidence": "MODERATE", "required_bias": "ANY"},
+                    notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
+                )
+                db.add(p_new)
+                await db.flush()
 
-            # Attach visual reference image
-            img = PatternImage(
-                pattern_id=p1.id,
-                file_path="/uploads/patterns/pattern_type_1.jpg",
-                filename="pattern_type_1.jpg",
-                file_size_bytes=62995,
-                mime_type="image/jpeg",
-                is_primary=True,
-                description="Visual reference for Pattern Type 1: 2 Green Candles + 1 Red Candle under SMC 10 Line"
-            )
-            db.add(img)
-
-            v1 = PatternVersion(
-                pattern_id=p1.id,
-                version_number=1,
-                change_summary="System reference Pattern Type 1 (SMC 10 Under)",
-                config_snapshot={
-                    "name": p1.name,
-                    "direction": p1.direction,
-                    "timeframe": p1.timeframe,
-                    "market_id": p1.market_id,
-                    "rules_config": p1.rules_config,
-                    "target_config": p1.target_config
-                }
-            )
-            db.add(v1)
-            await db.commit()
-            logger.info("Pattern Type 1 seeded successfully.")
-
-        # Seed Pattern Type 15 (V-Pattern Resistance Rejection)
-        p15_res = await db.execute(
-            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 15")
-        )
-        if not p15_res.scalar_one_or_none():
-            logger.info("Seeding Pattern Type 15 template...")
-            p15 = Pattern(
-                user_id=demo_user.id,
-                name="Pattern Type 15",
-                description="V-Pattern resistance rejection setup: triggers reversal trade upon price piercing or rejecting at established horizontal level.",
-                market_id="digital_options",
-                direction="DOWN",
-                timeframe="1M",
-                is_active=True,
-                current_version=1,
-                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
-                timeframes_config={"1M": "Any"},
-                trend_config={"required": "Any"},
-                momentum_config={"strength": "Strong", "rsi_min": 0, "rsi_max": 75},
-                volume_config={},
-                indicators_config=[],
-                rules_config={
-                    "operator": "AND",
-                    "conditions": [
-                        {
-                            "type": "pattern_type_15",
-                            "params": {
-                                "lookback": 10
-                            }
-                        }
-                    ]
-                },
-                entry_config={"type": "immediate"},
-                target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
-                ai_config={"enabled": True, "min_score": 75, "min_confidence": "HIGH", "required_bias": "BEARISH"},
-                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
-            )
-            db.add(p15)
-            await db.flush()
-
-            # Attach visual reference image
-            img15 = PatternImage(
-                pattern_id=p15.id,
-                file_path="/uploads/patterns/pattern_type_15.jpg",
-                filename="pattern_type_15.jpg",
-                file_size_bytes=68940,
-                mime_type="image/jpeg",
-                is_primary=True,
-                description="Visual reference for Pattern Type 15: V-Pattern rally rejecting horizontal line with upper wick"
-            )
-            db.add(img15)
-
-            v15 = PatternVersion(
-                pattern_id=p15.id,
-                version_number=1,
-                change_summary="System reference Pattern Type 15 (V-Pattern Reversal)",
-                config_snapshot={
-                    "name": p15.name,
-                    "direction": p15.direction,
-                    "timeframe": p15.timeframe,
-                    "market_id": p15.market_id,
-                    "rules_config": p15.rules_config,
-                    "target_config": p15.target_config
-                }
-            )
-            db.add(v15)
-            await db.commit()
-            logger.info("Pattern Type 15 seeded successfully.")
-
-        # Seed Pattern Type 14 (Horizontal Support Breakout)
-        p14_res = await db.execute(
-            select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == "Pattern Type 14")
-        )
-        if not p14_res.scalar_one_or_none():
-            logger.info("Seeding Pattern Type 14 template...")
-            p14 = Pattern(
-                user_id=demo_user.id,
-                name="Pattern Type 14",
-                description="Draw a Horizontal Line (SUPPORT LINE) between first 2 Green Candles after the Red Candle and wait for the market to break that support level with a Red candle then trade in the same direction.",
-                market_id="digital_options",
-                direction="DOWN",
-                timeframe="1M",
-                is_active=True,
-                current_version=1,
-                assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"],
-                timeframes_config={"1M": "Any"},
-                trend_config={"required": "Any"},
-                momentum_config={"strength": "Any"},
-                volume_config={},
-                indicators_config=[],
-                rules_config={
-                    "operator": "AND",
-                    "conditions": [
-                        {
-                            "type": "pattern_type_14",
-                            "params": {
-                                "bullish_count": 2,
-                                "confirmation": "close_below",
-                                "support_source": "swing_low"
-                            }
-                        }
-                    ]
-                },
-                entry_config={"type": "immediate"},
-                target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
-                ai_config={"enabled": True, "min_score": 60, "min_confidence": "MODERATE", "required_bias": "ANY"},
-                notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
-            )
-            db.add(p14)
-            await db.flush()
-
-            img14 = PatternImage(
-                pattern_id=p14.id,
-                file_path="/uploads/patterns/pattern_type_14.jpg",
-                filename="pattern_type_14.jpg",
-                file_size_bytes=73383,
-                mime_type="image/jpeg",
-                is_primary=True,
-                description="Visual reference for Pattern Type 14: Horizontal Support Breakdown with Strong Red Candle"
-            )
-            db.add(img14)
-
-            v14 = PatternVersion(
-                pattern_id=p14.id,
-                version_number=1,
-                change_summary="System reference Pattern Type 14 (Horizontal Support Breakout)",
-                config_snapshot={
-                    "name": p14.name,
-                    "direction": p14.direction,
-                    "timeframe": p14.timeframe,
-                    "market_id": p14.market_id,
-                    "rules_config": p14.rules_config,
-                    "target_config": p14.target_config
-                }
-            )
-            db.add(v14)
-            await db.commit()
-            logger.info("Pattern Type 14 seeded successfully.")
-
-        # Ensure all existing core patterns have optimal evaluation configs
-        for p_name, img_path in [
-            ("Pattern Type 1", "/uploads/patterns/pattern_type_1.jpg"),
-            ("Pattern Type 14", "/uploads/patterns/pattern_type_14.jpg"),
-            ("Pattern Type 15", "/uploads/patterns/pattern_type_15.jpg")
-        ]:
-            existing_p = (await db.execute(select(Pattern).where(Pattern.name == p_name))).scalar_one_or_none()
-            if existing_p:
-                existing_p.is_active = True
-                existing_p.trend_config = {"required": "Any"}
-                existing_p.momentum_config = {"strength": "Any"}
-                existing_p.indicators_config = []
-                existing_p.ai_config = {"enabled": True, "min_score": 60, "min_confidence": "MODERATE", "required_bias": "ANY"}
-                existing_p.assets_config = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
+                v_new = PatternVersion(
+                    pattern_id=p_new.id,
+                    version_number=1,
+                    change_summary=f"System reference {strat['name']}",
+                    config_snapshot={
+                        "name": p_new.name,
+                        "direction": p_new.direction,
+                        "timeframe": p_new.timeframe,
+                        "market_id": p_new.market_id,
+                        "rules_config": p_new.rules_config,
+                        "target_config": p_new.target_config
+                    }
+                )
+                db.add(v_new)
+                logger.info(f"{strat['name']} seeded successfully.")
         await db.commit()
 
-        # Cleanup legacy generic patterns so bot ONLY evaluates the user's exact strategies
+        # Purge legacy patterns so bot ONLY evaluates pure institutional strategies
         await db.execute(
-            delete(Pattern).where(Pattern.name.in_(["Quotex 1M OTC Momentum", "Quotex 1M OTC Reversal"]))
+            delete(Pattern).where(Pattern.name.in_(["Pattern Type 1", "Pattern Type 14", "Pattern Type 15", "Inverted Pattern Type 14", "Quotex 1M OTC Momentum", "Quotex 1M OTC Reversal"]))
         )
         await db.commit()
 
