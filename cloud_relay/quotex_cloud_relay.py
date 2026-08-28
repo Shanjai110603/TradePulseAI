@@ -80,7 +80,9 @@ async def get_live_quotex_session() -> str:
         return env_token
 
     try:
-        from playwright.async_api import async_playwright
+        import importlib
+        playwright_module = importlib.import_module("playwright.async_api")
+        async_playwright = getattr(playwright_module, "async_playwright")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
