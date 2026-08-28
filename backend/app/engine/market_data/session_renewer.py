@@ -62,8 +62,10 @@ class QuotexSessionRenewer:
     async def _try_playwright_login(cls, email: str, password: str) -> Optional[str]:
         """Runs a headless browser login to pass Cloudflare/JS challenges and extract the session."""
         try:
-            from playwright.async_api import async_playwright
-        except ImportError:
+            import importlib
+            playwright_module = importlib.import_module("playwright.async_api")
+            async_playwright = getattr(playwright_module, "async_playwright")
+        except (ImportError, AttributeError):
             logger.debug("[SESSION_RENEWER] Playwright not installed in environment; skipping browser step.")
             return None
 
