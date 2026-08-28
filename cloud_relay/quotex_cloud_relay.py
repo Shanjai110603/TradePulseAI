@@ -74,31 +74,72 @@ WATCH_ASSETS = [
 ]
 
 async def get_live_quotex_session() -> str:
-    """Extracts live Quotex session token using Playwright headless browser or env secret"""
+    """Extracts live Quotex session token by signing in with email & password via Playwright or demo-trade"""
     env_token = os.getenv("QUOTEX_SESSION_TOKEN")
     if env_token:
         return env_token
+
+    email = os.getenv("QUOTEX_EMAIL", "")
+    password = os.getenv("QUOTEX_PASSWORD", "")
 
     try:
         import importlib
         playwright_module = importlib.import_module("playwright.async_api")
         async_playwright = getattr(playwright_module, "async_playwright")
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-blink-features=AutomationControlled",
+                ],
+            )
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800},
             )
             page = await context.new_page()
-            print("[BROWSER] Navigating to https://qxbroker.com/en/demo-trade...", flush=True)
-            await page.goto("https://qxbroker.com/en/demo-trade", wait_until="domcontentloaded", timeout=25000)
-            await asyncio.sleep(2.0)
+
+            if email and password:
+                print(f"[BROWSER] Logging in to Quotex as {email[:4]}*** via Headless Chromium...", flush=True)
+                signin_urls = [
+                    "https://qxbroker.com/en/sign-in",
+                    "https://market-qx.pro/en/sign-in",
+                    "https://quotex.com/en/sign-in",
+                ]
+                for signin_url in signin_urls:
+                    try:
+                        await page.goto(signin_url, wait_until="domcontentloaded", timeout=25000)
+                        await asyncio.sleep(2.0)
+                        email_input = page.locator('input[type="email"], input[name="email"]')
+                        if await email_input.count() > 0:
+                            await email_input.first.fill(email)
+                            await page.fill('input[type="password"], input[name="password"]', password)
+                            submit_btn = page.locator('button[type="submit"]')
+                            if await submit_btn.count() > 0:
+                                await submit_btn.first.click()
+                            else:
+                                await page.keyboard.press("Enter")
+                            await asyncio.sleep(6.0)
+                            print("[BROWSER] Credentials submitted successfully!", flush=True)
+                            break
+                    except Exception as signin_err:
+                        print(f"[BROWSER NOTICE] Attempt with {signin_url}: {signin_err}", flush=True)
+            else:
+                print("[BROWSER] Navigating to https://qxbroker.com/en/demo-trade to acquire guest session...", flush=True)
+                await page.goto("https://qxbroker.com/en/demo-trade", wait_until="domcontentloaded", timeout=25000)
+                await asyncio.sleep(3.0)
+
             token = await page.evaluate("() => localStorage.getItem('token') || localStorage.getItem('session') || ''")
             cookies = await context.cookies()
-            cookie_session = next((c['value'] for c in cookies if c['name'] in ['session', 'token', 'PHPSESSID']), None)
+            cookie_session = next((c['value'] for c in cookies if c['name'] in ['session', 'token', 'PHPSESSID', 'ssid']), None)
             await browser.close()
             final_token = token or cookie_session or ""
             if final_token:
-                print(f"[BROWSER] Successfully acquired authentic Quotex session token: {final_token[:15]}...", flush=True)
+                print(f"[BROWSER] Successfully captured authentic Quotex session token: {final_token[:15]}...", flush=True)
             return final_token
     except Exception as e:
         print(f"[BROWSER NOTICE] Headless browser session note: {e}", flush=True)
