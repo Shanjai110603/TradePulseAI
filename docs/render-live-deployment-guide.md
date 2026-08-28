@@ -10,7 +10,7 @@ Before you begin, make sure you have:
 1. **GitHub Account**: To host your private/public repository.
 2. **Render.com Account**: Free account on [render.com](https://render.com).
 3. **Telegram Bot Token**: Created via `@BotFather` on Telegram.
-   - Example token: `8914871985:AAECsQhFgJhgnstQU6v-05IjprYYbGzckBw`
+   - Example token: `YOUR_TELEGRAM_BOT_TOKEN`
 
 ---
 
@@ -68,7 +68,7 @@ git push -u origin main --force
 
 | Key | Value | Purpose |
 | :--- | :--- | :--- |
-| `TELEGRAM_BOT_TOKEN` | `8914871985:AAECsQhFgJhgnstQU6v-05IjprYYbGzckBw` | Bot token from @BotFather |
+| `TELEGRAM_BOT_TOKEN` | `your_bot_token_here` | Bot token from @BotFather |
 | `TELEGRAM_TEST_MODE` | `false` | Enables live Telegram message dispatching |
 | `MARKET_DATA_PROVIDER` | `binance` | Live, free real-time crypto price feeds |
 | `AI_PROVIDER` | `mock` | Quantitative heuristic AI scoring (free) |
