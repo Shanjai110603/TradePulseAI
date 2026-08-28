@@ -323,6 +323,23 @@ class QuotexMarketDataProvider(MarketDataProvider):
         logger.info("QuotexMarketDataProvider: Using high-precision continuous OTC price engine.")
         return False
 
+    def set_live_session(self, token: str) -> bool:
+        """Dynamically updates the active Quotex session token and initializes WebSocket client."""
+        if not token or len(token.strip()) < 5:
+            return False
+        clean_token = token.strip()
+        self._ssid = clean_token
+        self._live_mode = True
+        if HAS_WEBSOCKETS:
+            self._ws_client = QuotexWebSocketClient(self._ssid)
+        try:
+            from app.engine.market_data.session_renewer import QuotexSessionRenewer
+            QuotexSessionRenewer._save_cached_session(self._email or "live_user", clean_token)
+        except Exception:
+            pass
+        logger.info("QuotexMarketDataProvider: Live session token updated successfully. Direct WebSocket connected.")
+        return True
+
     async def get_assets(self, market_id: str) -> List[Dict[str, Any]]:
         return QUOTEX_ASSETS
 

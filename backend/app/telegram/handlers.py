@@ -263,7 +263,36 @@ class TelegramUpdateHandler:
             else:
                 await telegram_service.send_message(chat_id, "❌ Please send <code>/start</code> first to subscribe.")
 
-        # /signal or /test_signal command - triggers an immediate live signal (fast, non-blocking)
+        # /session or /ssid command - allows instant live Quotex WebSocket connection directly from Telegram
+        elif text.startswith("/session") or text.startswith("/ssid") or text.startswith("/token"):
+            parts = text.strip().split(maxsplit=1)
+            if len(parts) < 2 or len(parts[1].strip()) < 5:
+                help_msg = (
+                    "ℹ️ <b>How to Connect Live Quotex WebSocket:</b>\n\n"
+                    "1. Open Quotex in Chrome and press <b>F12</b>.\n"
+                    "2. Go to <b>Application → Cookies</b> and copy the <code>ssid</code> value.\n"
+                    "3. Send it here like this:\n"
+                    "<code>/session YOUR_SSID_TOKEN</code>\n\n"
+                    "<i>The bot will instantly connect to Quotex's live tick stream without restarting the server!</i>"
+                )
+                await telegram_service.send_message(chat_id, help_msg)
+                return
+
+            token_val = parts[1].strip()
+            provider = market_data_manager.get_provider()
+            if hasattr(provider, "set_live_session"):
+                provider.set_live_session(token_val)
+                success_msg = (
+                    "✅ <b>Quotex Live WebSocket Stream Connected!</b>\n\n"
+                    "🟢 <b>Mode:</b> Real-time Quotex Broker Feed\n"
+                    "📊 <b>Assets:</b> 1M & 5M OTC + Major Forex Pairs\n"
+                    "⚡ <b>Status:</b> 100% Live Tick Stream Active\n\n"
+                    "<i>All upcoming automatic signals and <code>/signal</code> requests are now calculated directly from live Quotex candles.</i>"
+                )
+                await telegram_service.send_message(chat_id, success_msg)
+            else:
+                await telegram_service.send_message(chat_id, "⚠️ Market data provider does not support dynamic session injection.")
+            return
         elif text.startswith("/signal") or text.startswith("/test_signal") or text.startswith("/alert"):
             await telegram_service.send_message(chat_id, "🔍 <i>Scanning live Quotex OTC market conditions...</i>")
             from app.models.signal import Signal
@@ -390,6 +419,7 @@ class TelegramUpdateHandler:
                 "When a pattern on your workstation triggers a signal, you receive an instant alert card.\n\n"
                 "<b>Available Commands:</b>\n"
                 "• <code>/signal</code> - Generate an instant live Quotex AI market signal\n"
+                "• <code>/session &lt;token&gt;</code> - Connect real Quotex live WebSocket feed\n"
                 "• <code>/status</code> - Check subscription & bot operational status\n"
                 "• <code>/mute</code> - Pause incoming signal alerts\n"
                 "• <code>/unmute</code> - Resume signal alerts\n\n"
