@@ -55,7 +55,8 @@ class MarketDataProvider(ABC):
         symbol: str,
         timeframe: str = "1M",
         limit: int = 100,
-        end_time: Optional[datetime] = None
+        end_time: Optional[datetime] = None,
+        strict_live_only: bool = True
     ) -> List[Candle]:
         """Returns historical OHLCV candles sorted chronologically (oldest to newest)"""
         pass
