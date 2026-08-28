@@ -1,7 +1,7 @@
 import os
 import math
 import functools
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from PIL import Image, ImageDraw, ImageFont
 
@@ -195,10 +195,11 @@ class TradeChartGenerator:
             x2 = cx + body_w // 2
             draw.rectangle([(x1, top_y), (x2, bot_y)], fill=c_color)
 
-            # Bottom X-Axis Time Labels (every 8th candle)
+            # Bottom X-Axis Time Labels (every 8th candle, in IST UTC+5:30)
             if i % 8 == 0 or i == num_candles - 1:
                 try:
-                    c_dt = datetime.fromtimestamp(c.timestamp, tz=timezone.utc)
+                    ist_tz = timezone(timedelta(hours=5, minutes=30))
+                    c_dt = datetime.fromtimestamp(c.timestamp, tz=timezone.utc).astimezone(ist_tz)
                     t_str = c_dt.strftime("%H:%M")
                     draw.text((cx - 16, chart_bottom + 12), t_str, fill=(90, 110, 135), font=font_axis)
                 except Exception:

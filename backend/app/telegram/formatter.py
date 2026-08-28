@@ -22,17 +22,25 @@ class TelegramMessageFormatter:
         strength = signal.get("signal_strength", "HIGH")
         status = signal.get("status", "ACTIVE")
 
-        entry_time = signal.get("entry_time")
-        if isinstance(entry_time, datetime):
-            entry_str = entry_time.strftime("%H:%M:%S")
-        else:
-            entry_str = str(entry_time)[11:19] if entry_time else "10:35:20"
+        # Resolve timezone conversions for IST (UTC+5:30) and UTC
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        utc_tz = timezone.utc
 
-        expiry_time = signal.get("expiry_time")
-        if isinstance(expiry_time, datetime):
-            expiry_str = expiry_time.strftime("%H:%M:%S")
+        if isinstance(entry_time, datetime):
+            entry_dt = entry_time if entry_time.tzinfo else entry_time.replace(tzinfo=utc_tz)
         else:
-            expiry_str = str(expiry_time)[11:19] if expiry_time else "10:36:20"
+            entry_dt = datetime.now(utc_tz)
+
+        if isinstance(expiry_time, datetime):
+            expiry_dt = expiry_time if expiry_time.tzinfo else expiry_time.replace(tzinfo=utc_tz)
+        else:
+            expiry_dt = entry_dt + timedelta(minutes=1)
+
+        entry_ist = entry_dt.astimezone(ist_tz).strftime("%H:%M:%S")
+        expiry_ist = expiry_dt.astimezone(ist_tz).strftime("%H:%M:%S")
+
+        entry_utc = entry_dt.astimezone(utc_tz).strftime("%H:%M:%S")
+        expiry_utc = expiry_dt.astimezone(utc_tz).strftime("%H:%M:%S")
 
         is_call = direction in ["UP", "LONG", "BUY", "CALL"]
         dir_badge = "🟢 CALL / UP ⬆️" if is_call else "🔴 PUT / DOWN ⬇️"
@@ -44,7 +52,8 @@ class TelegramMessageFormatter:
             f"🎯 <b>Action:</b> <b>{dir_badge}</b>\n"
             f"⏱ <b>Expiry:</b> <b>1 MINUTE</b>\n"
             f"💵 <b>Entry Price:</b> <code>{ref_price}</code>\n"
-            f"⏰ <b>Window:</b> <code>{entry_str}</code> ➔ <code>{expiry_str}</code>\n"
+            f"🇮🇳 <b>Window (IST):</b> <code>{entry_ist}</code> ➔ <code>{expiry_ist}</code>\n"
+            f"🌐 <b>Window (UTC):</b> <code>{entry_utc}</code> ➔ <code>{expiry_utc}</code>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 <b>Pattern:</b> {pattern_name}\n"
             f"🧠 <b>AI Confidence:</b> <b>{ai_score}% ({strength})</b>\n"
