@@ -556,7 +556,7 @@ class QuotexMarketDataProvider(MarketDataProvider):
         if cache_key in self._ingested_candles and self._ingested_candles[cache_key]:
             return self._ingested_candles[cache_key][-1].close
 
-        candles = await self.get_candles(symbol, limit=2, strict_live_only=False)
+        candles = await self.get_candles(symbol, limit=2, strict_live_only=True)
         return candles[-1].close if candles else BASE_PRICES.get(symbol, 1.08500)
 
     def get_supported_timeframes(self) -> List[str]:

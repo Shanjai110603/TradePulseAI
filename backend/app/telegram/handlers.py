@@ -283,7 +283,7 @@ class TelegramUpdateHandler:
 
                         scan_targets = live_assets if live_assets else all_assets
                         for asset_sym in scan_targets:
-                            candles = await provider.get_candles(asset_sym, timeframe="1M", limit=50, strict_live_only=False)
+                            candles = await provider.get_candles(asset_sym, timeframe="1M", limit=50, strict_live_only=True)
                             if not candles or len(candles) < 6:
                                 continue
 
@@ -476,7 +476,7 @@ class TelegramUpdateHandler:
                 name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
                 provider = market_data_manager.get_provider("quotex")
                 current_price = await provider.get_current_price(name)
-                candles = await provider.get_candles(name, timeframe="1M", limit=25, strict_live_only=False)
+                candles = await provider.get_candles(name, timeframe="1M", limit=25, strict_live_only=True)
                 latest = candles[-1].model_dump() if candles else None
                 tech = provider.compute_technical_snapshot(candles, current_price) if candles else {}
 
@@ -505,7 +505,7 @@ class TelegramUpdateHandler:
 
                 name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
                 provider = market_data_manager.get_provider("quotex")
-                candles = await provider.get_candles(name, timeframe="1M", limit=35, strict_live_only=False)
+                candles = await provider.get_candles(name, timeframe="1M", limit=35, strict_live_only=True)
                 curr_p = await provider.get_current_price(name)
                 chart_path = TradeChartGenerator.generate_candlestick_chart(
                     candles=candles,
