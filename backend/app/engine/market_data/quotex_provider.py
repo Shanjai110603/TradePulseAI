@@ -90,11 +90,11 @@ class QuotexWebSocketClient:
         self._cooldown_until = 0.0
 
     def _build_cookie_header(self) -> str:
-        s = self.ssid.strip()
-        if "=" in s:
-            return s
-        # If raw value given, provide both laravel_session and ssid for maximum compatibility
-        return f"laravel_session={s}; ssid={s}"
+        import urllib.parse
+        raw = urllib.parse.unquote(self.ssid.strip())
+        if raw.startswith("ssid=") or raw.startswith("laravel_session="):
+            return raw
+        return f"ssid={raw}; laravel_session={raw}"
 
     async def get_candles(self, ws_asset: str, period: int, count: int) -> List[dict]:
         """
@@ -104,10 +104,24 @@ class QuotexWebSocketClient:
         if time.time() < self._cooldown_until:
             return []
 
+        import urllib.parse
         end_time = int(time.time())
         received: List[dict] = []
         success = False
         cookie_hdr = self._build_cookie_header()
+
+        # Extract pure session token value for authorization payload
+        raw_token = urllib.parse.unquote(self.ssid.strip())
+        if "ssid=" in raw_token:
+            for item in raw_token.split(";"):
+                if "ssid=" in item:
+                    raw_token = item.split("ssid=")[-1].strip()
+                    break
+        elif "laravel_session=" in raw_token:
+            for item in raw_token.split(";"):
+                if "laravel_session=" in item:
+                    raw_token = item.split("laravel_session=")[-1].strip()
+                    break
 
         for ws_url in self.WS_URLS:
             try:
@@ -135,8 +149,7 @@ class QuotexWebSocketClient:
                         continue
 
                     # Send Socket.IO authorization packet
-                    raw_ssid = self.ssid.split("=")[-1].strip() if "=" in self.ssid else self.ssid.strip()
-                    auth_payload = json.dumps(["authorization", {"session": raw_ssid, "isDemo": 1}])
+                    auth_payload = json.dumps(["authorization", {"session": raw_token, "isDemo": 1}])
                     await ws.send(f"42{auth_payload}")
 
                     # Request historical candles
