@@ -156,7 +156,7 @@ class BackgroundScheduler:
                             pattern_dict=pattern_dict,
                             candles=candles,
                             user_preferences=user_prefs,
-                            ai_provider=ai_manager.get_mock_provider()  # Fast local AI — no network calls in scheduler
+                            ai_provider=ai_manager.get_provider()
                         )
 
                         if is_created and sig_payload:

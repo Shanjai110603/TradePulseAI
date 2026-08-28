@@ -27,8 +27,7 @@ class MarketDataManager:
         name = provider_name or self._default_provider_name
         provider = self._providers.get(name)
         if not provider:
-            # Fallback to mock provider
-            return self._providers["mock"]
+            return self._providers.get("quotex", self._providers["mock"])
         return provider
 
     def get_mock_provider(self) -> MockDataProvider:

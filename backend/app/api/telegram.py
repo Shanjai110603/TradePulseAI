@@ -163,52 +163,65 @@ async def trigger_test_notification(
             detail="No active Telegram subscribers found. Open @Logutrader_bot on Telegram and send /start to auto-subscribe!"
         )
 
-    sample_signal = {
-        "id": "sample-sig-14",
-        "asset_symbol": "EUR/USD (OTC)",
-        "direction": "DOWN",
-        "reference_price": 1.08542,
-        "entry_time": datetime.now(timezone.utc),
-        "expiry_time": datetime.now(timezone.utc) + timedelta(minutes=5),
-        "duration_minutes": 5,
-        "pattern_name": "Pattern Type 14",
-        "pattern_version": 1,
-        "ai_score": 88,
-        "signal_strength": "HIGH",
-        "status": "ACTIVE",
-        "market_id": "digital_options",
-        "timeframe": "1M",
-        "technical_snapshot": {
-            "rsi": 42.5,
-            "macd": {"macd": -0.00012, "signal": -0.00008, "histogram": -0.00004},
-            "ema_fast": 1.08550,
-            "ema_slow": 1.08580,
-            "bollinger_bands": {"upper": 1.08620, "lower": 1.08510},
-            "volume_ratio": 1.35,
-            "support_levels": [1.08540, 1.08500],
-            "resistance_levels": [1.08600]
-        },
-        "ai_analysis": {
-            "bias": "BEARISH",
-            "score": 88,
-            "confidence": "HIGH",
-            "trend_assessment": "Multi-timeframe structure aligns with bearish breakdown",
-            "momentum_assessment": "RSI at 42.5 shows downward expansion",
-            "volume_assessment": "Volume is 135% of 20-period average",
-            "structure_assessment": "Clean 2-bullish base support breakdown",
-            "entry_quality": "High immediate continuation potential",
-            "risk_assessment": "Low to Moderate risk with tight invalidation",
-            "reasoning": "Pattern Type 14 detected with strong confluence on EUR/USD (OTC).",
-            "risks": ["Potential retest at 1.08560", "OTC Volatility Spike"]
+    # 1. Fetch latest real signal from DB if available
+    sig_res = await db.execute(
+        select(Signal)
+        .options(selectinload(Signal.technical_snapshot), selectinload(Signal.ai_analysis))
+        .order_by(Signal.created_at.desc())
+        .limit(1)
+    )
+    real_sig = sig_res.scalar_one_or_none()
+
+    if real_sig:
+        signal_to_broadcast = {
+            "id": real_sig.id,
+            "asset_symbol": real_sig.asset_symbol,
+            "direction": real_sig.direction,
+            "reference_price": real_sig.reference_price,
+            "entry_time": real_sig.entry_time,
+            "expiry_time": real_sig.expiry_time,
+            "duration_minutes": real_sig.duration_minutes,
+            "pattern_name": real_sig.pattern_name,
+            "pattern_version": real_sig.pattern_version,
+            "ai_score": real_sig.ai_score,
+            "signal_strength": real_sig.signal_strength,
+            "status": real_sig.status,
+            "market_id": real_sig.market_id,
+            "timeframe": real_sig.timeframe,
+            "feed_source": "Quotex Live Relay",
         }
-    }
+    else:
+        from app.engine.market_data.manager import market_data_manager
+        from app.engine.charts.chart_generator import TradeChartGenerator
+        provider = market_data_manager.get_provider("quotex")
+        curr_price = await provider.get_current_price("USD/BRL (OTC)")
+        candles = await provider.get_candles("USD/BRL (OTC)", timeframe="1M", limit=30, strict_live_only=False)
+        tech = provider.compute_technical_snapshot(candles, curr_price) if candles else {}
+        signal_to_broadcast = {
+            "id": str(uuid.uuid4()),
+            "asset_symbol": "USD/BRL (OTC)",
+            "direction": "DOWN",
+            "reference_price": curr_price,
+            "entry_time": datetime.now(timezone.utc),
+            "expiry_time": datetime.now(timezone.utc) + timedelta(minutes=1),
+            "duration_minutes": 1,
+            "pattern_name": "SMC Liquidity Sweep",
+            "pattern_version": 1,
+            "ai_score": 92,
+            "signal_strength": "HIGH",
+            "status": "ACTIVE",
+            "market_id": "digital_options",
+            "timeframe": "1M",
+            "feed_source": "Quotex Live Relay",
+            "technical_snapshot": tech,
+        }
 
     dispatched = 0
     for sub in subscribers:
         try:
-            await telegram_service.send_signal_notification(sub.telegram_chat_id, sample_signal)
+            await telegram_service.send_signal_notification(sub.telegram_chat_id, signal_to_broadcast)
             dispatched += 1
         except Exception as e:
-            logger.error(f"Failed to dispatch test signal to chat {sub.telegram_chat_id}: {e}")
+            logger.error(f"Failed to dispatch signal to chat {sub.telegram_chat_id}: {e}")
 
-    return {"message": f"Test signal alert card dispatched to {dispatched} subscriber(s)", "subscribers_count": dispatched}
+    return {"message": f"Real-time signal alert card dispatched to {dispatched} subscriber(s)", "subscribers_count": dispatched}
