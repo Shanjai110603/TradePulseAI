@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         default="sqlite+aiosqlite:///./tradepulse.db",
         description="SQLAlchemy database connection string"
     )
-    REDIS_URL: Optional[str] = "redis://localhost:6339/0"
+    REDIS_URL: Optional[str] = "redis://localhost:6379/0"
     SUPABASE_URL: Optional[str] = ""
     SUPABASE_KEY: Optional[str] = ""
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = ""

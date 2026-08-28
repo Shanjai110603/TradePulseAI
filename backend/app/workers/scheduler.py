@@ -19,6 +19,7 @@ from app.engine.signals.evaluator import SignalEvaluationPipeline
 from app.engine.signals.tracker import SignalLifecycleTracker
 from app.engine.charts.chart_generator import TradeChartGenerator
 from app.engine.ai.mock_ai import MockAIProvider
+from app.engine.ai.manager import ai_manager
 from app.telegram.bot import telegram_service
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class BackgroundScheduler:
             except Exception as e:
                 logger.error(f"Error in background worker tick: {e}", exc_info=True)
 
-            await asyncio.sleep(10)  # Evaluation interval
+            await asyncio.sleep(30)  # Evaluation interval — enough time for async market scan
 
     async def tick_pattern_evaluation(self):
         """Scans active user patterns against live market data and broadcasts automatically"""
@@ -86,7 +87,7 @@ class BackgroundScheduler:
                 if acc.telegram_chat_id and getattr(acc, "is_muted", False) is not True
             ]
 
-            logger.info(f"[SCHEDULER] Active Telegram subscribers: {len(subscribers)} (IDs: {[s.telegram_chat_id for s in subscribers]}). Last broadcast: {now_ts - self._last_broadcast_ts:.1f}s ago.")
+            logger.info(f"[SCHEDULER] Tick — Active patterns: {len(active_patterns)}, Subscribers: {len(subscribers)}, Last broadcast: {now_ts - self._last_broadcast_ts:.1f}s ago.")
 
             for pattern in active_patterns:
                 assets = pattern.assets_config or ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
@@ -141,7 +142,8 @@ class BackgroundScheduler:
                         is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
                             pattern_dict=pattern_dict,
                             candles=candles,
-                            user_preferences=user_prefs
+                            user_preferences=user_prefs,
+                            ai_provider=ai_manager.get_mock_provider()  # Fast local AI — no network calls in scheduler
                         )
 
                         if is_created and sig_payload:
