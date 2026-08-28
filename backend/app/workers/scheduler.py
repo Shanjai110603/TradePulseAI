@@ -149,6 +149,11 @@ class BackgroundScheduler:
                         if is_created and sig_payload:
                             signal_generated_in_tick = True
                             self._last_broadcast_ts = time.time()
+                            
+                            cache_k = f"{asset_symbol}_{tf}"
+                            is_live = bool(getattr(provider, "_ingested_candles", {}).get(cache_k)) or getattr(provider, "_live_mode", False)
+                            sig_payload["is_live_feed"] = is_live
+                            sig_payload["feed_source"] = "Quotex Live Relay" if is_live else "Algorithmic Model"
 
                             # Persist Signal to DB
                             new_signal = Signal(

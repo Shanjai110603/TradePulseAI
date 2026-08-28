@@ -106,3 +106,34 @@ async def list_data_sources():
         DataSourceResponse(id="quotex", name="Quotex OTC Live / Engine", provider_type="live", is_active=True, is_live=True, is_free=True, supported_markets=["digital_options", "forex", "crypto"], rate_limit_per_minute=2000),
         DataSourceResponse(id="binance", name="Binance Public API", provider_type="live", is_active=True, is_live=True, is_free=True, supported_markets=["crypto"], rate_limit_per_minute=1200),
     ]
+
+
+@router.post("/candles/ingest")
+async def ingest_market_candles(
+    payload: dict,
+    api_key: Optional[str] = Query(None)
+):
+    """
+    Receives real live candle batches pushed by an external free cloud relay.
+    Payload format:
+    {
+        "symbol": "EUR/USD (OTC)",
+        "timeframe": "1M",
+        "candles": [
+            {"time": 1787900000, "open": 1.0850, "high": 1.0855, "low": 1.0848, "close": 1.0852, "volume": 1500}
+        ]
+    }
+    """
+    symbol = payload.get("symbol")
+    timeframe = payload.get("timeframe", "1M")
+    raw_candles = payload.get("candles", [])
+
+    if not symbol or not raw_candles:
+        raise HTTPException(status_code=400, detail="Fields 'symbol' and 'candles' are required")
+
+    provider = market_data_manager.get_provider()
+    if hasattr(provider, "ingest_candles"):
+        count = provider.ingest_candles(symbol, timeframe, raw_candles)
+        return {"ok": True, "symbol": symbol, "timeframe": timeframe, "ingested_candles": count}
+
+    return {"ok": False, "detail": "Provider does not support live ingestion"}

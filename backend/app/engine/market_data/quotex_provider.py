@@ -311,61 +311,31 @@ class QuotexMarketDataProvider(MarketDataProvider):
         self._ws_client: Optional[QuotexWebSocketClient] = None
         self._live_mode = bool(self._ssid and len(self._ssid) > 10)
         self._login_attempted = False
+        self._ingested_candles: Dict[str, List[Candle]] = {}
+        self._last_ingest_ts: Dict[str, float] = {}
 
-        if self._live_mode and HAS_WEBSOCKETS:
-            self._ws_client = QuotexWebSocketClient(self._ssid)
-            logger.info("QuotexMarketDataProvider: LIVE mode (WebSocket with SSID token)")
-        elif self._email and self._password:
-            logger.info(f"QuotexMarketDataProvider: Email/Password configured ({self._email}). Attempting automated sign-in...")
-        else:
-            logger.info(
-                "QuotexMarketDataProvider: High-Quality OTC Continuity mode "
-                "(configure QUOTEX_EMAIL/QUOTEX_PASSWORD or QUOTEX_SESSION_TOKEN to stream directly from broker)"
-            )
-
-    async def login_with_credentials(self, email: Optional[str] = None, password: Optional[str] = None) -> bool:
-        """
-        Attempts automated login to Quotex using QuotexSessionRenewer (Headless Browser / HTTP flow),
-        extracting and renewing the session cookies automatically without manual user action.
-        """
-        target_email = email or self._email
-        target_password = password or self._password
-
-        if not target_email or not target_password:
-            return False
-
-        try:
-            from app.engine.market_data.session_renewer import QuotexSessionRenewer
-            token = await QuotexSessionRenewer.get_session_cookies(target_email, target_password)
-            if token and len(token) > 5:
-                self._ssid = token
-                self._live_mode = True
-                if HAS_WEBSOCKETS:
-                    self._ws_client = QuotexWebSocketClient(self._ssid)
-                logger.info("QuotexMarketDataProvider: Automated login & session renewal successful! Connected to live feed.")
-                return True
-        except Exception as e:
-            logger.debug(f"Quotex automated session renewal notice: {e}")
-
-        logger.info("QuotexMarketDataProvider: Using high-precision continuous OTC price engine.")
-        return False
-
-    def set_live_session(self, token: str) -> bool:
-        """Dynamically updates the active Quotex session token and initializes WebSocket client."""
-        if not token or len(token.strip()) < 5:
-            return False
-        clean_token = token.strip()
-        self._ssid = clean_token
-        self._live_mode = True
-        if HAS_WEBSOCKETS:
-            self._ws_client = QuotexWebSocketClient(self._ssid)
-        try:
-            from app.engine.market_data.session_renewer import QuotexSessionRenewer
-            QuotexSessionRenewer._save_cached_session(self._email or "live_user", clean_token)
-        except Exception:
-            pass
-        logger.info("QuotexMarketDataProvider: Live session token updated successfully. Direct WebSocket connected.")
-        return True
+    def ingest_candles(self, symbol: str, timeframe: str, raw_candles: List[Dict[str, Any]]) -> int:
+        """Stores real live external candles streamed from an online cloud relay or provider."""
+        converted = []
+        for c in raw_candles:
+            ts = int(c.get("time", c.get("timestamp", time.time())))
+            converted.append(Candle(
+                timestamp=ts,
+                open=float(c["open"]),
+                high=float(c["high"]),
+                low=float(c["low"]),
+                close=float(c["close"]),
+                volume=float(c.get("volume", 1200.0)),
+                is_closed=c.get("is_closed", True)
+            ))
+        if converted:
+            converted.sort(key=lambda x: x.timestamp)
+            key = f"{symbol}_{timeframe}"
+            self._ingested_candles[key] = converted[-100:]
+            self._last_ingest_ts[key] = time.time()
+            self._price_cache[symbol] = converted[-1].close
+            return len(converted)
+        return 0
 
     async def get_assets(self, market_id: str) -> List[Dict[str, Any]]:
         return QUOTEX_ASSETS
@@ -377,12 +347,16 @@ class QuotexMarketDataProvider(MarketDataProvider):
         limit: int = 100,
         end_time=None
     ) -> List[Candle]:
-        """Fetch candles — real from Quotex WS when configured, else synthetic."""
-
-        # Fire login attempt in background (non-blocking) so signal generation is never delayed
-        if not self._live_mode and self._email and self._password and not self._login_attempted:
-            self._login_attempted = True
-            asyncio.create_task(self.login_with_credentials())
+        """Fetch candles — real from Ingestion Relay, Quotex WS, or synthetic continuity."""
+        # 1. Check if we have freshly ingested real candles from cloud relay (within last 60s)
+        cache_key = f"{symbol}_{timeframe}"
+        if cache_key in self._ingested_candles:
+            last_ts = self._last_ingest_ts.get(cache_key, 0.0)
+            if (time.time() - last_ts) < 90:
+                candles = self._ingested_candles[cache_key][-limit:]
+                if candles:
+                    self._price_cache[symbol] = candles[-1].close
+                    return candles
 
         if self._live_mode and self._ws_client:
             ws_asset = SYMBOL_TO_WS.get(symbol, symbol.replace("/", "").replace(" (OTC)", "_OTC"))
