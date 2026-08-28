@@ -85,24 +85,24 @@ async def seed_initial_data():
                 "params": {"direction": "DOWN", "lookback": 20}
             },
             {
-                "name": "Quotex Wick Rejection",
-                "description": "High-Probability Quotex Price Action: Long shadow wick rejection (>=40%) at key dynamic support/resistance.",
+                "name": "SNR Wick Reversal",
+                "description": "STRATEGY 1: SNR WICK REVERSAL - 5M candle wick ratio > 45% with S/R line touch within 0.05%, RSI filter, and BB rejection.",
                 "direction": "DOWN",
-                "type": "wick_rejection",
-                "params": {"direction": "DOWN", "min_wick_ratio": 0.40}
+                "type": "snr_wick_reversal",
+                "params": {"direction": "DOWN", "min_wick_ratio": 0.45}
             },
             {
-                "name": "Quotex EMA Trend Bounce",
-                "description": "Quotex Multi-Timeframe Trend Continuation: Pullback test and dynamic bounce at EMA 20.",
+                "name": "EMA Trend Bounce",
+                "description": "STRATEGY 2: EMA TREND BOUNCE - Trend continuation test & bounce at EMA 20 with EMA 200 filter and Stochastic confluence.",
                 "direction": "DOWN",
                 "type": "ema_trend_bounce",
                 "params": {"direction": "DOWN", "ema_period": 20}
             },
             {
-                "name": "Quotex Momentum Alignment",
-                "description": "Quotex 2-Candle Trend Expansion: Strong consecutive momentum expansion in trend direction.",
+                "name": "MTF Momentum Alignment",
+                "description": "STRATEGY 3: MULTI-TIMEFRAME MOMENTUM - 2 consecutive strong Marubozu momentum expansion candles beyond preceding extremes with MACD filter.",
                 "direction": "DOWN",
-                "type": "momentum_alignment",
+                "type": "mtf_momentum",
                 "params": {"direction": "DOWN"}
             }
         ]

@@ -68,23 +68,24 @@ def test_break_of_structure_bearish():
 
 
 def test_wick_rejection_quotex():
-    # Trigger candle with 50% upper wick rejection
+    # 15 candles ending with candle with 55% upper wick rejection
     candles = [
-        Candle(timestamp=100, open=1.0830, high=1.0840, low=1.0825, close=1.0835, volume=1000),
-        Candle(timestamp=160, open=1.0835, high=1.0845, low=1.0830, close=1.0840, volume=1000),
-        Candle(timestamp=220, open=1.0840, high=1.0860, low=1.0835, close=1.0838, volume=2500),
+        Candle(timestamp=i * 60, open=1.0830 + (i % 2) * 0.0002, high=1.0835 + (i % 2) * 0.0002, low=1.0828, close=1.0832, volume=1000)
+        for i in range(14)
     ]
+    # Trigger candle with 55% upper wick and healthy body above Doji threshold
+    candles.append(Candle(timestamp=14 * 60, open=1.0830, high=1.0855, low=1.0828, close=1.0836, volume=2500))
     pattern_config = {
-        "name": "Quotex Wick Rejection Strategy",
+        "name": "SNR Wick Reversal Strategy",
         "direction": "DOWN",
         "rules_config": {
-            "type": "wick_rejection",
-            "params": {"direction": "DOWN", "min_wick_ratio": 0.40}
+            "type": "snr_wick_reversal",
+            "params": {"direction": "DOWN", "min_wick_ratio": 0.45}
         }
     }
     result = PatternRuleEngine.evaluate_pattern(pattern_config, candles)
     assert result["matched"] is True
-    assert "Quotex Upper Wick Rejection Confirmed" in result["reason"]
+    assert "SNR Upper Wick Rejection Confirmed" in result["reason"]
 
 
 def test_momentum_alignment_quotex():
@@ -94,16 +95,16 @@ def test_momentum_alignment_quotex():
         Candle(timestamp=220, open=1.0832, high=1.0833, low=1.0818, close=1.0820, volume=2000),
     ]
     pattern_config = {
-        "name": "Momentum Alignment Strategy",
+        "name": "MTF Momentum Strategy",
         "direction": "DOWN",
         "rules_config": {
-            "type": "momentum_alignment",
+            "type": "mtf_momentum",
             "params": {"direction": "DOWN"}
         }
     }
     result = PatternRuleEngine.evaluate_pattern(pattern_config, candles)
     assert result["matched"] is True
-    assert "Bearish Momentum Alignment Confirmed" in result["reason"]
+    assert "MTF Bearish Momentum Alignment Confirmed" in result["reason"]
 
 
 def test_ema_trend_bounce_quotex():

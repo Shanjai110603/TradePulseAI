@@ -37,3 +37,24 @@ def test_currency_monitor_card_rendering():
     assert any("Refresh Live Price" in b["text"] for row in kb for b in row)
     assert any("Generate 1M Chart" in b["text"] for row in kb for b in row)
     assert any("Set Signal Alert" in b["text"] for row in kb for b in row)
+
+
+@pytest.mark.asyncio
+async def test_callback_query_currency_selection_pipeline():
+    from app.telegram.handlers import TelegramUpdateHandler
+    from app.core.database import AsyncSessionLocal
+
+    cb_payload = {
+        "id": "test_cb_12345",
+        "from": {"id": 123456, "first_name": "Trader"},
+        "message": {
+            "message_id": 9999,
+            "chat": {"id": 123456, "type": "private"},
+            "text": "Existing menu"
+        },
+        "data": "curr_sel:USDBRL_otc"
+    }
+
+    async with AsyncSessionLocal() as db:
+        # Must execute cleanly without throwing AttributeError on compute_technical_snapshot
+        await TelegramUpdateHandler._handle_callback_query(cb_payload, db)

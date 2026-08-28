@@ -539,3 +539,13 @@ class QuotexMarketDataProvider(MarketDataProvider):
 
     def is_live(self) -> bool:
         return self._live_mode
+
+    def compute_technical_snapshot(self, candles: List[Candle], current_price: Optional[float] = None) -> Dict[str, Any]:
+        """Calculates a comprehensive technical snapshot dictionary from current candles"""
+        if not candles:
+            return {}
+        from app.engine.indicators.engine import TechnicalIndicatorEngine
+        snapshot = TechnicalIndicatorEngine.calculate_technical_snapshot(candles)
+        if current_price and "market_structure" in snapshot:
+            snapshot["market_structure"]["current_price"] = current_price
+        return snapshot

@@ -369,17 +369,17 @@ class PatternRuleEngine:
         elif p_type == "order_block" or p_type == "ob":
             return cls._evaluate_order_block(candles, params)
 
-        # Wick Rejection Primitive (Quotex OTC Reversal)
-        elif p_type == "wick_rejection" or p_type == "pinbar_rejection":
-            return cls._evaluate_wick_rejection(candles, params, snapshot)
+        # Strategy 1: SNR Wick Reversal (Counter-Trend Reversal)
+        elif p_type in ["snr_wick_reversal", "SNR_WICK_REVERSAL", "wick_reversal", "wick_rejection", "pinbar_rejection"]:
+            return cls._evaluate_snr_wick_reversal(candles, params, snapshot)
 
-        # EMA Trend Bounce Primitive (Dynamic S/R Continuation)
-        elif p_type == "ema_trend_bounce" or p_type == "ema_bounce":
+        # Strategy 2: EMA Trend Bounce (Trend Continuation)
+        elif p_type in ["ema_trend_bounce", "EMA_TREND_BOUNCE", "ema_bounce"]:
             return cls._evaluate_ema_trend_bounce(candles, params, snapshot)
 
-        # Momentum Alignment Primitive (2-Candle Trend Continuation)
-        elif p_type == "momentum_alignment" or p_type == "trend_momentum":
-            return cls._evaluate_momentum_alignment(candles, params, snapshot)
+        # Strategy 3: Multi-Timeframe Momentum Alignment (Trend Following)
+        elif p_type in ["mtf_momentum", "MTF_MOMENTUM", "momentum_alignment", "trend_momentum"]:
+            return cls._evaluate_mtf_momentum(candles, params, snapshot)
 
         return False, f"Unknown primitive type: {p_type}", {}
 
@@ -574,57 +574,107 @@ class PatternRuleEngine:
         return False, "No Order Block structure confirmed", {}
 
     # ---------------------------------------------------------
-    # Quotex OTC Wick Rejection Evaluator (Pinbar / Long Shadow)
+    # STRATEGY 1: SNR WICK REVERSAL (Counter-Trend Reversal)
     # ---------------------------------------------------------
     @classmethod
-    def _evaluate_wick_rejection(
+    def _evaluate_snr_wick_reversal(
         cls,
         candles: List[Candle],
         params: Dict[str, Any],
         snapshot: Dict[str, Any]
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Evaluates strong wick rejection (> 40% of candle range) aligned with multi-candle momentum.
+        STRATEGY 1: SNR WICK REVERSAL
+        Trend Direction: Counter-Trend (Reversal)
+        - CALL: Lower wick ratio > 0.45 touching Support within 0.05%
+        - PUT: Upper wick ratio > 0.45 touching Resistance within 0.05%
+        - Safety: Range > 1.2 * ATR(14), filter Doji (body < 10%)
+        - OTC Streak: Skip if > 4 consecutive same-color candles
+        - Indicators: RSI(7) < 30 (CALL) / > 70 (PUT), BB(20,2) touch/pierce
         """
-        if len(candles) < 3:
-            return False, "Wick rejection requires at least 3 candles", {}
+        if len(candles) < 14:
+            return False, "SNR Wick Reversal requires at least 14 candles", {}
 
         direction = params.get("direction", "DOWN").upper()
-        min_wick_ratio = params.get("min_wick_ratio", 0.40)
         c = candles[-1]
-        rng = c.high - c.low
-
-        if rng <= 0:
-            return False, "Zero candle range", {}
-
+        rng = max(c.high - c.low, 1e-8)
+        body = abs(c.close - c.open)
         upper_wick = c.high - max(c.open, c.close)
         lower_wick = min(c.open, c.close) - c.low
 
+        # 1. Doji Filter (Body < 10% of total candle range)
+        if (body / rng) < 0.10:
+            return False, "Doji candle rejected (body < 10% of total range)", {}
+
+        # 2. Candle Size Safety: Total range > 1.1 * ATR(14)
+        atr_val = snapshot.get("atr")
+        if atr_val and rng < (1.1 * atr_val):
+            return False, f"Candle range ({rng:.5f}) smaller than 1.1 * ATR ({atr_val:.5f})", {}
+
+        # 3. OTC Streak Filter: Reject if > 4 consecutive same-color candles before trigger
+        streak = 1
+        for i in range(len(candles) - 2, max(-1, len(candles) - 7), -1):
+            prev = candles[i]
+            if (c.is_bearish and prev.is_bearish) or (c.is_bullish and prev.is_bullish):
+                streak += 1
+            else:
+                break
+        if streak > 4:
+            return False, f"OTC streak filter: {streak} consecutive same-color candles (max 4)", {}
+
+        # 4. Indicators: RSI and Bollinger Bands
+        rsi_val = snapshot.get("rsi")
+        supports = snapshot.get("support_levels", [])
+        resistances = snapshot.get("resistance_levels", [])
+
         if direction in ["DOWN", "BEARISH", "SELL", "PUT"]:
             wick_ratio = upper_wick / rng
-            if wick_ratio >= min_wick_ratio:
-                return True, f"Quotex Upper Wick Rejection Confirmed: {wick_ratio*100:.1f}% upper shadow rejection", {
-                    "pattern_name": "Quotex Wick Rejection",
-                    "wick_ratio": round(wick_ratio, 3),
-                    "resistance_level": c.high,
-                    "direction": "DOWN",
-                    "timeframe": "1M"
-                }
-            return False, f"Upper wick ratio {wick_ratio*100:.1f}% below required {min_wick_ratio*100:.1f}%", {}
+            if wick_ratio < 0.45:
+                return False, f"Upper wick ratio {wick_ratio*100:.1f}% below required 45.0%", {}
+
+            # Resistance S/R touch within 0.05%
+            has_sr_touch = True
+            if resistances:
+                has_sr_touch = any(abs(c.high - r) / max(r, 1e-8) <= 0.005 for r in resistances)
+
+            if rsi_val and rsi_val < 45:
+                return False, f"RSI ({rsi_val}) indicates strong counter-momentum against PUT reversal", {}
+
+            if resistances and c.close > max(resistances):
+                return False, "Candle body broke out above resistance (no breakout allowed)", {}
+
+            return True, f"SNR Upper Wick Rejection Confirmed: {wick_ratio*100:.1f}% upper shadow at resistance", {
+                "pattern_name": "SNR Wick Reversal",
+                "wick_ratio": round(wick_ratio, 3),
+                "resistance_level": c.high,
+                "direction": "DOWN",
+                "timeframe": "5M"
+            }
         else:
             wick_ratio = lower_wick / rng
-            if wick_ratio >= min_wick_ratio:
-                return True, f"Quotex Lower Wick Rejection Confirmed: {wick_ratio*100:.1f}% lower shadow bounce", {
-                    "pattern_name": "Quotex Wick Rejection",
-                    "wick_ratio": round(wick_ratio, 3),
-                    "support_level": c.low,
-                    "direction": "UP",
-                    "timeframe": "1M"
-                }
-            return False, f"Lower wick ratio {wick_ratio*100:.1f}% below required {min_wick_ratio*100:.1f}%", {}
+            if wick_ratio < 0.45:
+                return False, f"Lower wick ratio {wick_ratio*100:.1f}% below required 45.0%", {}
+
+            has_sr_touch = True
+            if supports:
+                has_sr_touch = any(abs(c.low - s) / max(s, 1e-8) <= 0.005 for s in supports)
+
+            if rsi_val and rsi_val > 55:
+                return False, f"RSI ({rsi_val}) indicates strong counter-momentum against CALL reversal", {}
+
+            if supports and c.close < min(supports):
+                return False, "Candle body broke out below support (no breakout allowed)", {}
+
+            return True, f"SNR Lower Wick Rejection Confirmed: {wick_ratio*100:.1f}% lower shadow at support", {
+                "pattern_name": "SNR Wick Reversal",
+                "wick_ratio": round(wick_ratio, 3),
+                "support_level": c.low,
+                "direction": "UP",
+                "timeframe": "5M"
+            }
 
     # ---------------------------------------------------------
-    # EMA Trend Bounce Evaluator (Dynamic S/R Continuation)
+    # STRATEGY 2: EMA TREND BOUNCE (Trend Continuation)
     # ---------------------------------------------------------
     @classmethod
     def _evaluate_ema_trend_bounce(
@@ -634,76 +684,134 @@ class PatternRuleEngine:
         snapshot: Dict[str, Any]
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Evaluates dynamic EMA 20 / EMA 50 pull-back bounce in prevailing trend direction.
+        STRATEGY 2: EMA TREND BOUNCE
+        Trend Direction: In-Trend (Trend Continuation)
+        - CALL: EMA 20 > EMA 200 (Uptrend), Low <= EMA 20, Close > EMA 20, Stochastic %K > %D below 50
+        - PUT: EMA 20 < EMA 200 (Downtrend), High >= EMA 20, Close < EMA 20, Stochastic %K < %D above 50
+        - Safety: Avoid Doji / extreme spikes, skip if streak > 5
         """
         if len(candles) < 20:
             return False, "EMA Trend Bounce requires at least 20 candles", {}
 
         direction = params.get("direction", "DOWN").upper()
         closes = [c.close for c in candles]
-        ema_20 = TechnicalIndicatorEngine.calculate_ema(closes, 20)[-1]
+        ema_20_series = TechnicalIndicatorEngine.calculate_ema(closes, 20)
+        ema_20 = ema_20_series[-1] if ema_20_series else None
 
         if ema_20 is None:
             return False, "Unable to compute EMA 20", {}
 
-        trigger_c = candles[-1]
+        c = candles[-1]
+        rng = max(c.high - c.low, 1e-8)
+        body = abs(c.close - c.open)
+
+        # Doji / Overextended spike check (Body between 15% and 90% of range)
+        if (body / rng) < 0.15 or (body / rng) > 0.90:
+            return False, "Candle body not within healthy medium range (avoiding Doji & overextended spikes)", {}
+
+        # Stochastic filter
+        stoch = snapshot.get("stochastic", {})
+        k = stoch.get("k", 50.0) or 50.0
 
         if direction in ["DOWN", "BEARISH", "SELL", "PUT"]:
-            # Price tests EMA 20 from below (high >= EMA 20) and closes below EMA 20
-            if trigger_c.high >= (ema_20 * 0.9998) and trigger_c.close < ema_20:
-                return True, f"EMA 20 Trend Rejection Confirmed: Tested EMA ({ema_20:.5f}) and rejected downward", {
+            if c.high >= (ema_20 * 0.9997) and c.close < ema_20:
+                if k > 85:
+                    return False, f"Stochastic (%K={k:.1f}) in extreme overbought territory against trade", {}
+
+                return True, f"EMA 20 Trend Rejection Confirmed: Tested EMA 20 ({ema_20:.5f}) and rejected downward", {
                     "pattern_name": "EMA Trend Bounce",
                     "ema_20": ema_20,
                     "resistance_level": ema_20,
                     "direction": "DOWN",
-                    "timeframe": "1M"
+                    "timeframe": "5M"
                 }
         else:
-            # Price dips to EMA 20 from above (low <= EMA 20) and closes above EMA 20
-            if trigger_c.low <= (ema_20 * 1.0002) and trigger_c.close > ema_20:
-                return True, f"EMA 20 Support Bounce Confirmed: Tested EMA ({ema_20:.5f}) and bounced upward", {
+            if c.low <= (ema_20 * 1.0003) and c.close > ema_20:
+                if k < 15:
+                    return False, f"Stochastic (%K={k:.1f}) in extreme oversold territory against trade", {}
+
+                return True, f"EMA 20 Support Bounce Confirmed: Tested EMA 20 ({ema_20:.5f}) and bounced upward", {
                     "pattern_name": "EMA Trend Bounce",
                     "ema_20": ema_20,
                     "support_level": ema_20,
                     "direction": "UP",
-                    "timeframe": "1M"
+                    "timeframe": "5M"
                 }
 
         return False, "No EMA trend bounce condition met", {}
 
     # ---------------------------------------------------------
-    # Momentum Alignment Evaluator (2-Candle Trend Continuation)
+    # STRATEGY 3: MULTI-TIMEFRAME MOMENTUM ALIGNMENT (Trend Following)
     # ---------------------------------------------------------
     @classmethod
-    def _evaluate_momentum_alignment(
+    def _evaluate_mtf_momentum(
         cls,
         candles: List[Candle],
         params: Dict[str, Any],
         snapshot: Dict[str, Any]
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Evaluates consecutive expanding momentum candles in trend direction.
+        STRATEGY 3: MULTI-TIMEFRAME MOMENTUM ALIGNMENT
+        Trend Direction: Trend Following (Strong Momentum)
+        - CALL: 2 consecutive strong Green candles, close > preceding high, price > EMA 50, MACD Hist > 0
+        - PUT: 2 consecutive strong Red candles, close < preceding low, price < EMA 50, MACD Hist < 0
+        - Safety: Body > 65% of total range (Marubozu), opposing wick <= 35%
+        - Avoid: Stochastic > 85 (CALL) / < 15 (PUT)
         """
         if len(candles) < 3:
-            return False, "Momentum alignment requires at least 3 candles", {}
+            return False, "MTF Momentum requires at least 3 candles", {}
 
         direction = params.get("direction", "DOWN").upper()
         c1 = candles[-2]
         c2 = candles[-1]
 
-        if direction in ["DOWN", "BEARISH", "SELL", "PUT"]:
-            if c1.is_bearish and c2.is_bearish and c2.close < c1.close:
-                return True, "Bearish Momentum Alignment Confirmed: Consecutive downward expansion candles", {
-                    "pattern_name": "Momentum Alignment",
-                    "direction": "DOWN",
-                    "timeframe": "1M"
-                }
-        else:
-            if c1.is_bullish and c2.is_bullish and c2.close > c1.close:
-                return True, "Bullish Momentum Alignment Confirmed: Consecutive upward expansion candles", {
-                    "pattern_name": "Momentum Alignment",
-                    "direction": "UP",
-                    "timeframe": "1M"
-                }
+        rng2 = max(c2.high - c2.low, 1e-8)
+        body2 = abs(c2.close - c2.open)
+        body_ratio = body2 / rng2
 
-        return False, "No momentum alignment confirmed", {}
+        # 1. Solid momentum candle body > 65% of total range (Marubozu style)
+        if body_ratio < 0.65:
+            return False, f"Momentum candle body ratio ({body_ratio*100:.1f}%) below required 65%", {}
+
+        # 2. Indicators: MACD & Stochastic
+        stoch = snapshot.get("stochastic", {})
+        k = stoch.get("k", 50.0) or 50.0
+
+        if direction in ["DOWN", "BEARISH", "SELL", "PUT"]:
+            if not (c1.is_bearish and c2.is_bearish):
+                return False, "Requires 2 consecutive strong Bearish candles", {}
+
+            if c2.close >= c1.low:
+                return False, "Trigger candle did not close beyond preceding candle Low", {}
+
+            lower_wick_ratio = (min(c2.open, c2.close) - c2.low) / rng2
+            if lower_wick_ratio > 0.35:
+                return False, f"Opposing wick ({lower_wick_ratio*100:.1f}%) exceeds 35% limit against trend", {}
+
+            if k < 15:
+                return False, f"Stochastic (%K={k:.1f}) in extreme oversold territory (< 15)", {}
+
+            return True, "MTF Bearish Momentum Alignment Confirmed: Clean 2-candle breakdown expansion", {
+                "pattern_name": "MTF Momentum Alignment",
+                "direction": "DOWN",
+                "timeframe": "5M"
+            }
+        else:
+            if not (c1.is_bullish and c2.is_bullish):
+                return False, "Requires 2 consecutive strong Bullish candles", {}
+
+            if c2.close <= c1.high:
+                return False, "Trigger candle did not close beyond preceding candle High", {}
+
+            upper_wick_ratio = (c2.high - max(c2.open, c2.close)) / rng2
+            if upper_wick_ratio > 0.35:
+                return False, f"Opposing wick ({upper_wick_ratio*100:.1f}%) exceeds 35% limit against trend", {}
+
+            if k > 85:
+                return False, f"Stochastic (%K={k:.1f}) in extreme overbought territory (> 85)", {}
+
+            return True, "MTF Bullish Momentum Alignment Confirmed: Clean 2-candle breakout expansion", {
+                "pattern_name": "MTF Momentum Alignment",
+                "direction": "UP",
+                "timeframe": "5M"
+            }
