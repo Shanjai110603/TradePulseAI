@@ -322,6 +322,44 @@ class BackgroundScheduler:
                             )
                             db.add(result_record)
 
+                            # Dispatch automated outcome update to active Telegram subscribers
+                            sub_res = await db.execute(
+                                select(SignalSubscription)
+                                .join(TelegramAccount, SignalSubscription.telegram_account_id == TelegramAccount.id)
+                                .where(SignalSubscription.is_active == True, TelegramAccount.is_active == True)
+                            )
+                            subscribers = sub_res.scalars().all()
+
+                            if outcome == "WIN":
+                                result_msg = (
+                                    f"✅ <b>TRADE RESULT: DIRECT WIN 🟢🟢</b>\n\n"
+                                    f"📊 <b>Asset:</b> <code>{signal.asset_symbol}</code>\n"
+                                    f"🎯 <b>Strategy:</b> {signal.pattern_name}\n"
+                                    f"📌 <b>Entry Price:</b> <code>{signal.reference_price:.5f}</code>\n"
+                                    f"🏁 <b>Exit Price:</b> <code>{current_price:.5f}</code>\n"
+                                    f"💰 <b>Status:</b> Profit Secured (+88%)! 🎉"
+                                )
+                            elif outcome == "TIE":
+                                result_msg = (
+                                    f"⚪ <b>TRADE RESULT: TIE / REFUND ⚪⚪</b>\n\n"
+                                    f"📊 <b>Asset:</b> <code>{signal.asset_symbol}</code>\n"
+                                    f"📌 <b>Price:</b> <code>{current_price:.5f}</code> (Capital Preserved)"
+                                )
+                            else:
+                                result_msg = (
+                                    f"⚠️ <b>TRADE 1 COMPLETED (LOSS) — MTG 1 RECOVERY READY 🔄</b>\n\n"
+                                    f"📊 <b>Asset:</b> <code>{signal.asset_symbol}</code>\n"
+                                    f"🎯 <b>Direction:</b> {signal.direction} {'🟢 CALL / UP' if signal.direction == 'UP' else '🔴 PUT / DOWN'}\n"
+                                    f"📌 <b>Entry:</b> <code>{signal.reference_price:.5f}</code> | <b>Exit:</b> <code>{current_price:.5f}</code>\n\n"
+                                    f"💡 <i>Recommended: 1-step Martingale (MTG 1) on next 1M candle for full recovery.</i>"
+                                )
+
+                            for sub in subscribers:
+                                try:
+                                    await telegram_service.send_message(int(sub.telegram_chat_id), result_msg)
+                                except Exception as err:
+                                    logger.error(f"Failed to send result notification to {sub.telegram_chat_id}: {err}")
+
                     await db.commit()
 
                 except Exception as e:
