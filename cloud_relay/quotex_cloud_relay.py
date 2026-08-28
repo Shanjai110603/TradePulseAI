@@ -61,6 +61,13 @@ async def run_relay():
                     # Wait for namespace 40
                     msg = await asyncio.wait_for(ws.recv(), timeout=5)
                     
+                    # Send authorization if token is provided
+                    session_token = os.getenv("QUOTEX_SESSION_TOKEN")
+                    if session_token:
+                        auth_msg = json.dumps(["authorization", {"session": session_token, "isDemo": 1, "tournamentId": 0}])
+                        await ws.send(f"42{auth_msg}")
+                        await asyncio.sleep(0.5)
+
                     # Continuously fetch and push fresh live candles
                     while True:
                         for symbol, ws_asset in WATCH_ASSETS:
