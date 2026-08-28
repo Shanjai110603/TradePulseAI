@@ -60,9 +60,11 @@ class TelegramUpdateHandler:
                 user_check = await db.execute(select(User).where(User.email == tg_email))
                 tg_user = user_check.scalar_one_or_none()
                 if not tg_user:
+                    from app.core.security import get_password_hash
+                    import secrets
                     tg_user = User(
                         email=tg_email,
-                        hashed_password="!",
+                        hashed_password=get_password_hash(secrets.token_urlsafe(32)),
                         full_name=first_name,
                         is_active=True
                     )

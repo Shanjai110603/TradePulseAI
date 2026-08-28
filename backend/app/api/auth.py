@@ -39,6 +39,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     return user
 
 
+async def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative privileges required"
+        )
+    return current_user
+
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     query = select(User).where(User.email == user_in.email)
@@ -115,34 +124,11 @@ async def login(
     res = await db.execute(query)
     user = res.scalar_one_or_none()
 
-    if clean_email == "demo@tradepulse.ai":
-        # Always guarantee demo user exists and is active
-        if not user:
-            user = User(
-                email="demo@tradepulse.ai",
-                hashed_password=get_password_hash("password123"),
-                full_name="Alex Mercer",
-                is_admin=True,
-                is_active=True
-            )
-            db.add(user)
-            await db.flush()
-            prefs = UserPreferences(user_id=user.id)
-            db.add(prefs)
-            await db.commit()
-            await db.refresh(user)
-        else:
-            user.is_active = True
-            if clean_password == "password123" or not verify_password(clean_password, user.hashed_password):
-                user.hashed_password = get_password_hash("password123")
-            db.add(user)
-            await db.commit()
-    else:
-        if not user or not user.is_active:
-            raise HTTPException(status_code=400, detail="Invalid email or password")
+    if not user or not user.is_active:
+        raise HTTPException(status_code=400, detail="Invalid email or password")
 
-        if not verify_password(clean_password, user.hashed_password):
-            raise HTTPException(status_code=400, detail="Invalid email or password")
+    if not verify_password(clean_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
 
     access_token = create_access_token(subject=user.id)
 

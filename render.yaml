@@ -17,11 +17,11 @@ services:
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./tradepulse.db
       - key: SUPABASE_URL
-        value: https://gvtcspyomoxliglxuxjv.supabase.co
+        sync: false
       - key: SUPABASE_KEY
-        value: sb_publishable_X7JOCS41pQfRRJt1aEYMdQ_RRD3sxP3
+        sync: false
       - key: SECRET_KEY
-        value: tradepulse-ai-super-secret-key-2026-do-not-change-xK9mP3qL
+        sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_TEST_MODE

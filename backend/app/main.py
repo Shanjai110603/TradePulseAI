@@ -141,7 +141,7 @@ async def seed_initial_data():
             p15 = Pattern(
                 user_id=demo_user.id,
                 name="Pattern Type 15",
-                description="If market makes a movement in 'V' Pattern and breakout the horizontal line then a sure shot will take place in opposite direction.",
+                description="V-Pattern resistance rejection setup: triggers reversal trade upon price piercing or rejecting at established horizontal level.",
                 market_id="digital_options",
                 direction="DOWN",
                 timeframe="1M",

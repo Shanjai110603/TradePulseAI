@@ -64,6 +64,9 @@ async def get_signal_technicals(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    sig_check = await db.execute(select(Signal).where(Signal.id == signal_id, Signal.user_id == current_user.id))
+    if not sig_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Signal not found")
     query = select(SignalTechnicalSnapshot).where(SignalTechnicalSnapshot.signal_id == signal_id)
     res = await db.execute(query)
     snap = res.scalar_one_or_none()
@@ -78,6 +81,9 @@ async def get_signal_ai_analysis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    sig_check = await db.execute(select(Signal).where(Signal.id == signal_id, Signal.user_id == current_user.id))
+    if not sig_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Signal not found")
     query = select(SignalAIAnalysis).where(SignalAIAnalysis.signal_id == signal_id)
     res = await db.execute(query)
     ai_snap = res.scalar_one_or_none()

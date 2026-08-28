@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import generate_linking_code
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, get_current_admin_user
 from app.models.user import User
 from app.models.telegram import TelegramAccount, TelegramLinkCode
 from app.schemas.telegram import TelegramLinkCodeResponse, TelegramStatusResponse, TelegramLinkRequest
@@ -86,7 +86,10 @@ async def get_telegram_status(
 
 @router.post("/webhook")
 async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db)):
-    """Receives incoming updates from Telegram Webhook"""
+    """Receives incoming updates from Telegram Webhook with secret token verification"""
+    secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if settings.TELEGRAM_WEBHOOK_SECRET and secret_token != settings.TELEGRAM_WEBHOOK_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret token")
     update = await request.json()
     await TelegramUpdateHandler.process_update(update, db)
     return {"ok": True}
@@ -94,10 +97,10 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
 
 @router.get("/subscribers")
 async def get_telegram_subscribers(
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Returns all active Telegram subscribers receiving signals"""
+    """Returns all active Telegram subscribers receiving signals (Admin Only)"""
     query = select(TelegramAccount).order_by(TelegramAccount.created_at.desc())
     res = await db.execute(query)
     subscribers = res.scalars().all()
@@ -118,10 +121,10 @@ async def get_telegram_subscribers(
 
 @router.delete("/subscribers")
 async def clear_all_subscribers(
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Clears all subscribers from the database registry to start fresh"""
+    """Clears all subscribers from the database registry (Admin Only)"""
     from sqlalchemy import delete
     await db.execute(delete(TelegramAccount))
     await db.commit()
@@ -131,10 +134,10 @@ async def clear_all_subscribers(
 @router.delete("/subscribers/{subscriber_id}")
 async def delete_single_subscriber(
     subscriber_id: str,
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Removes a single subscriber from the registry"""
+    """Removes a single subscriber from the registry (Admin Only)"""
     from sqlalchemy import delete
     await db.execute(delete(TelegramAccount).where(TelegramAccount.id == subscriber_id))
     await db.commit()
@@ -143,10 +146,10 @@ async def delete_single_subscriber(
 
 @router.post("/test-notification")
 async def trigger_test_notification(
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Broadcasts a sample Pattern Type 14 signal alert card to ALL active Telegram subscribers"""
+    """Broadcasts a sample signal alert card to ALL active subscribers (Admin Only)"""
     query = select(TelegramAccount).where(
         TelegramAccount.is_active == True,
         TelegramAccount.is_muted == False

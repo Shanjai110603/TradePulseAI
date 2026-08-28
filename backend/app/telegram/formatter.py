@@ -47,6 +47,8 @@ class TelegramMessageFormatter:
         is_call = direction in ["UP", "LONG", "BUY", "CALL"]
         dir_badge = "🟢 CALL / UP ⬆️" if is_call else "🔴 PUT / DOWN ⬇️"
 
+        feed_source = signal.get("feed_source") or ("Quotex Live Stream" if signal.get("is_live_feed") else "Algorithmic Model")
+
         text = (
             f"⚡ <b>TRADEPULSE AI SIGNAL ALERT</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -58,6 +60,7 @@ class TelegramMessageFormatter:
             f"🌐 <b>Window (UTC):</b> <code>{entry_utc}</code> ➔ <code>{expiry_utc}</code>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 <b>Pattern:</b> {pattern_name}\n"
+            f"📡 <b>Feed Source:</b> <code>{feed_source}</code>\n"
             f"🧠 <b>AI Confidence:</b> <b>{ai_score}% ({strength})</b>\n"
             f"📌 <b>Status:</b> 🟢 {status}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"

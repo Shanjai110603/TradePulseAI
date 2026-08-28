@@ -8,7 +8,7 @@ from sqlalchemy import select, text, func
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, get_current_admin_user
 from app.models.user import User
 from app.models.signal import Signal
 from app.models.pattern import Pattern
@@ -61,7 +61,7 @@ async def get_health_status(db: AsyncSession = Depends(get_db)):
 
 @router.get("/metrics", response_model=SystemMetricsResponse)
 async def get_system_metrics(
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
     users_count = (await db.execute(select(func.count(User.id)))).scalar() or 0

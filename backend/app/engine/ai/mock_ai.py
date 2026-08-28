@@ -31,51 +31,67 @@ class MockAIProvider(AIProvider):
         support_levels = technical_snapshot.get("support_levels", [])
         resistance_levels = technical_snapshot.get("resistance_levels", [])
 
-        # Heuristic scoring calculation
-        score = 75
+        # Heuristic scoring calculation based on confluence
+        score = 65
 
         # Factor in trend alignment
         if direction in ["DOWN", "SHORT", "SELL"] and trend in ["BEARISH", "STRONG_BEARISH"]:
-            score += 10
+            score += 15
             trend_assess = f"Firmly bearish multi-timeframe structure supporting short momentum on {timeframe}."
             bias = "BEARISH"
         elif direction in ["UP", "LONG", "BUY"] and trend in ["BULLISH", "STRONG_BULLISH"]:
-            score += 10
+            score += 15
             trend_assess = f"Strong bullish structure with price sustaining above short-term moving averages on {timeframe}."
             bias = "BULLISH"
         else:
-            score -= 5
+            score -= 15
             trend_assess = f"Counter-trend / consolidation setup ({trend}) requiring strict risk boundaries."
             bias = "NEUTRAL" if direction not in ["UP", "DOWN"] else ("BEARISH" if direction == "DOWN" else "BULLISH")
 
         # Factor in momentum / RSI
         if direction in ["DOWN", "SHORT", "SELL"]:
             if rsi < 45:
-                score += 5
+                score += 10
                 mom_assess = f"RSI at {rsi:.1f} confirms active downward selling pressure with room before extreme oversold territory."
+            elif rsi > 60:
+                score -= 15
+                mom_assess = f"RSI at {rsi:.1f} indicates severe bullish counter-momentum against short trade."
             else:
                 mom_assess = f"RSI at {rsi:.1f} indicates moderate selling momentum."
         else:
             if rsi > 55:
-                score += 5
+                score += 10
                 mom_assess = f"RSI at {rsi:.1f} shows expanding buyer momentum."
+            elif rsi < 40:
+                score -= 15
+                mom_assess = f"RSI at {rsi:.1f} indicates severe bearish counter-momentum against long trade."
             else:
                 mom_assess = f"RSI at {rsi:.1f} indicates neutral upward pressure."
 
         # Factor in volume confirmation
         if vol_ratio >= 1.2:
-            score += 5
+            score += 10
             vol_assess = f"Volume is {(vol_ratio * 100):.0f}% of 20-period moving average, validating genuine breakdown participation."
+        elif vol_ratio < 0.8:
+            score -= 10
+            vol_assess = f"Low volume ({(vol_ratio * 100):.0f}% of average), potential false move due to thin liquidity."
         else:
             vol_assess = f"Volume at {(vol_ratio * 100):.0f}% of average, moderate liquidity present."
 
-        score = min(max(score, 60), 96)
-        confidence = "HIGH" if score >= 85 else ("MODERATE" if score >= 70 else "LOW")
+        score = min(max(score, 15), 95)
+        confidence = "HIGH" if score >= 80 else ("MODERATE" if score >= 60 else "LOW")
 
-        struct_assess = f"Clean sequence completing {pattern_name} with confirmed boundary break at {ref_price}."
-        entry_qual = "Optimal breakout close entry with favorable immediate continuation probability."
-        risk_assess = "Low to Moderate — setup exhibits distinct invalidation levels."
-        volatility = "Moderate"
+        struct_assess = f"Sequence completing {pattern_name} with confirmed boundary break at {ref_price}."
+        if score >= 75:
+            entry_qual = "Favorable technical confluence with immediate continuation potential."
+            risk_assess = "Moderate — setup exhibits distinct invalidation levels."
+        elif score >= 60:
+            entry_qual = "Moderate confluence setup. Standard position sizing advised."
+            risk_assess = "Moderate to High — partial confluence present."
+        else:
+            entry_qual = "Low confluence / counter-trend setup. High risk of false breakout."
+            risk_assess = "HIGH RISK — Consider skipping or using minimal allocation."
+        volatility = "High" if score < 60 else "Moderate"
 
         key_supports = support_levels[-2:] if support_levels else [round(ref_price * 0.999, 5)]
         key_resistances = resistance_levels[-2:] if resistance_levels else [round(ref_price * 1.001, 5)]

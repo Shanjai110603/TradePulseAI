@@ -17,4 +17,5 @@ aiofiles>=23.2.1
 psutil>=5.9.0
 pillow>=10.0.0
 matplotlib>=3.8.0
+websockets>=12.0
 

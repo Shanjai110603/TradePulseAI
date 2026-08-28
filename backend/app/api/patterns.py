@@ -209,6 +209,10 @@ async def list_pattern_versions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    pat_check = await db.execute(select(Pattern).where(Pattern.id == pattern_id, Pattern.user_id == current_user.id))
+    if not pat_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Pattern not found")
+
     query = (
         select(PatternVersion)
         .where(PatternVersion.pattern_id == pattern_id)
