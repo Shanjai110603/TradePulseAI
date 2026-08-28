@@ -258,20 +258,24 @@ class TelegramBotService:
 
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
-                # 1. Try editMessageCaption (for Photo messages)
-                caption_url = f"{self.base_url}/editMessageCaption"
-                resp = await client.post(caption_url, json=caption_payload)
-                if resp.status_code == 200:
-                    return resp.json()
-
-                # 2. Try editMessageText (for Text messages)
+                # 1. Try editMessageText (for standard Text messages)
                 text_url = f"{self.base_url}/editMessageText"
                 resp2 = await client.post(text_url, json=text_payload)
                 if resp2.status_code == 200:
                     return resp2.json()
+                if "message is not modified" in resp2.text.lower():
+                    return {"ok": True, "result": {"message_id": message_id, "text": text}}
+
+                # 2. Try editMessageCaption (for Photo messages)
+                caption_url = f"{self.base_url}/editMessageCaption"
+                resp = await client.post(caption_url, json=caption_payload)
+                if resp.status_code == 200:
+                    return resp.json()
+                if "message is not modified" in resp.text.lower():
+                    return {"ok": True, "result": {"message_id": message_id, "text": text}}
 
                 # 3. Fallback: send as a fresh message if editing is not possible
-                logger.warning(f"editMessageCaption/Text failed ({resp.status_code}, {resp2.status_code}). Sending fresh response...")
+                logger.warning(f"editMessageText/Caption failed ({resp2.status_code}: {resp2.text}). Sending fresh response...")
                 return await self.send_message(chat_id, text, reply_markup=reply_markup)
             except Exception as e:
                 logger.error(f"Failed to edit Telegram message content: {e}")

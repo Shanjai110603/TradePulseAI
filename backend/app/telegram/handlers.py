@@ -431,112 +431,117 @@ class TelegramUpdateHandler:
         message_id = msg.get("message_id")
         data = cb.get("data", "")
 
+        logger.info(f"[TELEGRAM CALLBACK] Action received: data='{data}' | chat_id={chat_id} | msg_id={message_id}")
+
         if not data or not chat_id or not message_id:
             if cb_id:
-                await telegram_service.answer_callback_query(cb_id)
-            return
-
-        parts = data.split(":")
-        action = parts[0]
-        sig_id = parts[1] if len(parts) > 1 else ""
-
-        # Handle Currency Categories & Real-Time Monitoring Callbacks
-        if action == "curr_home":
-            text, kb = TelegramMessageFormatter.format_currency_categories_menu()
-            await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
-            return
-
-        elif action == "curr_cat":
-            cat_key = parts[1] if len(parts) > 1 else "forex_otc"
-            page = int(parts[2]) if len(parts) > 2 else 0
-            text, kb = TelegramMessageFormatter.format_currency_list(cat_key, page)
-            await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
-            return
-
-        elif action == "curr_sel":
-            sym_code = parts[1] if len(parts) > 1 else "EURUSD_otc"
-            found = None
-            for cat in TelegramMessageFormatter.QUOTEX_CATEGORIES.values():
-                for name, code, payout in cat["assets"]:
-                    if code == sym_code:
-                        found = (name, code, payout)
-                        break
-                if found:
-                    break
-
-            name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
-            provider = market_data_manager.get_provider("quotex")
-            current_price = await provider.get_current_price(name)
-            candles = await provider.get_candles(name, timeframe="1M", limit=25, strict_live_only=False)
-            latest = candles[-1].model_dump() if candles else None
-            tech = provider.compute_technical_snapshot(candles, current_price) if candles else {}
-
-            text, kb = TelegramMessageFormatter.format_currency_monitor_card(
-                symbol_name=name,
-                symbol_code=code,
-                current_price=current_price,
-                payout_pct=payout,
-                candles_count=len(candles),
-                latest_candle=latest,
-                tech_snapshot=tech
-            )
-            await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
-            return
-
-        elif action == "curr_chart":
-            sym_code = parts[1] if len(parts) > 1 else "EURUSD_otc"
-            found = None
-            for cat in TelegramMessageFormatter.QUOTEX_CATEGORIES.values():
-                for name, code, payout in cat["assets"]:
-                    if code == sym_code:
-                        found = (name, code, payout)
-                        break
-                if found:
-                    break
-
-            name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
-            provider = market_data_manager.get_provider("quotex")
-            candles = await provider.get_candles(name, timeframe="1M", limit=35, strict_live_only=False)
-            curr_p = await provider.get_current_price(name)
-            chart_path = TradeChartGenerator.generate_candlestick_chart(
-                candles=candles,
-                pattern_name=f"Live Quotex Market: {name}",
-                direction="DOWN",
-                entry_price=curr_p,
-                symbol=name
-            )
-            caption = (
-                f"📊 <b>Real-Time 1M Candlestick Chart: {name}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"• <b>Live Price:</b> <code>{curr_p:.5f}</code>\n"
-                f"• <b>Payout Rate:</b> <b>{payout}</b>\n"
-                f"• <b>Feed:</b> 🟢 <b>Quotex Live Relay</b>"
-            )
-            await telegram_service.send_photo(chat_id, photo_path=chart_path, caption=caption)
-            return
-
-        elif action == "curr_alert":
-            sym_code = parts[1] if len(parts) > 1 else "EURUSD_otc"
-            found = None
-            for cat in TelegramMessageFormatter.QUOTEX_CATEGORIES.values():
-                for name, code, payout in cat["assets"]:
-                    if code == sym_code:
-                        found = (name, code, payout)
-                        break
-                if found:
-                    break
-
-            name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
-            alert_confirm = (
-                f"🔔 <b>Live Monitoring Active: {name}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"You are now subscribed to priority institutional alerts for <b>{name}</b>.\n\n"
-                f"The bot will notify you the instant a high-confluence <b>Fair Value Gap, Liquidity Sweep, or Wick Rejection</b> confirms on this pair!"
-            )
-            await telegram_service.send_message(chat_id, alert_confirm)
+                try:
+                    await telegram_service.answer_callback_query(cb_id)
+                except Exception:
+                    pass
             return
 
         try:
+            parts = data.split(":")
+            action = parts[0]
+            sig_id = parts[1] if len(parts) > 1 else ""
+
+            # Handle Currency Categories & Real-Time Monitoring Callbacks
+            if action == "curr_home":
+                text, kb = TelegramMessageFormatter.format_currency_categories_menu()
+                await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
+                return
+
+            elif action == "curr_cat":
+                cat_key = parts[1] if len(parts) > 1 else "forex_otc"
+                page = int(parts[2]) if len(parts) > 2 else 0
+                text, kb = TelegramMessageFormatter.format_currency_list(cat_key, page)
+                await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
+                return
+
+            elif action == "curr_sel":
+                sym_code = parts[1] if len(parts) > 1 else "EURUSD_otc"
+                found = None
+                for cat in TelegramMessageFormatter.QUOTEX_CATEGORIES.values():
+                    for name, code, payout in cat["assets"]:
+                        if code == sym_code:
+                            found = (name, code, payout)
+                            break
+                    if found:
+                        break
+
+                name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
+                provider = market_data_manager.get_provider("quotex")
+                current_price = await provider.get_current_price(name)
+                candles = await provider.get_candles(name, timeframe="1M", limit=25, strict_live_only=False)
+                latest = candles[-1].model_dump() if candles else None
+                tech = provider.compute_technical_snapshot(candles, current_price) if candles else {}
+
+                text, kb = TelegramMessageFormatter.format_currency_monitor_card(
+                    symbol_name=name,
+                    symbol_code=code,
+                    current_price=current_price,
+                    payout_pct=payout,
+                    candles_count=len(candles),
+                    latest_candle=latest,
+                    tech_snapshot=tech
+                )
+                await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
+                return
+
+            elif action == "curr_chart":
+                sym_code = parts[1] if len(parts) > 1 else "EURUSD_otc"
+                found = None
+                for cat in TelegramMessageFormatter.QUOTEX_CATEGORIES.values():
+                    for name, code, payout in cat["assets"]:
+                        if code == sym_code:
+                            found = (name, code, payout)
+                            break
+                    if found:
+                        break
+
+                name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
+                provider = market_data_manager.get_provider("quotex")
+                candles = await provider.get_candles(name, timeframe="1M", limit=35, strict_live_only=False)
+                curr_p = await provider.get_current_price(name)
+                chart_path = TradeChartGenerator.generate_candlestick_chart(
+                    candles=candles,
+                    pattern_name=f"Live Quotex Market: {name}",
+                    direction="DOWN",
+                    entry_price=curr_p,
+                    symbol=name
+                )
+                caption = (
+                    f"📊 <b>Real-Time 1M Candlestick Chart: {name}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"• <b>Live Price:</b> <code>{curr_p:.5f}</code>\n"
+                    f"• <b>Payout Rate:</b> <b>{payout}</b>\n"
+                    f"• <b>Feed:</b> 🟢 <b>Quotex Live Relay</b>"
+                )
+                await telegram_service.send_photo(chat_id, photo_path=chart_path, caption=caption)
+                return
+
+            elif action == "curr_alert":
+                sym_code = parts[1] if len(parts) > 1 else "EURUSD_otc"
+                found = None
+                for cat in TelegramMessageFormatter.QUOTEX_CATEGORIES.values():
+                    for name, code, payout in cat["assets"]:
+                        if code == sym_code:
+                            found = (name, code, payout)
+                            break
+                    if found:
+                        break
+
+                name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
+                alert_confirm = (
+                    f"🔔 <b>Live Monitoring Active: {name}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"You are now subscribed to priority institutional alerts for <b>{name}</b>.\n\n"
+                    f"The bot will notify you the instant a high-confluence <b>Fair Value Gap, Liquidity Sweep, or Wick Rejection</b> confirms on this pair!"
+                )
+                await telegram_service.send_message(chat_id, alert_confirm)
+                return
+
             # 1. Fetch signal with pre-loaded technicals and AI analysis
             sig_dict = None
             if sig_id and sig_id != "sample-sig-14":
@@ -663,10 +668,10 @@ class TelegramUpdateHandler:
                 await telegram_service.edit_message_text(chat_id, message_id, text, reply_markup={"inline_keyboard": kb})
 
         except Exception as e:
-            logger.error(f"Error handling Telegram callback query action '{action}': {e}", exc_info=True)
+            logger.error(f"[TELEGRAM CALLBACK ERROR] Action '{data}': {e}", exc_info=True)
         finally:
             if cb_id:
                 try:
                     await telegram_service.answer_callback_query(cb_id)
-                except Exception:
-                    pass
+                except Exception as ans_err:
+                    logger.debug(f"answer_callback_query notice: {ans_err}")
