@@ -10,9 +10,13 @@ from sqlalchemy.orm import selectinload
 from app.models.user import User
 from app.models.telegram import TelegramAccount, TelegramLinkCode, SignalSubscription
 from app.models.signal import Signal
+from app.models.pattern import Pattern
 from app.telegram.bot import telegram_service
 from app.telegram.formatter import TelegramMessageFormatter
 from app.engine.market_data.manager import market_data_manager
+from app.engine.signals.evaluator import SignalEvaluationPipeline
+from app.engine.ai.manager import ai_manager
+from app.engine.charts.chart_generator import TradeChartGenerator
 
 logger = logging.getLogger(__name__)
 
