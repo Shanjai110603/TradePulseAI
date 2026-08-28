@@ -39,7 +39,7 @@ class TelegramMessageFormatter:
         dir_badge = "🟢 CALL / UP ⬆️" if is_call else "🔴 PUT / DOWN ⬇️"
         action_text = "CALL (BUY)" if is_call else "PUT (SELL)"
 
-        duration_str = "1 MINUTE" if (duration == 1 or not duration) else f"{duration} MINUTE(S)"
+        duration_str = "1 MINUTE"
 
         text = (
             f"⚡ <b>TRADEPULSE AI SIGNAL ALERT</b>\n"
