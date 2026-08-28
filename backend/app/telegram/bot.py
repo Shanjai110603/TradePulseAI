@@ -297,9 +297,13 @@ class TelegramBotService:
             return {"ok": True}
 
         url = f"{self.base_url}/answerCallbackQuery"
+        payload: Dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
-                resp = await client.post(url, json={"callback_query_id": callback_query_id, "text": text})
+                resp = await client.post(url, json=payload)
                 return resp.json()
             except Exception as e:
                 logger.error(f"Failed to answer callback: {e}")
