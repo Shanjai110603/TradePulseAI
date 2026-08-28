@@ -52,6 +52,7 @@ services:
     expose:
       - "8000"
     volumes:
+      - ./backend/app:/app/app
       - ./uploads:/app/uploads
       - ./uploads:/app/backend/uploads
 
