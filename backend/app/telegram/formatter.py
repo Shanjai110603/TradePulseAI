@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
 
@@ -21,6 +21,8 @@ class TelegramMessageFormatter:
         ai_score = signal.get("ai_score", 95)
         strength = signal.get("signal_strength", "HIGH")
         status = signal.get("status", "ACTIVE")
+        entry_time = signal.get("entry_time")
+        expiry_time = signal.get("expiry_time")
 
         # Resolve timezone conversions for IST (UTC+5:30) and UTC
         ist_tz = timezone(timedelta(hours=5, minutes=30))

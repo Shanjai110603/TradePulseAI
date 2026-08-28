@@ -309,7 +309,7 @@ class QuotexMarketDataProvider(MarketDataProvider):
             "Accept-Language": "en-US,en;q=0.9",
         }
 
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=6.0) as client:
             for url in endpoints:
                 try:
                     # 1. GET page to get CSRF token and initial cookie
@@ -356,9 +356,10 @@ class QuotexMarketDataProvider(MarketDataProvider):
     ) -> List[Candle]:
         """Fetch candles — real from Quotex WS when configured, else synthetic."""
 
+        # Fire login attempt in background (non-blocking) so signal generation is never delayed
         if not self._live_mode and self._email and self._password and not self._login_attempted:
             self._login_attempted = True
-            await self.login_with_credentials()
+            asyncio.create_task(self.login_with_credentials())
 
         if self._live_mode and self._ws_client:
             ws_asset = SYMBOL_TO_WS.get(symbol, symbol.replace("/", "").replace(" (OTC)", "_OTC"))
