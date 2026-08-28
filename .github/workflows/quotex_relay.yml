@@ -28,6 +28,5 @@ jobs:
           python -u cloud_relay/quotex_cloud_relay.py
         env:
           BACKEND_INGEST_URL: "http://13.48.58.176:8000/api/v1/markets/candles/ingest"
-          QUOTEX_SESSION_TOKEN: ${{ secrets.QUOTEX_SESSION_TOKEN }}
           QUOTEX_EMAIL: ${{ secrets.QUOTEX_EMAIL }}
           QUOTEX_PASSWORD: ${{ secrets.QUOTEX_PASSWORD }}
