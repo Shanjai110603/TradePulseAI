@@ -40,28 +40,75 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 QUOTEX_ASSETS = [
-    {"symbol": "EUR/USD (OTC)", "base_asset": "EUR", "quote_asset": "USD", "name": "EUR/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 87, "is_otc": True, "ws_asset": "EURUSD_OTC"},
-    {"symbol": "GBP/USD (OTC)", "base_asset": "GBP", "quote_asset": "USD", "name": "GBP/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 88, "is_otc": True, "ws_asset": "GBPUSD_OTC"},
-    {"symbol": "USD/JPY (OTC)", "base_asset": "USD", "quote_asset": "JPY", "name": "USD/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 85, "is_otc": True, "ws_asset": "USDJPY_OTC"},
-    {"symbol": "AUD/CAD (OTC)", "base_asset": "AUD", "quote_asset": "CAD", "name": "AUD/CAD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 86, "is_otc": True, "ws_asset": "AUDCAD_OTC"},
-    {"symbol": "EUR/JPY (OTC)", "base_asset": "EUR", "quote_asset": "JPY", "name": "EUR/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 84, "is_otc": True, "ws_asset": "EURJPY_OTC"},
-    {"symbol": "NZD/USD (OTC)", "base_asset": "NZD", "quote_asset": "USD", "name": "NZD/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 83, "is_otc": True, "ws_asset": "NZDUSD_OTC"},
-    {"symbol": "USD/CHF (OTC)", "base_asset": "USD", "quote_asset": "CHF", "name": "USD/CHF OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 85, "is_otc": True, "ws_asset": "USDCHF_OTC"},
-    {"symbol": "BTC/USDT (OTC)", "base_asset": "BTC", "quote_asset": "USDT", "name": "Bitcoin OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 90, "is_otc": True, "ws_asset": "BTCUSD_OTC"},
-    {"symbol": "ETH/USDT (OTC)", "base_asset": "ETH", "quote_asset": "USDT", "name": "Ethereum OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 89, "is_otc": True, "ws_asset": "ETHUSD_OTC"},
+    # Forex OTC Pairs
+    {"symbol": "EUR/USD (OTC)", "base_asset": "EUR", "quote_asset": "USD", "name": "EUR/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 87, "is_otc": True, "ws_asset": "EURUSD_otc"},
+    {"symbol": "GBP/USD (OTC)", "base_asset": "GBP", "quote_asset": "USD", "name": "GBP/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 88, "is_otc": True, "ws_asset": "GBPUSD_otc"},
+    {"symbol": "USD/JPY (OTC)", "base_asset": "USD", "quote_asset": "JPY", "name": "USD/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 85, "is_otc": True, "ws_asset": "USDJPY_otc"},
+    {"symbol": "USD/CHF (OTC)", "base_asset": "USD", "quote_asset": "CHF", "name": "USD/CHF OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 85, "is_otc": True, "ws_asset": "USDCHF_otc"},
+    {"symbol": "AUD/USD (OTC)", "base_asset": "AUD", "quote_asset": "USD", "name": "AUD/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 85, "is_otc": True, "ws_asset": "AUDUSD_otc"},
+    {"symbol": "USD/CAD (OTC)", "base_asset": "USD", "quote_asset": "CAD", "name": "USD/CAD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 84, "is_otc": True, "ws_asset": "USDCAD_otc"},
+    {"symbol": "NZD/USD (OTC)", "base_asset": "NZD", "quote_asset": "USD", "name": "NZD/USD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 83, "is_otc": True, "ws_asset": "NZDUSD_otc"},
+    {"symbol": "EUR/GBP (OTC)", "base_asset": "EUR", "quote_asset": "GBP", "name": "EUR/GBP OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 86, "is_otc": True, "ws_asset": "EURGBP_otc"},
+    {"symbol": "EUR/JPY (OTC)", "base_asset": "EUR", "quote_asset": "JPY", "name": "EUR/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 84, "is_otc": True, "ws_asset": "EURJPY_otc"},
+    {"symbol": "GBP/JPY (OTC)", "base_asset": "GBP", "quote_asset": "JPY", "name": "GBP/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 87, "is_otc": True, "ws_asset": "GBPJPY_otc"},
+    {"symbol": "AUD/CAD (OTC)", "base_asset": "AUD", "quote_asset": "CAD", "name": "AUD/CAD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 86, "is_otc": True, "ws_asset": "AUDCAD_otc"},
+    {"symbol": "AUD/JPY (OTC)", "base_asset": "AUD", "quote_asset": "JPY", "name": "AUD/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 84, "is_otc": True, "ws_asset": "AUDJPY_otc"},
+    {"symbol": "CAD/JPY (OTC)", "base_asset": "CAD", "quote_asset": "JPY", "name": "CAD/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 83, "is_otc": True, "ws_asset": "CADJPY_otc"},
+    {"symbol": "CHF/JPY (OTC)", "base_asset": "CHF", "quote_asset": "JPY", "name": "CHF/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 85, "is_otc": True, "ws_asset": "CHFJPY_otc"},
+    {"symbol": "EUR/AUD (OTC)", "base_asset": "EUR", "quote_asset": "AUD", "name": "EUR/AUD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 85, "is_otc": True, "ws_asset": "EURAUD_otc"},
+    {"symbol": "EUR/CAD (OTC)", "base_asset": "EUR", "quote_asset": "CAD", "name": "EUR/CAD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 84, "is_otc": True, "ws_asset": "EURCAD_otc"},
+    {"symbol": "EUR/CHF (OTC)", "base_asset": "EUR", "quote_asset": "CHF", "name": "EUR/CHF OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 84, "is_otc": True, "ws_asset": "EURCHF_otc"},
+    {"symbol": "GBP/AUD (OTC)", "base_asset": "GBP", "quote_asset": "AUD", "name": "GBP/AUD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 86, "is_otc": True, "ws_asset": "GBPAUD_otc"},
+    {"symbol": "GBP/CAD (OTC)", "base_asset": "GBP", "quote_asset": "CAD", "name": "GBP/CAD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 85, "is_otc": True, "ws_asset": "GBPCAD_otc"},
+    {"symbol": "GBP/CHF (OTC)", "base_asset": "GBP", "quote_asset": "CHF", "name": "GBP/CHF OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 85, "is_otc": True, "ws_asset": "GBPCHF_otc"},
+    {"symbol": "NZD/JPY (OTC)", "base_asset": "NZD", "quote_asset": "JPY", "name": "NZD/JPY OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 83, "is_otc": True, "ws_asset": "NZDJPY_otc"},
+    {"symbol": "NZD/CAD (OTC)", "base_asset": "NZD", "quote_asset": "CAD", "name": "NZD/CAD OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 82, "is_otc": True, "ws_asset": "NZDCAD_otc"},
+    {"symbol": "USD/INR (OTC)", "base_asset": "USD", "quote_asset": "INR", "name": "USD/INR OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 88, "is_otc": True, "ws_asset": "USDINR_otc"},
+    {"symbol": "USD/BRL (OTC)", "base_asset": "USD", "quote_asset": "BRL", "name": "USD/BRL OTC (Quotex)", "price_precision": 4, "min_movement": 0.0001, "payout": 87, "is_otc": True, "ws_asset": "USDBRL_otc"},
+    {"symbol": "USD/TRY (OTC)", "base_asset": "USD", "quote_asset": "TRY", "name": "USD/TRY OTC (Quotex)", "price_precision": 4, "min_movement": 0.0001, "payout": 86, "is_otc": True, "ws_asset": "USDTRY_otc"},
+    {"symbol": "USD/MXN (OTC)", "base_asset": "USD", "quote_asset": "MXN", "name": "USD/MXN OTC (Quotex)", "price_precision": 4, "min_movement": 0.0001, "payout": 85, "is_otc": True, "ws_asset": "USDMXN_otc"},
+
+    # Crypto Pairs
+    {"symbol": "BTC/USDT (OTC)", "base_asset": "BTC", "quote_asset": "USDT", "name": "Bitcoin OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 90, "is_otc": True, "ws_asset": "BTCUSD_otc"},
+    {"symbol": "ETH/USDT (OTC)", "base_asset": "ETH", "quote_asset": "USDT", "name": "Ethereum OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 89, "is_otc": True, "ws_asset": "ETHUSD_otc"},
+    {"symbol": "LTC/USDT (OTC)", "base_asset": "LTC", "quote_asset": "USDT", "name": "Litecoin OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 88, "is_otc": True, "ws_asset": "LTCUSD_otc"},
+    {"symbol": "XRP/USDT (OTC)", "base_asset": "XRP", "quote_asset": "USDT", "name": "Ripple OTC (Quotex)", "price_precision": 4, "min_movement": 0.0001, "payout": 87, "is_otc": True, "ws_asset": "XRPUSD_otc"},
+    {"symbol": "SOL/USDT (OTC)", "base_asset": "SOL", "quote_asset": "USDT", "name": "Solana OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 88, "is_otc": True, "ws_asset": "SOLUSD_otc"},
+    {"symbol": "DOGE/USDT (OTC)", "base_asset": "DOGE", "quote_asset": "USDT", "name": "Dogecoin OTC (Quotex)", "price_precision": 5, "min_movement": 0.00001, "payout": 86, "is_otc": True, "ws_asset": "DOGEUSD_otc"},
+
+    # Commodities OTC
+    {"symbol": "GOLD (OTC)", "base_asset": "XAU", "quote_asset": "USD", "name": "Gold OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 90, "is_otc": True, "ws_asset": "XAUUSD_otc"},
+    {"symbol": "SILVER (OTC)", "base_asset": "XAG", "quote_asset": "USD", "name": "Silver OTC (Quotex)", "price_precision": 3, "min_movement": 0.001, "payout": 87, "is_otc": True, "ws_asset": "XAGUSD_otc"},
+    {"symbol": "US CRUDE (OTC)", "base_asset": "OIL", "quote_asset": "USD", "name": "US Crude OTC (Quotex)", "price_precision": 2, "min_movement": 0.01, "payout": 86, "is_otc": True, "ws_asset": "UKBrent_otc"},
+
+    # Live Standard Forex Market
     {"symbol": "EUR/USD", "base_asset": "EUR", "quote_asset": "USD", "name": "EUR/USD Live Market", "price_precision": 5, "min_movement": 0.00001, "payout": 82, "is_otc": False, "ws_asset": "EURUSD"},
     {"symbol": "GBP/USD", "base_asset": "GBP", "quote_asset": "USD", "name": "GBP/USD Live Market", "price_precision": 5, "min_movement": 0.00001, "payout": 82, "is_otc": False, "ws_asset": "GBPUSD"},
     {"symbol": "USD/JPY", "base_asset": "USD", "quote_asset": "JPY", "name": "USD/JPY Live Market", "price_precision": 3, "min_movement": 0.001, "payout": 80, "is_otc": False, "ws_asset": "USDJPY"},
     {"symbol": "AUD/USD", "base_asset": "AUD", "quote_asset": "USD", "name": "AUD/USD Live Market", "price_precision": 5, "min_movement": 0.00001, "payout": 81, "is_otc": False, "ws_asset": "AUDUSD"},
+    {"symbol": "USD/CAD", "base_asset": "USD", "quote_asset": "CAD", "name": "USD/CAD Live Market", "price_precision": 5, "min_movement": 0.00001, "payout": 80, "is_otc": False, "ws_asset": "USDCAD"},
+    {"symbol": "USD/CHF", "base_asset": "USD", "quote_asset": "CHF", "name": "USD/CHF Live Market", "price_precision": 5, "min_movement": 0.00001, "payout": 80, "is_otc": False, "ws_asset": "USDCHF"},
+    {"symbol": "EUR/JPY", "base_asset": "EUR", "quote_asset": "JPY", "name": "EUR/JPY Live Market", "price_precision": 3, "min_movement": 0.001, "payout": 81, "is_otc": False, "ws_asset": "EURJPY"},
+    {"symbol": "GBP/JPY", "base_asset": "GBP", "quote_asset": "JPY", "name": "GBP/JPY Live Market", "price_precision": 3, "min_movement": 0.001, "payout": 82, "is_otc": False, "ws_asset": "GBPJPY"},
 ]
 
 SYMBOL_TO_WS = {a["symbol"]: a["ws_asset"] for a in QUOTEX_ASSETS}
 
 BASE_PRICES = {
     "EUR/USD (OTC)": 1.08450, "GBP/USD (OTC)": 1.27210, "USD/JPY (OTC)": 154.620,
-    "AUD/CAD (OTC)": 0.89340, "EUR/JPY (OTC)": 167.450, "NZD/USD (OTC)": 0.59820,
-    "USD/CHF (OTC)": 0.88420, "BTC/USDT (OTC)": 67500.0, "ETH/USDT (OTC)": 3520.0,
+    "USD/CHF (OTC)": 0.88420, "AUD/USD (OTC)": 0.65480, "USD/CAD (OTC)": 1.36850,
+    "NZD/USD (OTC)": 0.59820, "EUR/GBP (OTC)": 0.85240, "EUR/JPY (OTC)": 167.450,
+    "GBP/JPY (OTC)": 196.520, "AUD/CAD (OTC)": 0.89340, "AUD/JPY (OTC)": 101.240,
+    "CAD/JPY (OTC)": 113.120, "CHF/JPY (OTC)": 174.850, "EUR/AUD (OTC)": 1.65600,
+    "EUR/CAD (OTC)": 1.48420, "EUR/CHF (OTC)": 0.95880, "GBP/AUD (OTC)": 1.94250,
+    "GBP/CAD (OTC)": 1.74100, "GBP/CHF (OTC)": 1.12480, "NZD/JPY (OTC)": 92.480,
+    "NZD/CAD (OTC)": 0.81850, "USD/INR (OTC)": 83.920, "USD/BRL (OTC)": 5.4850,
+    "USD/TRY (OTC)": 32.8450, "USD/MXN (OTC)": 18.2540,
+    "BTC/USDT (OTC)": 67500.0, "ETH/USDT (OTC)": 3520.0, "LTC/USDT (OTC)": 84.50,
+    "XRP/USDT (OTC)": 0.5840, "SOL/USDT (OTC)": 154.20, "DOGE/USDT (OTC)": 0.12450,
+    "GOLD (OTC)": 2412.50, "SILVER (OTC)": 29.450, "US CRUDE (OTC)": 78.40,
     "EUR/USD": 1.08520, "GBP/USD": 1.27180, "USD/JPY": 154.550, "AUD/USD": 0.65420,
+    "USD/CAD": 1.36800, "USD/CHF": 0.88400, "EUR/JPY": 167.400, "GBP/JPY": 196.450,
 }
 
 PERIOD_MAP = {"1M": 60, "5M": 300, "15M": 900, "1H": 3600}

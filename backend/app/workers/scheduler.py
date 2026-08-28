@@ -20,6 +20,7 @@ from app.engine.signals.tracker import SignalLifecycleTracker
 from app.engine.charts.chart_generator import TradeChartGenerator
 from app.engine.ai.mock_ai import MockAIProvider
 from app.engine.ai.manager import ai_manager
+from app.engine.market_data.quotex_provider import QUOTEX_ASSETS
 from app.telegram.bot import telegram_service
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class BackgroundScheduler:
             logger.info(f"[SCHEDULER] Tick — Active patterns: {len(active_patterns)}, Subscribers: {len(subscribers)}, Last broadcast: {now_ts - self._last_broadcast_ts:.1f}s ago.")
 
             for pattern in active_patterns:
-                assets = pattern.assets_config or ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
+                assets = pattern.assets_config or [a["symbol"] for a in QUOTEX_ASSETS]
                 tf = pattern.timeframe or "1M"
 
                 for asset_symbol in assets:

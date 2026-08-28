@@ -21,11 +21,56 @@ WS_URLS = [
 ]
 
 WATCH_ASSETS = [
+    # Forex OTC Pairs
     ("EUR/USD (OTC)", "EURUSD_otc"),
     ("GBP/USD (OTC)", "GBPUSD_otc"),
     ("USD/JPY (OTC)", "USDJPY_otc"),
-    ("BTC/USDT (OTC)", "BTCUSD_otc"),
+    ("USD/CHF (OTC)", "USDCHF_otc"),
+    ("AUD/USD (OTC)", "AUDUSD_otc"),
+    ("USD/CAD (OTC)", "USDCAD_otc"),
+    ("NZD/USD (OTC)", "NZDUSD_otc"),
+    ("EUR/GBP (OTC)", "EURGBP_otc"),
+    ("EUR/JPY (OTC)", "EURJPY_otc"),
+    ("GBP/JPY (OTC)", "GBPJPY_otc"),
     ("AUD/CAD (OTC)", "AUDCAD_otc"),
+    ("AUD/JPY (OTC)", "AUDJPY_otc"),
+    ("CAD/JPY (OTC)", "CADJPY_otc"),
+    ("CHF/JPY (OTC)", "CHFJPY_otc"),
+    ("EUR/AUD (OTC)", "EURAUD_otc"),
+    ("EUR/CAD (OTC)", "EURCAD_otc"),
+    ("EUR/CHF (OTC)", "EURCHF_otc"),
+    ("GBP/AUD (OTC)", "GBPAUD_otc"),
+    ("GBP/CAD (OTC)", "GBPCAD_otc"),
+    ("GBP/CHF (OTC)", "GBPCHF_otc"),
+    ("NZD/JPY (OTC)", "NZDJPY_otc"),
+    ("NZD/CAD (OTC)", "NZDCAD_otc"),
+    ("USD/INR (OTC)", "USDINR_otc"),
+    ("USD/BRL (OTC)", "USDBRL_otc"),
+    ("USD/TRY (OTC)", "USDTRY_otc"),
+    ("USD/MXN (OTC)", "USDMXN_otc"),
+
+    # Crypto Pairs
+    ("BTC/USDT (OTC)", "BTCUSD_otc"),
+    ("ETH/USDT (OTC)", "ETHUSD_otc"),
+    ("LTC/USDT (OTC)", "LTCUSD_otc"),
+    ("XRP/USDT (OTC)", "XRPUSD_otc"),
+    ("SOL/USDT (OTC)", "SOLUSD_otc"),
+    ("DOGE/USDT (OTC)", "DOGEUSD_otc"),
+
+    # Commodities OTC
+    ("GOLD (OTC)", "XAUUSD_otc"),
+    ("SILVER (OTC)", "XAGUSD_otc"),
+    ("US CRUDE (OTC)", "UKBrent_otc"),
+
+    # Live Standard Forex Market
+    ("EUR/USD", "EURUSD"),
+    ("GBP/USD", "GBPUSD"),
+    ("USD/JPY", "USDJPY"),
+    ("AUD/USD", "AUDUSD"),
+    ("USD/CAD", "USDCAD"),
+    ("USD/CHF", "USDCHF"),
+    ("EUR/JPY", "EURJPY"),
+    ("GBP/JPY", "GBPJPY"),
 ]
 
 async def push_candles_to_ec2(symbol: str, timeframe: str, candles: list):
