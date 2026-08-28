@@ -220,6 +220,63 @@ class TelegramBotService:
                 logger.error(f"Failed to send Telegram message to {chat_id}: {e}")
                 return {"ok": False, "error": str(e)}
 
+    async def edit_message_content(
+        self,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        parse_mode: Optional[str] = "HTML",
+        reply_markup: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Robustly edits an existing Telegram message in-place:
+        Tries editMessageCaption first (for photo messages with trade charts),
+        then falls back to editMessageText (for text messages).
+        """
+        if self.test_mode or not self.base_url:
+            return {"ok": True, "result": {"message_id": message_id, "text": text}}
+
+        caption_payload: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "caption": text,
+        }
+        if parse_mode:
+            caption_payload["parse_mode"] = parse_mode
+        if reply_markup:
+            caption_payload["reply_markup"] = reply_markup
+
+        text_payload: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+        }
+        if parse_mode:
+            text_payload["parse_mode"] = parse_mode
+        if reply_markup:
+            text_payload["reply_markup"] = reply_markup
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                # 1. Try editMessageCaption (for Photo messages)
+                caption_url = f"{self.base_url}/editMessageCaption"
+                resp = await client.post(caption_url, json=caption_payload)
+                if resp.status_code == 200:
+                    return resp.json()
+
+                # 2. Try editMessageText (for Text messages)
+                text_url = f"{self.base_url}/editMessageText"
+                resp2 = await client.post(text_url, json=text_payload)
+                if resp2.status_code == 200:
+                    return resp2.json()
+
+                # 3. Fallback: send as a fresh message if editing is not possible
+                logger.warning(f"editMessageCaption/Text failed ({resp.status_code}, {resp2.status_code}). Sending fresh response...")
+                return await self.send_message(chat_id, text, reply_markup=reply_markup)
+            except Exception as e:
+                logger.error(f"Failed to edit Telegram message content: {e}")
+                return await self.send_message(chat_id, text, reply_markup=reply_markup)
+
     async def edit_message_text(
         self,
         chat_id: int,
@@ -228,29 +285,8 @@ class TelegramBotService:
         parse_mode: Optional[str] = "HTML",
         reply_markup: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Edits an existing Telegram message in-place for fast, smooth sub-views"""
-        msg_payload: Dict[str, Any] = {
-            "chat_id": chat_id,
-            "message_id": message_id,
-            "text": text,
-        }
-        if parse_mode:
-            msg_payload["parse_mode"] = parse_mode
-        if reply_markup:
-            msg_payload["reply_markup"] = reply_markup
-
-        if self.test_mode or not self.base_url:
-            return {"ok": True, "result": {"message_id": message_id, "text": text}}
-
-        url = f"{self.base_url}/editMessageText"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                resp = await client.post(url, json=msg_payload)
-                resp.raise_for_status()
-                return resp.json()
-            except Exception as e:
-                logger.error(f"Failed to edit Telegram message: {e}")
-                return {"ok": False, "error": str(e)}
+        """Alias to edit_message_content for backward compatibility"""
+        return await self.edit_message_content(chat_id, message_id, text, parse_mode, reply_markup)
 
     async def answer_callback_query(self, callback_query_id: str, text: Optional[str] = None) -> Dict[str, Any]:
         if self.test_mode or not self.base_url:
