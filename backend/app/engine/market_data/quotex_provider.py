@@ -385,6 +385,32 @@ class QuotexMarketDataProvider(MarketDataProvider):
             return len(converted)
         return 0
 
+    async def ensure_live_connection(self):
+        """Ensures active live connection to Quotex WebSocket"""
+        if self._live_mode and self._ws_client:
+            return True
+
+        if not self._ssid and self._email and self._password and not self._login_attempted:
+            self._login_attempted = True
+            try:
+                from app.engine.market_data.session_renewer import QuotexSessionRenewer
+                token = await QuotexSessionRenewer.get_session_cookies(self._email, self._password)
+                if token:
+                    self._ssid = token
+                    self._live_mode = True
+                    self._ws_client = QuotexWebSocketClient(token)
+                    logger.info("[QUOTEX_PROVIDER] Initialized live Quotex WebSocket client with auto-renewed token.")
+                    return True
+            except Exception as e:
+                logger.debug(f"[QUOTEX_PROVIDER] Auto-login attempt notice: {e}")
+
+        if self._ssid and not self._ws_client:
+            self._ws_client = QuotexWebSocketClient(self._ssid)
+            self._live_mode = True
+            return True
+
+        return False
+
     async def get_assets(self, market_id: str) -> List[Dict[str, Any]]:
         return QUOTEX_ASSETS
 
@@ -397,6 +423,7 @@ class QuotexMarketDataProvider(MarketDataProvider):
         strict_live_only: bool = True
     ) -> List[Candle]:
         """Fetch candles — real from Ingestion Relay or Quotex WS. Returns empty if live data unavailable."""
+        await self.ensure_live_connection()
         # 1. Check if we have freshly ingested real candles from cloud relay (within last 180s)
         cache_key = f"{symbol}_{timeframe}"
         if cache_key in self._ingested_candles:
@@ -511,6 +538,7 @@ class QuotexMarketDataProvider(MarketDataProvider):
         return candles
 
     async def get_current_price(self, symbol: str) -> float:
+        await self.ensure_live_connection()
         if self._live_mode and self._ws_client:
             ws_asset = SYMBOL_TO_WS.get(symbol, symbol.replace("/", "").replace(" (OTC)", "_OTC"))
             try:
