@@ -22,8 +22,8 @@ export const PatternCreator: React.FC = () => {
   const totalSteps = 16;
 
   // Form State
-  const [name, setName] = useState('Pattern Type 14 Custom');
-  const [description, setDescription] = useState('Bearish initial candle -> 2 Bullish base candles creating support -> Support close breakdown -> DOWN Signal');
+  const [name, setName] = useState('SMC Liquidity Sweep Strategy');
+  const [description, setDescription] = useState('Smart Money Concepts: Detects stop-hunt liquidity grabs past key highs/lows with instant shadow rejection.');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 

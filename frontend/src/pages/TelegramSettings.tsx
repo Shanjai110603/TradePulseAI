@@ -193,7 +193,7 @@ export const TelegramSettings: React.FC = () => {
               <Sparkles className="w-4 h-4 text-cyan-400" /> Instant Signal Dispatch Test
             </h3>
             <p className="text-xs text-gray-300">
-              Dispatches an enriched <b>Pattern Type 14</b> interactive signal card directly to all active Telegram subscribers.
+              Dispatches an enriched <b>SMC Institutional</b> interactive signal card directly to all active Telegram subscribers.
             </p>
           </div>
           <button
@@ -333,7 +333,7 @@ export const TelegramSettings: React.FC = () => {
           <span>How Broadcaster Works</span>
         </div>
         <p className="leading-relaxed">
-          The background market scanner checks Quotex OTC 1-Minute candles on AWS every 10 seconds. When algorithmic pattern criteria (Momentum, Reversal, or Pattern Type 14) are satisfied and validated by AI confidence score, the server automatically broadcasts rich interactive signal cards to all subscribers listed above simultaneously.
+          The background market scanner checks Quotex OTC 1-Minute candles on AWS continuously. When algorithmic Smart Money Concepts criteria (Fair Value Gap, Liquidity Sweep, BOS, Wick Rejection) are satisfied and validated by AI confidence score, the server automatically broadcasts rich interactive signal cards to all subscribers listed above simultaneously.
         </p>
       </div>
     </div>
