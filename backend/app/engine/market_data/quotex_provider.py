@@ -195,11 +195,16 @@ class QuotexWebSocketClient:
                         if not isinstance(data, list) or len(data) < 2:
                             continue
 
-                        event = data[0]
+                        event = str(data[0])
                         payload_data = data[1]
 
-                        if event == "history/load" and isinstance(payload_data, dict):
-                            candles_raw = payload_data.get("candles", [])
+                        if "history" in event or "candle" in event or event == "instruments/update":
+                            candles_raw = []
+                            if isinstance(payload_data, dict):
+                                candles_raw = payload_data.get("candles", payload_data.get("data", payload_data.get("history", [])))
+                            elif isinstance(payload_data, list):
+                                candles_raw = payload_data
+
                             for c in candles_raw:
                                 if isinstance(c, (list, tuple)) and len(c) >= 5:
                                     received.append({
@@ -209,6 +214,15 @@ class QuotexWebSocketClient:
                                         "high": float(c[3]),
                                         "low": float(c[4]),
                                     })
+                                elif isinstance(c, dict) and "time" in c:
+                                    received.append({
+                                        "time": int(c.get("time", c.get("t", 0))),
+                                        "open": float(c.get("open", c.get("o", 0))),
+                                        "close": float(c.get("close", c.get("c", 0))),
+                                        "high": float(c.get("high", c.get("h", c.get("max", 0)))),
+                                        "low": float(c.get("low", c.get("l", c.get("min", 0)))),
+                                    })
+
                             if received:
                                 success = True
                                 break

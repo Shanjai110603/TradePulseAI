@@ -408,16 +408,14 @@ class PatternRuleEngine:
         best_support = None
         best_crest_height = 0.0
 
-        for i in range(len(candles) - 3, max(0, len(candles) - lookback), -1):
-            # Check if candles[i : i + bullish_count_req] are green base candles
-            if i + bullish_count_req >= len(candles) - 1:
+        for i in range(len(candles) - 3, max(1, len(candles) - lookback), -1):
+            if i <= 0 or (i + bullish_count_req >= len(candles) - 1):
                 continue
             
             base_candles = candles[i : i + bullish_count_req]
-            if not all(c.is_bullish for c in base_candles):
+            if len(base_candles) < bullish_count_req or not all(c.is_bullish for c in base_candles):
                 continue
 
-            # Prior candle must be initial bearish
             prior_candle = candles[i - 1]
             if not prior_candle.is_bearish:
                 continue
@@ -477,12 +475,12 @@ class PatternRuleEngine:
         best_resistance = None
         best_trough_depth = 0.0
 
-        for i in range(len(candles) - 3, max(0, len(candles) - lookback), -1):
-            if i + bearish_count_req >= len(candles) - 1:
+        for i in range(len(candles) - 3, max(1, len(candles) - lookback), -1):
+            if i <= 0 or (i + bearish_count_req >= len(candles) - 1):
                 continue
 
             base_candles = candles[i : i + bearish_count_req]
-            if not all(c.is_bearish for c in base_candles):
+            if len(base_candles) < bearish_count_req or not all(c.is_bearish for c in base_candles):
                 continue
 
             prior_candle = candles[i - 1]
@@ -631,8 +629,10 @@ class PatternRuleEngine:
             if len(preceding) < 5:
                 continue
 
-            half = len(preceding) // 2
+            half = max(1, len(preceding) // 2)
             left_window = preceding[:half]
+            if not left_window:
+                continue
             horizontal_ceiling = max(c.high for c in left_window)
             swing_low_bottom = min(c.low for c in preceding)
             v_depth = horizontal_ceiling - swing_low_bottom
@@ -688,8 +688,10 @@ class PatternRuleEngine:
             if len(preceding) < 5:
                 continue
 
-            half = len(preceding) // 2
+            half = max(1, len(preceding) // 2)
             left_window = preceding[:half]
+            if not left_window:
+                continue
             horizontal_floor = min(c.low for c in left_window)
             swing_high_top = max(c.high for c in preceding)
             inverted_depth = swing_high_top - horizontal_floor
