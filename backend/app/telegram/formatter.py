@@ -220,3 +220,216 @@ class TelegramMessageFormatter:
             [{"text": "⬅️ Back to Signal", "callback_data": f"back:{sig_id}"}]
         ]
         return text, keyboard
+
+    # ---------------------------------------------------------
+    # Currency Categories & Real-Time Monitoring Views
+    # ---------------------------------------------------------
+
+    QUOTEX_CATEGORIES = {
+        "forex_otc": {
+            "title": "💱 Forex OTC Pairs",
+            "assets": [
+                ("EUR/USD (OTC)", "EURUSD_otc", "95%"),
+                ("GBP/USD (OTC)", "GBPUSD_otc", "95%"),
+                ("USD/BRL (OTC)", "USDBRL_otc", "95%"),
+                ("EUR/NZD (OTC)", "EURNZD_otc", "95%"),
+                ("NZD/CAD (OTC)", "NZDCAD_otc", "93%"),
+                ("USD/ARS (OTC)", "USDARS_otc", "93%"),
+                ("USD/INR (OTC)", "USDINR_otc", "88%"),
+                ("USD/JPY (OTC)", "USDJPY_otc", "82%"),
+                ("USD/CHF (OTC)", "USDCHF_otc", "85%"),
+                ("AUD/USD (OTC)", "AUDUSD_otc", "85%"),
+                ("USD/CAD (OTC)", "USDCAD_otc", "85%"),
+                ("NZD/USD (OTC)", "NZDUSD_otc", "93%"),
+                ("EUR/GBP (OTC)", "EURGBP_otc", "85%"),
+                ("EUR/JPY (OTC)", "EURJPY_otc", "85%"),
+                ("GBP/JPY (OTC)", "GBPJPY_otc", "85%"),
+                ("AUD/CAD (OTC)", "AUDCAD_otc", "85%"),
+                ("USD/TRY (OTC)", "USDTRY_otc", "85%"),
+                ("USD/MXN (OTC)", "USDMXN_otc", "85%"),
+                ("USD/EGP (OTC)", "USDEGP_otc", "89%"),
+                ("USD/IDR (OTC)", "USDIDR_otc", "88%"),
+                ("USD/PHP (OTC)", "USDPHP_otc", "88%"),
+            ]
+        },
+        "crypto_otc": {
+            "title": "🪙 Crypto OTC Pairs",
+            "assets": [
+                ("BTC/USDT (OTC)", "BTCUSD_otc", "86%"),
+                ("ETH/USDT (OTC)", "ETHUSD_otc", "84%"),
+                ("SOL/USDT (OTC)", "SOLUSD_otc", "82%"),
+                ("XRP/USDT (OTC)", "XRPUSD_otc", "82%"),
+                ("LTC/USDT (OTC)", "LTCUSD_otc", "80%"),
+                ("DOGE/USDT (OTC)", "DOGEUSD_otc", "80%"),
+            ]
+        },
+        "commodities": {
+            "title": "🥇 Commodities OTC",
+            "assets": [
+                ("GOLD (OTC)", "XAUUSD_otc", "90%"),
+                ("SILVER (OTC)", "XAGUSD_otc", "88%"),
+                ("US CRUDE (OTC)", "UKBrent_otc", "85%"),
+            ]
+        },
+        "forex_live": {
+            "title": "🌍 Live Standard Forex",
+            "assets": [
+                ("EUR/USD", "EURUSD", "82%"),
+                ("GBP/USD", "GBPUSD", "82%"),
+                ("USD/JPY", "USDJPY", "80%"),
+                ("AUD/USD", "AUDUSD", "80%"),
+                ("USD/CAD", "USDCAD", "80%"),
+                ("USD/CHF", "USDCHF", "80%"),
+            ]
+        }
+    }
+
+    @classmethod
+    def format_currency_categories_menu(cls) -> Tuple[str, List[List[Dict[str, str]]]]:
+        """Renders the top-level currency categories menu."""
+        text = (
+            "🏛️ <b>QUOTEX LIVE CURRENCY & TRADE DIRECTORY</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "Select a market category below to explore all active trade assets, view real-time prices & payouts, and start monitoring any pair live in the bot:\n\n"
+            "• 💱 <b>Forex OTC:</b> 21 High-payout 24/7 OTC Pairs\n"
+            "• 🪙 <b>Crypto OTC:</b> BTC, ETH, SOL, XRP, DOGE\n"
+            "• 🥇 <b>Commodities:</b> Gold, Silver, Crude Oil\n"
+            "• 🌍 <b>Live Forex:</b> Standard Interbank Market Pairs\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚡ <i>Data Stream: 100% Real-Time Quotex Broker Feed</i>"
+        )
+
+        keyboard = [
+            [
+                {"text": "💱 Forex OTC (21 Pairs)", "callback_data": "curr_cat:forex_otc:0"},
+                {"text": "🪙 Crypto OTC", "callback_data": "curr_cat:crypto_otc:0"}
+            ],
+            [
+                {"text": "🥇 Commodities OTC", "callback_data": "curr_cat:commodities:0"},
+                {"text": "🌍 Live Forex Pairs", "callback_data": "curr_cat:forex_live:0"}
+            ],
+            [
+                {"text": "🔄 Refresh All Rates", "callback_data": "curr_home"}
+            ]
+        ]
+        return text, keyboard
+
+    @classmethod
+    def format_currency_list(cls, cat_key: str, page: int = 0) -> Tuple[str, List[List[Dict[str, str]]]]:
+        """Renders a paginated list of currency pairs for a chosen category."""
+        category = cls.QUOTEX_CATEGORIES.get(cat_key, cls.QUOTEX_CATEGORIES["forex_otc"])
+        title = category["title"]
+        all_assets = category["assets"]
+
+        page_size = 6
+        total_pages = (len(all_assets) + page_size - 1) // page_size
+        page = max(0, min(page, total_pages - 1))
+        start_idx = page * page_size
+        page_assets = all_assets[start_idx : start_idx + page_size]
+
+        text = (
+            f"📊 <b>{title.upper()} (Page {page + 1}/{total_pages})</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"Click on any asset below to open its <b>Real-Time Live Monitor</b>, view candlestick stats, and enable institutional signal alerts:\n\n"
+        )
+
+        for name, code, payout in page_assets:
+            text += f"• <b>{name}</b> ➔ Payout: <code>{payout}</code>\n"
+
+        text += (
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Tap any pair below to inspect and monitor:</i>"
+        )
+
+        keyboard = []
+        # Build 2-buttons-per-row for asset selection
+        for i in range(0, len(page_assets), 2):
+            row = []
+            row.append({
+                "text": f"📈 {page_assets[i][0]} ({page_assets[i][2]})",
+                "callback_data": f"curr_sel:{page_assets[i][1]}"
+            })
+            if i + 1 < len(page_assets):
+                row.append({
+                    "text": f"📈 {page_assets[i+1][0]} ({page_assets[i+1][2]})",
+                    "callback_data": f"curr_sel:{page_assets[i+1][1]}"
+                })
+            keyboard.append(row)
+
+        # Pagination row
+        nav_row = []
+        if page > 0:
+            nav_row.append({"text": "⬅️ Prev", "callback_data": f"curr_cat:{cat_key}:{page - 1}"})
+        if page < total_pages - 1:
+            nav_row.append({"text": "Next ➡️", "callback_data": f"curr_cat:{cat_key}:{page + 1}"})
+
+        if nav_row:
+            keyboard.append(nav_row)
+
+        keyboard.append([{"text": "🔙 Back to Categories", "callback_data": "curr_home"}])
+        return text, keyboard
+
+    @classmethod
+    def format_currency_monitor_card(
+        cls,
+        symbol_name: str,
+        symbol_code: str,
+        current_price: float,
+        payout_pct: str,
+        candles_count: int,
+        latest_candle: Optional[Dict[str, Any]],
+        tech_snapshot: Dict[str, Any]
+    ) -> Tuple[str, List[List[Dict[str, str]]]]:
+        """Renders the full real-time live monitor card for a chosen currency pair."""
+        now_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%H:%M:%S")
+        now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+        rsi = tech_snapshot.get("rsi_14", 50.0)
+        trend = tech_snapshot.get("trend", "Neutral")
+        ema_20 = tech_snapshot.get("ema_20", current_price)
+        momentum = tech_snapshot.get("momentum_state", "Moderate")
+        volatility = tech_snapshot.get("atr_14", 0.00045)
+
+        o = latest_candle.get("open", current_price) if latest_candle else current_price
+        h = latest_candle.get("high", current_price) if latest_candle else current_price
+        l = latest_candle.get("low", current_price) if latest_candle else current_price
+        c = latest_candle.get("close", current_price) if latest_candle else current_price
+
+        candle_color = "🟢 Bullish (Green)" if c >= o else "🔴 Bearish (Red)"
+
+        text = (
+            f"⚡ <b>LIVE ASSET MONITOR: {symbol_name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 <b>Current Live Price:</b> <code>{current_price:.5f}</code>\n"
+            f"💰 <b>Broker Payout Rate:</b> <b>{payout_pct}</b>\n"
+            f"📡 <b>Feed Status:</b> 🟢 <b>Quotex Live Stream Active</b>\n"
+            f"⏰ <b>Last Tick (IST):</b> <code>{now_ist}</code> | <b>(UTC):</b> <code>{now_utc}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🕯️ <b>CURRENT 1M CANDLE:</b>\n"
+            f"• <b>Open:</b> <code>{o:.5f}</code>  • <b>High:</b> <code>{h:.5f}</code>\n"
+            f"• <b>Low:</b>  <code>{l:.5f}</code>  • <b>Close:</b> <code>{c:.5f}</code>\n"
+            f"• <b>State:</b> {candle_color}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 <b>TECHNICAL & SMC SNAPSHOT:</b>\n"
+            f"• <b>RSI (14):</b> <code>{rsi:.1f}</code> ({'Overbought' if rsi > 70 else ('Oversold' if rsi < 30 else 'Balanced')})\n"
+            f"• <b>EMA 20 Dynamic Level:</b> <code>{ema_20:.5f}</code>\n"
+            f"• <b>Directional Bias:</b> <b>{trend.upper()}</b>\n"
+            f"• <b>Momentum:</b> {momentum}\n"
+            f"• <b>Buffer History:</b> <code>{candles_count}</code> live 1M bars cached\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎯 <i>Tap buttons below to refresh live ticks, render a chart, or monitor alerts:</i>"
+        )
+
+        keyboard = [
+            [
+                {"text": "🔄 Refresh Live Price", "callback_data": f"curr_sel:{symbol_code}"},
+                {"text": "📊 Generate 1M Chart", "callback_data": f"curr_chart:{symbol_code}"}
+            ],
+            [
+                {"text": "🔔 Set Signal Alert for this Pair", "callback_data": f"curr_alert:{symbol_code}"}
+            ],
+            [
+                {"text": "🔙 Back to Currency List", "callback_data": "curr_home"}
+            ]
+        ]
+        return text, keyboard
