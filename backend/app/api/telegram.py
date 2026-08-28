@@ -1,8 +1,10 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -10,6 +12,7 @@ from app.core.security import generate_linking_code
 from app.api.auth import get_current_user, get_current_admin_user
 from app.models.user import User
 from app.models.telegram import TelegramAccount, TelegramLinkCode
+from app.models.signal import Signal
 from app.schemas.telegram import TelegramLinkCodeResponse, TelegramStatusResponse, TelegramLinkRequest
 from app.telegram.bot import telegram_service
 from app.telegram.handlers import TelegramUpdateHandler
