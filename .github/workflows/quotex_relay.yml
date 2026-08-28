@@ -18,12 +18,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install dependencies & Playwright Browser
         run: |
-          pip install httpx websockets
+          pip install httpx websockets playwright
+          playwright install chromium --with-deps
 
       - name: Run Live Quotex Continuous Relay
         run: |
           python -u cloud_relay/quotex_cloud_relay.py
         env:
           BACKEND_INGEST_URL: "http://13.48.58.176:8000/api/v1/markets/candles/ingest"
+          QUOTEX_SESSION_TOKEN: ${{ secrets.QUOTEX_SESSION_TOKEN }}

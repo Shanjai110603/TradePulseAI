@@ -73,6 +73,35 @@ WATCH_ASSETS = [
     ("GBP/JPY", "GBPJPY"),
 ]
 
+async def get_live_quotex_session() -> str:
+    """Extracts live Quotex session token using Playwright headless browser or env secret"""
+    env_token = os.getenv("QUOTEX_SESSION_TOKEN")
+    if env_token:
+        return env_token
+
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
+            page = await context.new_page()
+            print("[BROWSER] Navigating to https://qxbroker.com/en/demo-trade...", flush=True)
+            await page.goto("https://qxbroker.com/en/demo-trade", wait_until="domcontentloaded", timeout=25000)
+            await asyncio.sleep(2.0)
+            token = await page.evaluate("() => localStorage.getItem('token') || localStorage.getItem('session') || ''")
+            cookies = await context.cookies()
+            cookie_session = next((c['value'] for c in cookies if c['name'] in ['session', 'token', 'PHPSESSID']), None)
+            await browser.close()
+            final_token = token or cookie_session or ""
+            if final_token:
+                print(f"[BROWSER] Successfully acquired authentic Quotex session token: {final_token[:15]}...", flush=True)
+            return final_token
+    except Exception as e:
+        print(f"[BROWSER NOTICE] Headless browser session note: {e}", flush=True)
+        return ""
+
 async def push_candles_to_ec2(symbol: str, timeframe: str, candles: list):
     """Pushes candle batch to AWS EC2 backend"""
     try:
@@ -84,14 +113,18 @@ async def push_candles_to_ec2(symbol: str, timeframe: str, candles: list):
         async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.post(BACKEND_INGEST_URL, json=payload)
             if res.status_code == 200:
-                print(f"[RELAY ➔ EC2] Ingested {len(candles)} real candles for {symbol}")
+                print(f"[RELAY ➔ EC2] Ingested {len(candles)} real candles for {symbol}", flush=True)
             else:
-                print(f"[RELAY] Failed push ({res.status_code}): {res.text}")
+                print(f"[RELAY] Failed push ({res.status_code}): {res.text}", flush=True)
     except Exception as e:
-        print(f"[RELAY ERROR] Failed to push to EC2: {e}")
+        print(f"[RELAY ERROR] Failed to push to EC2: {e}", flush=True)
 
 async def run_relay():
-    print(f"[*] Starting TradePulse Free Cloud Relay -> Target: {BACKEND_INGEST_URL}")
+    print(f"[*] Starting TradePulse Free Cloud Relay -> Target: {BACKEND_INGEST_URL}", flush=True)
+    
+    # Obtain authentic session token on start
+    session_token = await get_live_quotex_session()
+
     while True:
         for ws_url in WS_URLS:
             try:
@@ -99,29 +132,32 @@ async def run_relay():
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                     "Origin": "https://qxbroker.com"
                 }
-                async with websockets.connect(ws_url, additional_headers=headers, open_timeout=10, close_timeout=5) as ws:
-                    init_msg = await asyncio.wait_for(ws.recv(), timeout=5)
-                    print(f"[WS] Connected to {ws_url}")
+                async with websockets.connect(ws_url, additional_headers=headers, open_timeout=12, close_timeout=5) as ws:
+                    init_msg = await asyncio.wait_for(ws.recv(), timeout=6)
+                    print(f"[WS] Connected to {ws_url} (Handshake: {str(init_msg)[:60]})", flush=True)
+
+                    # Send Socket.IO namespace connect
+                    await ws.send("40")
                     
-                    # Wait for namespace 40
-                    msg = await asyncio.wait_for(ws.recv(), timeout=5)
-                    
-                    # Send authorization if token is provided
-                    session_token = os.getenv("QUOTEX_SESSION_TOKEN")
+                    # Send authorization if token available
                     if session_token:
                         auth_msg = json.dumps(["authorization", {"session": session_token, "isDemo": 1, "tournamentId": 0}])
                         await ws.send(f"42{auth_msg}")
-                        await asyncio.sleep(0.5)
+                        print(f"[WS AUTH] Sent Quotex session authorization packet", flush=True)
+                    else:
+                        print(f"[WS] Streaming live market data...", flush=True)
 
-                    # Continuously fetch and push fresh live candles
+                    await asyncio.sleep(0.5)
+
+                    # Continuous streaming loop
                     while True:
                         for symbol, ws_asset in WATCH_ASSETS:
                             end_time = int(time.time())
                             req = json.dumps(["history/load", {"asset": ws_asset, "period": 60, "time": end_time, "count": 50}])
                             await ws.send(f"42{req}")
-                            await asyncio.sleep(0.2)
+                            await asyncio.sleep(0.15)
 
-                        deadline = asyncio.get_event_loop().time() + 10
+                        deadline = asyncio.get_event_loop().time() + 8
                         while asyncio.get_event_loop().time() < deadline:
                             try:
                                 raw = await asyncio.wait_for(ws.recv(), timeout=2)
@@ -130,6 +166,10 @@ async def run_relay():
                                 if raw == "2":
                                     await ws.send("3")
                                     continue
+                                if raw == "41":
+                                    print("[WS NOTICE] Session refresh required. Re-authenticating...", flush=True)
+                                    session_token = await get_live_quotex_session()
+                                    break
                                 if raw.startswith("42"):
                                     data = json.loads(raw[2:])
                                     if isinstance(data, list) and len(data) >= 2:
@@ -138,8 +178,8 @@ async def run_relay():
                                         if "history" in event and isinstance(payload, dict):
                                             candles_raw = payload.get("candles", [])
                                             asset_name = payload.get("asset", "")
-                                            matched_symbol = next((s for s, a in WATCH_ASSETS if a == asset_name), "EUR/USD (OTC)")
-                                            if candles_raw:
+                                            matched_symbol = next((s for s, a in WATCH_ASSETS if a == asset_name), None)
+                                            if matched_symbol and candles_raw:
                                                 converted = [
                                                     {
                                                         "time": int(c[0]),
@@ -157,7 +197,7 @@ async def run_relay():
                                 break
 
             except Exception as err:
-                print(f"[WS DISCONNECT] {err}. Reconnecting in 5 seconds...")
+                print(f"[WS DISCONNECT] {err}. Reconnecting in 5 seconds...", flush=True)
                 await asyncio.sleep(5)
 
 if __name__ == "__main__":
