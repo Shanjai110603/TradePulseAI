@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     MARKET_POLL_INTERVAL_SECONDS: int = 10
 
     # Quotex Account Credentials
-    QUOTEX_EMAIL: Optional[str] = "logeshpythonbot@gmail.com"
-    QUOTEX_PASSWORD: Optional[str] = "BotForTraining@101"
+    QUOTEX_EMAIL: Optional[str] = ""
+    QUOTEX_PASSWORD: Optional[str] = ""
     QUOTEX_SESSION_TOKEN: Optional[str] = ""
 
     # AI Provider

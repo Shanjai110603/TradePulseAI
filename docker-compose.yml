@@ -43,8 +43,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tradepulse}:${POSTGRES_PASSWORD:-tradepulse_secure_password_2026}@postgres:5432/${POSTGRES_DB:-tradepulse_db}
       REDIS_URL: redis://redis:6379/0
       MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-quotex}
-      QUOTEX_EMAIL: ${QUOTEX_EMAIL:-logeshpythonbot@gmail.com}
-      QUOTEX_PASSWORD: ${QUOTEX_PASSWORD:-BotForTraining@101}
+      QUOTEX_EMAIL: ${QUOTEX_EMAIL}
+      QUOTEX_PASSWORD: ${QUOTEX_PASSWORD}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_TEST_MODE: ${TELEGRAM_TEST_MODE:-false}
