@@ -7,12 +7,18 @@ and extracts the latest active session cookies (SSID).
 Runs in the background so the bot maintains a perpetual, auto-renewing live connection
 without ever requiring manual browser cookie extraction.
 """
+import os
+import json
+import time
 import asyncio
 import logging
 from typing import Optional, Dict, List
 import httpx
 
 logger = logging.getLogger(__name__)
+
+SESSION_CACHE_FILE = "uploads/quotex_session.json"
+SESSION_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 
 QUOTEX_SIGNIN_URLS = [
     "https://qxbroker.com/en/sign-in",
@@ -24,39 +30,80 @@ QUOTEX_SIGNIN_URLS = [
 
 class QuotexSessionRenewer:
     """
-    Manages automated login and session cookie renewal for Quotex.
-    Tries Playwright Headless Chromium first, then falls back to optimized HTTP request flow.
+    Manages automated login, file caching, and session cookie renewal for Quotex.
+    Matches A11ksa/API-Quotex session persistence pattern.
     """
 
     @classmethod
-    async def get_session_cookies(cls, email: str, password: str) -> Optional[str]:
+    async def get_session_cookies(cls, email: str, password: str, force_refresh: bool = False) -> Optional[str]:
         """
-        Attempts to acquire a fresh active SSID token for Quotex.
-        Returns cookie string like 'ssid=xxx; token=yyy' or None if all methods fail.
+        Acquires an active SSID token for Quotex.
+        Checks local session cache first; refreshes via Playwright/HTTP if missing or expired.
         """
         if not email or not password:
             logger.warning("[SESSION_RENEWER] Email or password not configured.")
             return None
 
-        # 1. Try Playwright Headless Browser (Full JS Execution)
+        # 1. Check cached session file if not forcing refresh
+        if not force_refresh:
+            cached_token = cls._load_cached_session(email)
+            if cached_token:
+                logger.info("[SESSION_RENEWER] Using active cached Quotex session.")
+                return cached_token
+
+        # 2. Try Playwright Headless Browser (Full JS Execution)
         try:
             playwright_token = await cls._try_playwright_login(email, password)
             if playwright_token:
                 logger.info("[SESSION_RENEWER] Successfully acquired fresh Quotex session via Playwright.")
+                cls._save_cached_session(email, playwright_token)
                 return playwright_token
         except Exception as e:
             logger.debug(f"[SESSION_RENEWER] Playwright login attempt notice: {e}")
 
-        # 2. Try Direct HTTP Login with CSRF Extraction
+        # 3. Try Direct HTTP Login with CSRF Extraction
         try:
             http_token = await cls._try_http_login(email, password)
             if http_token:
                 logger.info("[SESSION_RENEWER] Successfully acquired Quotex session via Direct HTTP.")
+                cls._save_cached_session(email, http_token)
                 return http_token
         except Exception as e:
             logger.debug(f"[SESSION_RENEWER] HTTP direct login attempt notice: {e}")
 
         return None
+
+    @classmethod
+    def _load_cached_session(cls, email: str) -> Optional[str]:
+        """Loads and validates cached session from disk."""
+        if not os.path.exists(SESSION_CACHE_FILE):
+            return None
+        try:
+            with open(SESSION_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            saved_email = data.get("email")
+            saved_time = data.get("timestamp", 0)
+            token = data.get("token")
+            # Validate email and TTL
+            if saved_email == email and token and (time.time() - saved_time < SESSION_TTL_SECONDS):
+                return token
+        except Exception as e:
+            logger.debug(f"[SESSION_RENEWER] Error reading session cache: {e}")
+        return None
+
+    @classmethod
+    def _save_cached_session(cls, email: str, token: str):
+        """Persists acquired session to disk."""
+        try:
+            os.makedirs(os.path.dirname(SESSION_CACHE_FILE), exist_ok=True)
+            with open(SESSION_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump({
+                    "email": email,
+                    "token": token,
+                    "timestamp": time.time()
+                }, f)
+        except Exception as e:
+            logger.debug(f"[SESSION_RENEWER] Error saving session cache: {e}")
 
     @classmethod
     async def _try_playwright_login(cls, email: str, password: str) -> Optional[str]:

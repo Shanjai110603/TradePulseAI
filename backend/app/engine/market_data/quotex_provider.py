@@ -134,6 +134,11 @@ class QuotexWebSocketClient:
                     except asyncio.TimeoutError:
                         continue
 
+                    # Send Socket.IO authorization packet
+                    raw_ssid = self.ssid.split("=")[-1].strip() if "=" in self.ssid else self.ssid.strip()
+                    auth_payload = json.dumps(["authorization", {"session": raw_ssid, "isDemo": 1}])
+                    await ws.send(f"42{auth_payload}")
+
                     # Request historical candles
                     payload = json.dumps([
                         "instruments/update",
@@ -153,13 +158,18 @@ class QuotexWebSocketClient:
                     ])
                     await ws.send(f"42{history_payload}")
 
-                    # Receive responses
+                    # Receive responses with ping/pong heartbeat
                     deadline = asyncio.get_event_loop().time() + 8
                     while asyncio.get_event_loop().time() < deadline:
                         try:
                             raw = await asyncio.wait_for(ws.recv(), timeout=3)
                         except asyncio.TimeoutError:
                             break
+
+                        # Handle Socket.IO ping
+                        if raw == "2":
+                            await ws.send("3")  # pong
+                            continue
 
                         if not raw.startswith("42"):
                             continue
