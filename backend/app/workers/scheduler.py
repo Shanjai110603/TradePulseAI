@@ -95,6 +95,18 @@ class BackgroundScheduler:
 
                 for asset_symbol in assets:
                     try:
+                        # Strictly enforce Live Relay data only
+                        cache_k = f"{asset_symbol}_{tf}"
+                        has_live_relay = False
+                        if hasattr(provider, "_ingested_candles") and cache_k in provider._ingested_candles:
+                            last_ts = getattr(provider, "_last_ingest_ts", {}).get(cache_k, 0.0)
+                            if (time.time() - last_ts) < 180:
+                                has_live_relay = True
+
+                        is_live = has_live_relay or getattr(provider, "_live_mode", False)
+                        if not is_live:
+                            continue
+
                         candles = await provider.get_candles(asset_symbol, timeframe=tf, limit=50)
                         if len(candles) < 10:
                             continue

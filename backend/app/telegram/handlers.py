@@ -311,13 +311,12 @@ class TelegramUpdateHandler:
                     patterns = p_res.scalars().all()
 
                     provider = market_data_manager.get_provider()
-                    assets = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
+                    all_assets = ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "BTC/USDT (OTC)", "AUD/CAD (OTC)", "EUR/USD", "GBP/USD"]
+                    
+                    # Prioritize assets currently streaming on the Live Relay
+                    live_assets = [a for a in all_assets if hasattr(provider, "_ingested_candles") and f"{a}_1M" in provider._ingested_candles]
+                    chosen_asset = random.choice(live_assets) if live_assets else random.choice(all_assets)
 
-                    # Pick best pattern and a random asset
-                    top_pattern = patterns[0] if patterns else None
-                    chosen_asset = random.choice(assets)
-
-                    # Fetch live candles (guaranteed fast — synthetic if Quotex WS unavailable)
                     candles = await provider.get_candles(chosen_asset, timeframe="1M", limit=50)
                     last_c = candles[-1] if candles else None
                     ref_p = last_c.close if last_c else 1.08500
@@ -328,6 +327,8 @@ class TelegramUpdateHandler:
 
                     p_name = top_pattern.name if top_pattern else "SMC Pattern Type 14"
                     direction = top_pattern.direction if top_pattern else random.choice(["UP", "DOWN"])
+
+                    is_live = bool(getattr(provider, "_ingested_candles", {}).get(f"{chosen_asset}_1M")) or getattr(provider, "_live_mode", False)
 
                     sig_payload = {
                         "id": str(uuid.uuid4()),
@@ -347,6 +348,8 @@ class TelegramUpdateHandler:
                         "ai_score": random.randint(88, 95),
                         "ai_confidence": "HIGH",
                         "status": "ACTIVE",
+                        "is_live_feed": is_live,
+                        "feed_source": "Quotex Live Relay",
                         "technical_snapshot": {
                             "rsi": round(random.uniform(35.0, 48.0), 1),
                             "volume_ratio": round(random.uniform(1.2, 1.6), 2),
