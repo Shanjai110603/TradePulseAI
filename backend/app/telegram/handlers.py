@@ -436,12 +436,14 @@ class TelegramUpdateHandler:
 
         logger.info(f"[TELEGRAM CALLBACK] Action received: data='{data}' | chat_id={chat_id} | msg_id={message_id}")
 
+        # Always acknowledge Telegram callback immediately to stop the button loading spinner
+        if cb_id:
+            try:
+                await telegram_service.answer_callback_query(cb_id)
+            except Exception as e:
+                logger.debug(f"Failed to answer callback query: {e}")
+
         if not data or not chat_id or not message_id:
-            if cb_id:
-                try:
-                    await telegram_service.answer_callback_query(cb_id)
-                except Exception:
-                    pass
             return
 
         try:
@@ -476,7 +478,7 @@ class TelegramUpdateHandler:
                 name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
                 provider = market_data_manager.get_provider("quotex")
                 current_price = await provider.get_current_price(name)
-                candles = await provider.get_candles(name, timeframe="1M", limit=25, strict_live_only=True)
+                candles = await provider.get_candles(name, timeframe="1M", limit=25, strict_live_only=False)
                 latest = candles[-1].model_dump() if candles else None
                 tech = provider.compute_technical_snapshot(candles, current_price) if candles else {}
 
@@ -505,7 +507,7 @@ class TelegramUpdateHandler:
 
                 name, code, payout = found or ("EUR/USD (OTC)", "EURUSD_otc", "95%")
                 provider = market_data_manager.get_provider("quotex")
-                candles = await provider.get_candles(name, timeframe="1M", limit=35, strict_live_only=True)
+                candles = await provider.get_candles(name, timeframe="1M", limit=35, strict_live_only=False)
                 curr_p = await provider.get_current_price(name)
                 chart_path = TradeChartGenerator.generate_candlestick_chart(
                     candles=candles,
