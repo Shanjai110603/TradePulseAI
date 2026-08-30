@@ -184,20 +184,12 @@ class QuotexWebSocketClient:
                     open_timeout=10,
                     close_timeout=5,
                 ) as ws:
-                    # EIO4 handshake
-                    await asyncio.wait_for(ws.recv(), timeout=5)
+                    # Handshake
+                    await asyncio.wait_for(ws.recv(), timeout=3)
                     await ws.send("40")  # Socket.IO connect
 
-                    # Wait for Socket.IO connected confirmation
-                    try:
-                        msg = await asyncio.wait_for(ws.recv(), timeout=5)
-                        if not msg.startswith("40"):
-                            continue
-                    except asyncio.TimeoutError:
-                        continue
-
                     # Send Socket.IO authorization packet
-                    auth_payload = json.dumps(["authorization", {"session": raw_token, "isDemo": 1}])
+                    auth_payload = json.dumps(["authorization", {"session": raw_token, "isDemo": 0, "tournamentId": 0}])
                     await ws.send(f"42{auth_payload}")
 
                     # Request historical candles
