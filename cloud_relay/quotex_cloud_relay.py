@@ -11,13 +11,15 @@ import os
 import httpx
 import websockets
 
-# Your AWS EC2 Backend Ingestion URL
-BACKEND_INGEST_URL = os.getenv("BACKEND_INGEST_URL", "http://13.48.58.176:8000/api/v1/markets/candles/ingest")
+# Backend Ingestion URL (defaults to local backend, or set via BACKEND_INGEST_URL env var)
+BACKEND_INGEST_URL = os.getenv("BACKEND_INGEST_URL", "http://127.0.0.1:8000/api/v1/markets/candles/ingest")
 
-# Quotex WebSocket Server Endpoints
+# Quotex WebSocket Server Endpoints (Socket.IO EIO=4 and EIO=3)
 WS_URLS = [
-    "wss://ws2.qxbroker.com/socket.io/?EIO=3&transport=websocket",
-    "wss://ws.qxbroker.com/socket.io/?EIO=3&transport=websocket",
+    "wss://ws2.qxbroker.com/socket.io/?EIO=4&transport=websocket",
+    "wss://ws.qxbroker.com/socket.io/?EIO=4&transport=websocket",
+    "wss://ws2.quotex.io/socket.io/?EIO=4&transport=websocket",
+    "wss://ws.quotex.io/socket.io/?EIO=4&transport=websocket",
 ]
 
 WATCH_ASSETS = [
