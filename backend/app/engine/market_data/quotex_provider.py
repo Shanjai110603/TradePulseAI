@@ -240,10 +240,16 @@ class QuotexWebSocketClient:
                         except json.JSONDecodeError:
                             continue
 
-                        if not isinstance(data, list) or len(data) < 2:
+                        if not isinstance(data, list) or len(data) < 1:
                             continue
 
                         event = str(data[0])
+                        if event == "authorization/reject":
+                            logger.warning("[QUOTEX_WS] Quotex session token rejected by broker. Token is expired or invalid.")
+                            break
+
+                        if len(data) < 2:
+                            continue
                         payload_data = data[1]
 
                         if "history" in event or "candle" in event or event == "instruments/update":
@@ -280,7 +286,7 @@ class QuotexWebSocketClient:
 
             except Exception as e:
                 logger.debug(f"Quotex WS connection to {ws_url} failed: {e}")
-                self._cooldown_until = time.time() + 180  # 3-min cooldown on rate-limit
+                self._cooldown_until = time.time() + 30  # 30-sec cooldown on connection error
                 continue
 
         return received
@@ -409,7 +415,14 @@ class QuotexMarketDataProvider(MarketDataProvider):
             self._live_mode = True
             return True
 
-        return False
+    def set_live_session(self, token: str):
+        """Dynamically injects a fresh live Quotex session SSID cookie without restarting server."""
+        raw_token = token.strip()
+        self._ssid = raw_token
+        self._live_mode = True
+        self._ws_client = QuotexWebSocketClient(raw_token)
+        self._login_attempted = False
+        logger.info(f"[QUOTEX_PROVIDER] Live session injected dynamically (length={len(raw_token)}). Live mode active.")
 
     async def get_assets(self, market_id: str) -> List[Dict[str, Any]]:
         return QUOTEX_ASSETS

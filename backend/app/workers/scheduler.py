@@ -106,10 +106,12 @@ class BackgroundScheduler:
 
                         is_live = has_live_relay or getattr(provider, "_live_mode", False)
                         if not is_live:
+                            logger.debug(f"[SCHEDULER] Skipping {asset_symbol} ({tf}): Market data provider is not in live mode. Provide active Quotex SSID via /session.")
                             continue
 
                         candles = await provider.get_candles(asset_symbol, timeframe=tf, limit=50)
                         if len(candles) < 10:
+                            logger.debug(f"[SCHEDULER] {asset_symbol} ({tf}): Received {len(candles)} candles (minimum 10 required for strategy evaluation).")
                             continue
 
                         # Check if a signal was already generated on this latest candle to avoid duplicate signals
