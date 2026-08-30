@@ -360,6 +360,19 @@ class QuotexMarketDataProvider(MarketDataProvider):
     def __init__(self):
         self._price_cache: Dict[str, float] = {}
         self._ssid: Optional[str] = getattr(settings, "QUOTEX_SESSION_TOKEN", None) or ""
+        if not self._ssid or len(self._ssid) < 5:
+            try:
+                for path in ["uploads/quotex_session.json", "backend/uploads/quotex_session.json", "/app/uploads/quotex_session.json"]:
+                    if os.path.exists(path):
+                        with open(path, "r") as f:
+                            data = json.load(f)
+                            cached_t = data.get("token")
+                            if cached_t and len(cached_t) > 5:
+                                self._ssid = cached_t
+                                break
+            except Exception:
+                pass
+
         self._email: Optional[str] = getattr(settings, "QUOTEX_EMAIL", None) or ""
         self._password: Optional[str] = getattr(settings, "QUOTEX_PASSWORD", None) or ""
         self._ws_client: Optional[QuotexWebSocketClient] = None
