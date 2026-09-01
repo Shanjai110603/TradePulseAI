@@ -369,15 +369,17 @@ class PatternRuleEngine:
         elif p_type == "order_block" or p_type == "ob":
             return cls._evaluate_order_block(candles, params)
 
-        # Strategy 1: SNR Wick Reversal (Counter-Trend Reversal)
+        # Strategy 1: Multi-Timeframe Engulfing Breakout (MTF_ENGULFING_1M)
+        elif p_type in ["mtf_engulfing_1m", "MTF_ENGULFING_1M", "mtf_engulfing", "engulfing_breakout"]:
+            return cls._evaluate_mtf_engulfing_1m(candles, params, snapshot)
+
+        # Legacy / Alternative Strategy Primitives
         elif p_type in ["snr_wick_reversal", "SNR_WICK_REVERSAL", "wick_reversal", "wick_rejection", "pinbar_rejection"]:
             return cls._evaluate_snr_wick_reversal(candles, params, snapshot)
 
-        # Strategy 2: EMA Trend Bounce (Trend Continuation)
         elif p_type in ["ema_trend_bounce", "EMA_TREND_BOUNCE", "ema_bounce"]:
             return cls._evaluate_ema_trend_bounce(candles, params, snapshot)
 
-        # Strategy 3: Multi-Timeframe Momentum Alignment (Trend Following)
         elif p_type in ["mtf_momentum", "MTF_MOMENTUM", "momentum_alignment", "trend_momentum"]:
             return cls._evaluate_mtf_momentum(candles, params, snapshot)
 
@@ -571,7 +573,191 @@ class PatternRuleEngine:
                             "timeframe": "1M"
                         }
 
-        return False, "No Order Block structure confirmed", {}
+    @classmethod
+    def _compute_ema(cls, values: List[float], period: int) -> float:
+        """Helper to calculate Exponential Moving Average (EMA)."""
+        if not values:
+            return 0.0
+        if len(values) < period:
+            return sum(values) / len(values)
+        k = 2.0 / (period + 1.0)
+        ema = sum(values[:period]) / period
+        for val in values[period:]:
+            ema = (val * k) + (ema * (1.0 - k))
+        return ema
+
+    @classmethod
+    def _aggregate_to_5m(cls, candles_1m: List[Candle]) -> List[Candle]:
+        """Synthesizes high-definition 5-minute candles from 1-minute sequence."""
+        if not candles_1m:
+            return []
+        candles_5m = []
+        chunk_size = 5
+        for i in range(0, len(candles_1m), chunk_size):
+            chunk = candles_1m[i : i + chunk_size]
+            if not chunk:
+                continue
+            o = chunk[0].open
+            h = max(c.high for c in chunk)
+            l = min(c.low for c in chunk)
+            cl = chunk[-1].close
+            vol = sum(c.volume for c in chunk)
+            ts = chunk[0].timestamp
+            candles_5m.append(Candle(open=o, high=h, low=l, close=cl, volume=vol, timestamp=ts))
+        return candles_5m
+
+    # ---------------------------------------------------------
+    # STRATEGY 1: MULTI-TIMEFRAME ENGULFING BREAKOUT (MTF_ENGULFING_1M)
+    # ---------------------------------------------------------
+    @classmethod
+    def _evaluate_mtf_engulfing_1m(
+        cls,
+        candles: List[Candle],
+        params: Dict[str, Any],
+        snapshot: Dict[str, Any],
+        multi_timeframe_candles: Optional[Dict[str, List[Candle]]] = None
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        STRATEGY 1: MULTI-TIMEFRAME ENGULFING BREAKOUT (MTF_ENGULFING_1M)
+        Trend Direction: Multi-Timeframe Trend Following
+        Execution Timeframe: 1-Minute Chart
+        Trend Filter Timeframe: 5-Minute Chart
+        Expiry Time: 2 Minutes
+        Minimum Payout Filter: Enter ONLY if OTC Asset Payout >= 80%
+        Entry Timing: Exact first 5 seconds after 1-minute candle close
+        """
+        # Avoid Rule 1: Minimum Payout Filter >= 80%
+        payout_val = params.get("payout_pct", snapshot.get("payout_pct", 85))
+        if isinstance(payout_val, str):
+            payout_val = float(payout_val.replace("%", "").strip() or 85)
+        if payout_val < 80:
+            return False, f"Avoid Rule 1: OTC Asset Payout ({payout_val}%) < 80% minimum threshold", {}
+
+        if len(candles) < 6:
+            return False, "MTF Engulfing requires at least 6 1M candles", {}
+
+        direction = params.get("direction", "ANY").upper()
+        c = candles[-1]
+        prev = candles[-2]
+
+        rng_c = max(c.high - c.low, 1e-8)
+        body_c = abs(c.close - c.open)
+        upper_wick_c = c.high - max(c.open, c.close)
+        lower_wick_c = min(c.open, c.close) - c.low
+
+        rng_prev = max(prev.high - prev.low, 1e-8)
+        body_prev = abs(prev.close - prev.open)
+
+        # Avoid Rule 4: Doji Filter on preceding candle (Body < 10% of candle range)
+        if (body_prev / rng_prev) < 0.10:
+            return False, f"Avoid Rule 4: Preceding candle is a Doji / body size ({body_prev/rng_prev*100:.1f}%) < 10% of range", {}
+
+        # Candle Size Safety: 1M engulfing candle body > 65% of total range
+        body_ratio = body_c / rng_c
+        if body_ratio <= 0.65:
+            return False, f"Candle Size Safety: 1M engulfing body ({body_ratio*100:.1f}%) <= 65% of range", {}
+
+        # Anomaly Filter: Skip entry if 1M candle length > 3x average size of previous 3 candles
+        if len(candles) >= 5:
+            avg_prev_3 = sum(max(k.high - k.low, 1e-8) for k in candles[-4:-1]) / 3.0
+            if rng_c > (3.0 * avg_prev_3):
+                return False, f"Anomaly Filter: 1M candle range ({rng_c:.5f}) > 3x average ({avg_prev_3:.5f}) of preceding 3 bars (Spike candle avoidance)", {}
+
+        # 5M Multi-Timeframe Trend & EMA 20
+        candles_5m = []
+        if multi_timeframe_candles and "5M" in multi_timeframe_candles and len(multi_timeframe_candles["5M"]) >= 2:
+            candles_5m = multi_timeframe_candles["5M"]
+        else:
+            candles_5m = cls._aggregate_to_5m(candles)
+
+        c_5m = candles_5m[-1] if candles_5m else c
+        ema_20_5m = cls._compute_ema([b.close for b in candles_5m], period=min(20, max(2, len(candles_5m))))
+        ema_20_1m = cls._compute_ema([b.close for b in candles], period=min(20, max(2, len(candles))))
+
+        supports = snapshot.get("support_levels", [])
+        resistances = snapshot.get("resistance_levels", [])
+
+        # Check CALL Entry
+        if direction in ["UP", "CALL", "BUY", "ANY"]:
+            # 5M Chart: Green and strictly ABOVE EMA 20
+            cond_5m_call = c_5m.is_bullish and (c_5m.close > ema_20_5m)
+            # 1M Chart: Bullish Engulfing and closes ABOVE EMA 20
+            cond_1m_bull_engulf = c.is_bullish and prev.is_bearish and (c.open <= (prev.close + 1e-5)) and (c.close >= (prev.open - 1e-5))
+            cond_1m_ema_call = c.close > ema_20_1m
+            # Confirmation: 1M Engulfing Close > High of preceding Red candle
+            cond_conf_call = c.close > prev.high
+
+            if cond_5m_call and cond_1m_bull_engulf and cond_1m_ema_call and cond_conf_call:
+                # Avoid Rule 3: Upper wick rejection > 30% against trade direction
+                upper_wick_ratio = upper_wick_c / rng_c
+                if upper_wick_ratio > 0.30:
+                    return False, f"Avoid Rule 3: Upper wick rejection ({upper_wick_ratio*100:.1f}%) > 30% against CALL direction", {}
+
+                # Distance to S/R Clearance: At least 0.1% clearance from nearest resistance
+                if resistances:
+                    nearby_res = [r for r in resistances if r >= c.close]
+                    if nearby_res:
+                        dist_res = min(nearby_res) - c.close
+                        if dist_res < (0.001 * c.close):
+                            return False, f"Avoid Rule 5 / S/R Clearance: Resistance ({min(nearby_res):.5f}) is within {dist_res/c.close*100:.3f}% (< 0.1% buffer)", {}
+
+                return True, "Bullish MTF Engulfing Breakout Confirmed: 5M Trend + 1M Engulfing above EMA 20 with > 65% solid body", {
+                    "pattern_name": "MTF_ENGULFING_1M",
+                    "strategy_name": "MTF_ENGULFING_1M",
+                    "direction": "UP",
+                    "timeframe": "1M",
+                    "trend_timeframe": "5M",
+                    "expiry_minutes": 2,
+                    "body_ratio": round(body_ratio, 3),
+                    "payout_pct": payout_val,
+                    "ema_20_1m": round(ema_20_1m, 5),
+                    "ema_20_5m": round(ema_20_5m, 5)
+                }
+
+        # Check PUT Entry
+        if direction in ["DOWN", "PUT", "SELL", "ANY"]:
+            # 5M Chart: Red and strictly BELOW EMA 20
+            cond_5m_put = c_5m.is_bearish and (c_5m.close < ema_20_5m)
+            # 1M Chart: Bearish Engulfing and closes BELOW EMA 20
+            cond_1m_bear_engulf = c.is_bearish and prev.is_bullish and (c.open >= (prev.close - 1e-5)) and (c.close <= (prev.open + 1e-5))
+            cond_1m_ema_put = c.close < ema_20_1m
+            # Confirmation: 1M Engulfing Close < Low of preceding Green candle
+            cond_conf_put = c.close < prev.low
+
+            if cond_5m_put and cond_1m_bear_engulf and cond_1m_ema_put and cond_conf_put:
+                # Avoid Rule 3: Lower wick rejection > 30% against trade direction
+                lower_wick_ratio = lower_wick_c / rng_c
+                if lower_wick_ratio > 0.30:
+                    return False, f"Avoid Rule 3: Lower wick rejection ({lower_wick_ratio*100:.1f}%) > 30% against PUT direction", {}
+
+                # Distance to S/R Clearance: At least 0.1% clearance from nearest support
+                if supports:
+                    nearby_sup = [s for s in supports if s <= c.close]
+                    if nearby_sup:
+                        dist_sup = c.close - max(nearby_sup)
+                        if dist_sup < (0.001 * c.close):
+                            return False, f"Avoid Rule 5 / S/R Clearance: Support ({max(nearby_sup):.5f}) is within {dist_sup/c.close*100:.3f}% (< 0.1% buffer)", {}
+
+                return True, "Bearish MTF Engulfing Breakout Confirmed: 5M Trend + 1M Engulfing below EMA 20 with > 65% solid body", {
+                    "pattern_name": "MTF_ENGULFING_1M",
+                    "strategy_name": "MTF_ENGULFING_1M",
+                    "direction": "DOWN",
+                    "timeframe": "1M",
+                    "trend_timeframe": "5M",
+                    "expiry_minutes": 2,
+                    "body_ratio": round(body_ratio, 3),
+                    "payout_pct": payout_val,
+                    "ema_20_1m": round(ema_20_1m, 5),
+                    "ema_20_5m": round(ema_20_5m, 5)
+                }
+
+        # If 5M trend mismatch was the reason
+        if direction in ["UP", "CALL", "BUY"] and not (c_5m.is_bullish and c_5m.close > ema_20_5m):
+            return False, "Avoid Rule 2: 5M Trend Mismatch (5M candle is not Green above EMA 20 for CALL entry)", {}
+        if direction in ["DOWN", "PUT", "SELL"] and not (c_5m.is_bearish and c_5m.close < ema_20_5m):
+            return False, "Avoid Rule 2: 5M Trend Mismatch (5M candle is not Red below EMA 20 for PUT entry)", {}
+
+        return False, "No MTF Engulfing breakout setup confirmed", {}
 
     # ---------------------------------------------------------
     # STRATEGY 1: SNR WICK REVERSAL (Counter-Trend Reversal)

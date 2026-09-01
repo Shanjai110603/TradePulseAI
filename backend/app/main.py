@@ -61,64 +61,41 @@ async def seed_initial_data():
             await db.commit()
             logger.info("Demo user password hash refreshed.")
 
-        # Seed Modern Institutional SMC & Quotex Strategies
+        # Pause all existing/prior strategies
+        await db.execute(update(Pattern).values(is_active=False))
+        await db.commit()
+        logger.info("Paused all prior strategies.")
+
+        # Seed STRATEGY 1: MULTI-TIMEFRAME ENGULFING BREAKOUT (MTF_ENGULFING_1M)
         strategies_to_seed = [
             {
-                "name": "SMC Liquidity Sweep",
-                "description": "Smart Money Concepts: Detects stop-hunt liquidity grabs past key highs/lows with instant shadow rejection.",
-                "direction": "DOWN",
-                "type": "liquidity_sweep",
-                "params": {"direction": "DOWN", "lookback": 15}
-            },
-            {
-                "name": "SMC Fair Value Gap",
-                "description": "Smart Money Concepts: Detects 3-candle price imbalance mitigation zones for high-probability entries.",
-                "direction": "DOWN",
-                "type": "fair_value_gap",
-                "params": {"direction": "DOWN", "lookback": 10}
-            },
-            {
-                "name": "SMC Break of Structure",
-                "description": "Smart Money Concepts: Confirms structural swing break and trend expansion.",
-                "direction": "DOWN",
-                "type": "break_of_structure",
-                "params": {"direction": "DOWN", "lookback": 20}
-            },
-            {
-                "name": "SNR Wick Reversal",
-                "description": "STRATEGY 1: SNR WICK REVERSAL - 5M candle wick ratio > 45% with S/R line touch within 0.05%, RSI filter, and BB rejection.",
-                "direction": "DOWN",
-                "type": "snr_wick_reversal",
-                "params": {"direction": "DOWN", "min_wick_ratio": 0.45}
-            },
-            {
-                "name": "EMA Trend Bounce",
-                "description": "STRATEGY 2: EMA TREND BOUNCE - Trend continuation test & bounce at EMA 20 with EMA 200 filter and Stochastic confluence.",
-                "direction": "DOWN",
-                "type": "ema_trend_bounce",
-                "params": {"direction": "DOWN", "ema_period": 20}
-            },
-            {
-                "name": "MTF Momentum Alignment",
-                "description": "STRATEGY 3: MULTI-TIMEFRAME MOMENTUM - 2 consecutive strong Marubozu momentum expansion candles beyond preceding extremes with MACD filter.",
-                "direction": "DOWN",
-                "type": "mtf_momentum",
-                "params": {"direction": "DOWN"}
+                "name": "MTF_ENGULFING_1M",
+                "description": "STRATEGY 1: MULTI-TIMEFRAME ENGULFING BREAKOUT - 1M execution with 5M trend confirmation above/below EMA 20, solid body > 65%, 2-min expiry.",
+                "direction": "ANY",
+                "type": "mtf_engulfing_1m",
+                "params": {"direction": "ANY", "min_payout": 80}
             }
         ]
-
-        # Deactivate any legacy pattern templates
-        legacy_patterns_res = await db.execute(
-            select(Pattern).where(Pattern.name.in_(["Pattern Type 1", "Pattern Type 14", "Pattern Type 15", "Inverted Pattern Type 14"]))
-        )
-        for legacy_p in legacy_patterns_res.scalars().all():
-            legacy_p.is_active = False
 
         for strat in strategies_to_seed:
             strat_res = await db.execute(
                 select(Pattern).where(Pattern.user_id == demo_user.id, Pattern.name == strat["name"])
             )
-            if not strat_res.scalar_one_or_none():
+            existing_p = strat_res.scalar_one_or_none()
+            if existing_p:
+                existing_p.is_active = True
+                existing_p.rules_config = {
+                    "operator": "AND",
+                    "conditions": [
+                        {
+                            "type": strat["type"],
+                            "params": strat["params"]
+                        }
+                    ]
+                }
+                existing_p.target_config = {"duration_type": "time", "duration_minutes": 2, "duration_candles": 2}
+                await db.commit()
+            else:
                 logger.info(f"Seeding {strat['name']} strategy...")
                 p_new = Pattern(
                     user_id=demo_user.id,
@@ -129,10 +106,10 @@ async def seed_initial_data():
                     timeframe="1M",
                     is_active=True,
                     current_version=1,
-                    assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "USD/BRL (OTC)", "EUR/NZD (OTC)", "BTC/USDT (OTC)", "USD/ARS (OTC)"],
-                    timeframes_config={"1M": "Any"},
-                    trend_config={"required": "Any"},
-                    momentum_config={"strength": "Any"},
+                    assets_config=["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "USD/BRL (OTC)", "EUR/NZD (OTC)", "BTC/USDT (OTC)", "USD/ARS (OTC)", "USD/INR (OTC)"],
+                    timeframes_config={"1M": "Any", "5M": "Trend Filter"},
+                    trend_config={"required": "EMA 20 Alignment"},
+                    momentum_config={"strength": "High Body Ratio > 65%"},
                     volume_config={},
                     indicators_config=[],
                     rules_config={
@@ -144,8 +121,8 @@ async def seed_initial_data():
                             }
                         ]
                     },
-                    entry_config={"type": "immediate"},
-                    target_config={"duration_type": "time", "duration_minutes": 1, "duration_candles": 1},
+                    entry_config={"type": "immediate", "window_seconds": 5},
+                    target_config={"duration_type": "time", "duration_minutes": 2, "duration_candles": 2},
                     ai_config={"enabled": True, "min_score": 65, "min_confidence": "MODERATE", "required_bias": "ANY"},
                     notification_config={"telegram": True, "notify_on_entry": True, "notify_on_outcome": True}
                 )

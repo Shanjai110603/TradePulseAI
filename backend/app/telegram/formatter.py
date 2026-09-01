@@ -36,7 +36,7 @@ class TelegramMessageFormatter:
         if isinstance(expiry_time, datetime):
             expiry_dt = expiry_time if expiry_time.tzinfo else expiry_time.replace(tzinfo=utc_tz)
         else:
-            expiry_dt = entry_dt + timedelta(minutes=1)
+            expiry_dt = entry_dt + timedelta(minutes=2)
 
         entry_ist = entry_dt.astimezone(ist_tz).strftime("%H:%M:%S")
         expiry_ist = expiry_dt.astimezone(ist_tz).strftime("%H:%M:%S")
@@ -45,24 +45,24 @@ class TelegramMessageFormatter:
         expiry_utc = expiry_dt.astimezone(utc_tz).strftime("%H:%M:%S")
 
         is_call = direction in ["UP", "LONG", "BUY", "CALL"]
-        dir_badge = "🟢 CALL / UP ⬆️" if is_call else "🔴 PUT / DOWN ⬇️"
+        dir_badge = "CALL (UP) 🟢" if is_call else "PUT (DOWN) 🔴"
 
+        payout_pct = signal.get("payout_pct", 95)
         feed_source = signal.get("feed_source") or "Quotex Live Relay"
 
         text = (
-            f"⚡ <b>TRADEPULSE AI SIGNAL ALERT</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💎 <b>Asset:</b> <code>{asset}</code>\n"
-            f"🎯 <b>Action:</b> <b>{dir_badge}</b>\n"
-            f"⏱ <b>Expiry:</b> <b>1 MINUTE</b>\n"
+            f"🚀 <b>SIGNAL ALERT: STRATEGY 1 (MTF_ENGULFING_1M)</b>\n"
+            f"────────────────────────\n"
+            f"📊 <b>Asset:</b> <code>{asset}</code>\n"
+            f"💰 <b>OTC Payout:</b> <b>{payout_pct}%</b>\n"
+            f"📈 <b>Direction:</b> <b>{dir_badge}</b>\n"
+            f"⏱ <b>Chart Timeframe:</b> <b>1 Min</b>\n"
+            f"⌛ <b>Expiry Time:</b> <b>2 Mins</b>\n"
+            f"🕒 <b>Entry Time:</b> <b>Next 1M Candle Open (00:00) | {entry_ist} IST</b>\n"
             f"💵 <b>Entry Price:</b> <code>{ref_price}</code>\n"
-            f"🇮🇳 <b>Window (IST):</b> <code>{entry_ist}</code> ➔ <code>{expiry_ist}</code>\n"
-            f"🌐 <b>Window (UTC):</b> <code>{entry_utc}</code> ➔ <code>{expiry_utc}</code>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 <b>Pattern:</b> {pattern_name}\n"
-            f"📡 <b>Feed Source:</b> <code>{feed_source}</code>\n"
             f"🧠 <b>AI Confidence:</b> <b>{ai_score}% ({strength})</b>\n"
-            f"📌 <b>Status:</b> 🟢 {status}\n"
+            f"📡 <b>Feed Source:</b> <code>{feed_source}</code>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"💡 <i>Click buttons below for live multi-factor analysis:</i>"
         )
