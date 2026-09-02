@@ -31,6 +31,32 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 # ---------------------------------------------------------------------------
+# Load environment configuration (.env)
+# ---------------------------------------------------------------------------
+
+def _load_env():
+    # Look for .env in current dir, parent dir (project root), or C:\TradePulse
+    candidates = [
+        Path(__file__).resolve().parent.parent / ".env",
+        Path.cwd() / ".env",
+        Path(r"C:\TradePulse\.env"),
+        Path(r"C:\TradePulse\backend\.env"),
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                for line in p.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ.setdefault(k.strip(), v.strip())
+                break
+            except Exception:
+                pass
+
+_load_env()
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -54,7 +80,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get(
     "TELEGRAM_BOT_TOKEN",
     "8928508919:AAH49-CwlHxX7EZnDrMixVUVNsMUCzp56uM"
 )
-TELEGRAM_CHAT_IDS = os.environ.get("TELEGRAM_CHAT_IDS", "8899287239").split(",")
+TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ.get("TELEGRAM_CHAT_IDS", "8899287239").split(",") if cid.strip()]
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 SCREENSHOTS_DIR = str(Path.home() / "TradePulseScreenshots")
@@ -315,8 +341,25 @@ class TelegramSender:
 
     def __init__(self, token: str, chat_ids: List[str]):
         self.token = token
-        self.chat_ids = chat_ids
+        self.chat_ids = list(chat_ids)
         self.api_base = f"https://api.telegram.org/bot{token}"
+        self.refresh_subscribers()
+
+    def refresh_subscribers(self):
+        """Auto-discover any new subscribers who messaged the bot."""
+        try:
+            import httpx
+            resp = httpx.get(f"{self.api_base}/getUpdates", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                for item in data.get("result", []):
+                    msg = item.get("message", {}) or item.get("callback_query", {}).get("message", {})
+                    chat = msg.get("chat", {})
+                    cid = str(chat.get("id", ""))
+                    if cid and cid not in self.chat_ids:
+                        self.chat_ids.append(cid)
+        except Exception:
+            pass
 
     def send_signal_with_screenshot(
         self,
@@ -329,6 +372,9 @@ class TelegramSender:
     ) -> bool:
         """Send a signal alert with chart screenshot to all subscribers."""
         import httpx
+
+        # Refresh subscribers right before dispatching
+        self.refresh_subscribers()
 
         ist_tz = timezone(timedelta(hours=5, minutes=30))
         now_ist = datetime.now(ist_tz).strftime("%H:%M:%S")
