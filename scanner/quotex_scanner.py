@@ -67,28 +67,40 @@ TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ.get("TELEGRAM_CHAT_IDS", 
 SCREENSHOTS_DIR = str(Path.home() / "TradePulseScreenshots")
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
-# 20 Monitored Quotex OTC Currencies
+# Comprehensive Monitored Quotex Assets (Forex OTC, Crypto & Commodities)
 OTC_CURRENCIES = [
-    {"name": "EUR/USD (OTC)", "code": "EUR/USD", "payout": 95},
-    {"name": "GBP/USD (OTC)", "code": "GBP/USD", "payout": 95},
-    {"name": "USD/JPY (OTC)", "code": "USD/JPY", "payout": 82},
-    {"name": "AUD/USD (OTC)", "code": "AUD/USD", "payout": 85},
-    {"name": "USD/CHF (OTC)", "code": "USD/CHF", "payout": 85},
-    {"name": "USD/CAD (OTC)", "code": "USD/CAD", "payout": 85},
-    {"name": "NZD/USD (OTC)", "code": "NZD/USD", "payout": 93},
-    {"name": "EUR/GBP (OTC)", "code": "EUR/GBP", "payout": 85},
-    {"name": "EUR/JPY (OTC)", "code": "EUR/JPY", "payout": 85},
-    {"name": "GBP/JPY (OTC)", "code": "GBP/JPY", "payout": 85},
-    {"name": "AUD/CAD (OTC)", "code": "AUD/CAD", "payout": 85},
-    {"name": "AUD/JPY (OTC)", "code": "AUD/JPY", "payout": 84},
-    {"name": "USD/INR (OTC)", "code": "USD/INR", "payout": 88},
-    {"name": "USD/BRL (OTC)", "code": "USD/BRL", "payout": 95},
-    {"name": "USD/PKR (OTC)", "code": "USD/PKR", "payout": 92},
-    {"name": "USD/ZAR (OTC)", "code": "USD/ZAR", "payout": 93},
-    {"name": "NZD/CAD (OTC)", "code": "NZD/CAD", "payout": 93},
-    {"name": "USD/MXN (OTC)", "code": "USD/MXN", "payout": 85},
-    {"name": "USD/TRY (OTC)", "code": "USD/TRY", "payout": 85},
-    {"name": "USD/EGP (OTC)", "code": "USD/EGP", "payout": 89},
+    # Top 90%+ High Payout OTC Pairs
+    {"name": "EUR/USD (OTC)", "code": "EUR/USD", "ws_asset": "EURUSD_otc", "payout": 95},
+    {"name": "GBP/USD (OTC)", "code": "GBP/USD", "ws_asset": "GBPUSD_otc", "payout": 95},
+    {"name": "USD/BRL (OTC)", "code": "USD/BRL", "ws_asset": "USDBRL_otc", "payout": 95},
+    {"name": "EUR/NZD (OTC)", "code": "EUR/NZD", "ws_asset": "EURNZD_otc", "payout": 95},
+    {"name": "NZD/USD (OTC)", "code": "NZD/USD", "ws_asset": "NZDUSD_otc", "payout": 93},
+    {"name": "NZD/CAD (OTC)", "code": "NZD/CAD", "ws_asset": "NZDCAD_otc", "payout": 93},
+    {"name": "USD/ZAR (OTC)", "code": "USD/ZAR", "ws_asset": "USDZAR_otc", "payout": 93},
+    {"name": "USD/ARS (OTC)", "code": "USD/ARS", "ws_asset": "USDARS_otc", "payout": 93},
+    {"name": "USD/PKR (OTC)", "code": "USD/PKR", "ws_asset": "USDPKR_otc", "payout": 92},
+    # 85% - 89% High Payout OTC Pairs
+    {"name": "USD/EGP (OTC)", "code": "USD/EGP", "ws_asset": "USDEGP_otc", "payout": 89},
+    {"name": "USD/INR (OTC)", "code": "USD/INR", "ws_asset": "USDINR_otc", "payout": 88},
+    {"name": "USD/IDR (OTC)", "code": "USD/IDR", "ws_asset": "USDIDR_otc", "payout": 88},
+    {"name": "USD/PHP (OTC)", "code": "USD/PHP", "ws_asset": "USDPHP_otc", "payout": 88},
+    {"name": "AUD/CAD (OTC)", "code": "AUD/CAD", "ws_asset": "AUDCAD_otc", "payout": 86},
+    {"name": "AUD/USD (OTC)", "code": "AUD/USD", "ws_asset": "AUDUSD_otc", "payout": 85},
+    {"name": "USD/CHF (OTC)", "code": "USD/CHF", "ws_asset": "USDCHF_otc", "payout": 85},
+    {"name": "USD/CAD (OTC)", "code": "USD/CAD", "ws_asset": "USDCAD_otc", "payout": 85},
+    {"name": "EUR/GBP (OTC)", "code": "EUR/GBP", "ws_asset": "EURGBP_otc", "payout": 85},
+    {"name": "EUR/JPY (OTC)", "code": "EUR/JPY", "ws_asset": "EURJPY_otc", "payout": 85},
+    {"name": "GBP/JPY (OTC)", "code": "GBP/JPY", "ws_asset": "GBPJPY_otc", "payout": 85},
+    {"name": "CHF/JPY (OTC)", "code": "CHF/JPY", "ws_asset": "CHFJPY_otc", "payout": 85},
+    {"name": "USD/MXN (OTC)", "code": "USD/MXN", "ws_asset": "USDMXN_otc", "payout": 85},
+    {"name": "USD/TRY (OTC)", "code": "USD/TRY", "ws_asset": "USDTRY_otc", "payout": 85},
+    {"name": "AUD/JPY (OTC)", "code": "AUD/JPY", "ws_asset": "AUDJPY_otc", "payout": 84},
+    {"name": "CAD/JPY (OTC)", "code": "CAD/JPY", "ws_asset": "CADJPY_otc", "payout": 84},
+    {"name": "USD/JPY (OTC)", "code": "USD/JPY", "ws_asset": "USDJPY_otc", "payout": 82},
+    # High Payout Commodities & Crypto
+    {"name": "GOLD (OTC)", "code": "GOLD", "ws_asset": "XAUUSD_otc", "payout": 90},
+    {"name": "SILVER (OTC)", "code": "SILVER", "ws_asset": "XAGUSD_otc", "payout": 88},
+    {"name": "BTC/USDT (OTC)", "code": "BTC/USD", "ws_asset": "BTCUSD_otc", "payout": 86},
 ]
 
 COLORS = {
