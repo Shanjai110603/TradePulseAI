@@ -111,7 +111,7 @@ export const Dashboard: React.FC = () => {
             </p>
             <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 mt-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              @{tgStatus?.bot_username || 'TradePulse_101_bot'}
+              @{tgStatus?.bot_username || 'TradePulse_QuotexBot'}
             </p>
           </div>
           <div className="w-12 h-12 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 flex items-center justify-center shadow-glow-green">
