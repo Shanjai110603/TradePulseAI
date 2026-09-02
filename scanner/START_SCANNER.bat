@@ -1,44 +1,25 @@
 @echo off
-title TradePulse Quotex Multi-Currency Scanner
+title TradePulse Quotex Scanner v2
 echo ============================================================
-echo   TradePulse Quotex Multi-Currency Scanner
-echo   Streams 20+ OTC currencies to the TradePulse Bot
+echo   TradePulse Quotex Scanner v2.0
+echo   Self-Contained - Direct to Telegram - Real Screenshots
+echo   NO BACKEND NEEDED
 echo ============================================================
 echo.
 
-REM Check Python is installed
+REM Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python not found! Install Python 3.10+ first.
+    echo ERROR: Python not found!
     pause
     exit /b 1
 )
 
-REM Install dependencies if needed
-echo Checking dependencies...
+REM Install deps
+echo Installing dependencies...
 pip install httpx websockets >nul 2>&1
-
-REM Check if the bot backend is running
-echo Checking bot backend at http://127.0.0.1:8000...
-curl -s http://127.0.0.1:8000/health >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo WARNING: Bot backend not detected at port 8000!
-    echo Make sure uvicorn is running first:
-    echo   cd C:\TradePulse\backend
-    echo   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-    echo.
-    echo Press any key to continue anyway, or Ctrl+C to abort...
-    pause >nul
-)
-
-echo.
-echo Starting scanner... (Chrome will launch automatically)
-echo Press Ctrl+C to stop.
+echo Done.
 echo.
 
-python "%~dp0quotex_scanner.py"
-
-echo.
-echo Scanner stopped.
-pause
+echo Launching TradePulse Scanner...
+start "" pythonw "%~dp0quotex_scanner.py" 2>nul || python "%~dp0quotex_scanner.py"
