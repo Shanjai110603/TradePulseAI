@@ -166,19 +166,34 @@ class StrategyEngine:
         cond_5m_call = c_5m.is_bullish and (c_5m.close > ema_20_5m)
         cond_1m_bull_engulf = (
             c.is_bullish and prev.is_bearish and
-            c.open <= (prev.close + 1e-5) and
-            c.close >= (prev.open - 1e-5) and
+            c.open <= (prev.close + 1e-4) and
+            c.close >= (prev.open - 1e-4) and
             c.close > prev.high
         )
         cond_1m_ema_call = c.close > ema_20_1m
+        upper_wick_ratio = upper_wick_c / rng_c
+        wick_ok_call = upper_wick_ratio <= 0.30
+
+        # 7. Directional Confluence: PUT (DOWN)
+        cond_5m_put = c_5m.is_bearish and (c_5m.close < ema_20_5m)
+        cond_1m_bear_engulf = (
+            c.is_bearish and prev.is_bullish and
+            c.open >= (prev.close - 1e-4) and
+            c.close <= (prev.open + 1e-4) and
+            c.close < prev.low
+        )
+        cond_1m_ema_put = c.close < ema_20_1m
+        lower_wick_ratio = lower_wick_c / rng_c
+        wick_ok_put = lower_wick_ratio <= 0.30
+
+        # Populate breakdown for explainability
+        breakdown["trend_5m_check"] = cond_5m_call or cond_5m_put
+        breakdown["engulfing_1m_check"] = cond_1m_bull_engulf or cond_1m_bear_engulf
+        breakdown["wick_check"] = wick_ok_call if c.is_bullish else wick_ok_put
 
         if cond_5m_call and cond_1m_bull_engulf and cond_1m_ema_call:
-            upper_wick_ratio = upper_wick_c / rng_c
-            if upper_wick_ratio > 0.30:
+            if not wick_ok_call:
                 return False, f"Upper wick rejection {upper_wick_ratio*100:.1f}% > 30% against CALL", breakdown
-            breakdown["wick_check"] = True
-            breakdown["trend_5m_check"] = True
-            breakdown["engulfing_1m_check"] = True
 
             confidence = min(96, int(75 + (body_ratio * 20) + (payout_pct / 20.0)))
             breakdown["confidence_score"] = confidence
@@ -197,23 +212,9 @@ class StrategyEngine:
             }
             return True, "Bullish MTF Engulfing Breakout Confirmed", details
 
-        # 7. Directional Confluence: PUT (DOWN)
-        cond_5m_put = c_5m.is_bearish and (c_5m.close < ema_20_5m)
-        cond_1m_bear_engulf = (
-            c.is_bearish and prev.is_bullish and
-            c.open >= (prev.close - 1e-5) and
-            c.close <= (prev.open + 1e-5) and
-            c.close < prev.low
-        )
-        cond_1m_ema_put = c.close < ema_20_1m
-
         if cond_5m_put and cond_1m_bear_engulf and cond_1m_ema_put:
-            lower_wick_ratio = lower_wick_c / rng_c
-            if lower_wick_ratio > 0.30:
+            if not wick_ok_put:
                 return False, f"Lower wick rejection {lower_wick_ratio*100:.1f}% > 30% against PUT", breakdown
-            breakdown["wick_check"] = True
-            breakdown["trend_5m_check"] = True
-            breakdown["engulfing_1m_check"] = True
 
             confidence = min(96, int(75 + (body_ratio * 20) + (payout_pct / 20.0)))
             breakdown["confidence_score"] = confidence
@@ -232,4 +233,14 @@ class StrategyEngine:
             }
             return True, "Bearish MTF Engulfing Breakout Confirmed", details
 
-        return False, "No MTF Engulfing setup confirmed at this candle", breakdown
+        # Explain missing factor clearly
+        reasons = []
+        if not breakdown["trend_5m_check"]:
+            reasons.append("5M EMA trend not aligned")
+        if not breakdown["engulfing_1m_check"]:
+            reasons.append("1M candle not engulfing prior high/low")
+        if not breakdown["wick_check"]:
+            reasons.append("Opposing wick rejection > 30%")
+
+        reason_str = ", ".join(reasons) if reasons else "Confluence incomplete"
+        return False, f"Waiting on setup: {reason_str}", breakdown

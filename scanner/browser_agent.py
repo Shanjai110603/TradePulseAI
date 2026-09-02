@@ -25,8 +25,8 @@ CHROME_PATHS = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     os.path.expanduser(r"~\AppData\Local\Google\Chrome\Application\chrome.exe"),
-    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
 ]
 
 CDP_PORT = 9222
@@ -99,8 +99,9 @@ class BrowserAgent:
     def find_quotex_target(self) -> Optional[dict]:
         targets = self.get_targets()
         for t in targets:
-            url = t.get("url", "")
-            if "qxbroker.com" in url or "quotex.io" in url or "trade" in url:
+            url = t.get("url", "").lower()
+            title = t.get("title", "").lower()
+            if any(k in url or k in title for k in ["qxbroker", "quotex", "trade", "qx-"]):
                 return t
         return None
 
@@ -138,6 +139,7 @@ class BrowserAgent:
                     return data
         except Exception as e:
             logger.debug(f"CDP command error: {e}")
+            self._ws = None
         return {}
 
     def evaluate_js(self, script: str) -> any:
@@ -148,10 +150,6 @@ class BrowserAgent:
             "awaitPromise": True
         })
         return res.get("result", {}).get("result", {}).get("value")
-
-    # -----------------------------------------------------------------------
-    # Multi-Level Self-Healing Asset Switcher
-    # -----------------------------------------------------------------------
 
     # -----------------------------------------------------------------------
     # Multi-Level Self-Healing Asset Switcher

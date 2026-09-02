@@ -8,6 +8,7 @@ Provides bidirectional control between Telegram (@TradePulse_QuotexBot) and the 
  - Auto-registers subscribers
 """
 
+import json
 import logging
 import threading
 import time
@@ -145,7 +146,6 @@ class TelegramBridge:
             "parse_mode": "HTML"
         }
         if keyboard:
-            import json
             data["reply_markup"] = json.dumps({"inline_keyboard": keyboard})
 
         files = {"photo": ("chart.png", BytesIO(photo_bytes), "image/png")}
