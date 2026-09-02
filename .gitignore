@@ -21,6 +21,12 @@ frontend/.tmp/
 .env
 .env.local
 
+# Build artifacts
+scanner/build/
+scanner/dist/
+scanner/*.spec
+*.spec
+
 # IDE
 .vscode/
 .idea/
