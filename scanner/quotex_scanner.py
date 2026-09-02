@@ -378,6 +378,41 @@ class AssistantOrchestrator:
                 )
                 self.telegram.send_message(chat_id, reply)
 
+        # 8. /signal or /scan
+        elif cmd_lower in ["/signal", "/scan", "cmd_signal"]:
+            best_setup = None
+            best_confidence = 0
+            scanned_count = len(self.currencies_data)
+
+            for sym, data in self.currencies_data.items():
+                candles = self.buffer.get_candles(sym)
+                payout = data.get("payout", 85)
+                price = data.get("price", 0.0)
+                if len(candles) >= 6:
+                    matched, reason, details = self.strategy.evaluate_mtf_engulfing(candles, payout_pct=payout)
+                    conf = details.get("confidence", 0)
+                    if matched and conf > best_confidence:
+                        best_confidence = conf
+                        best_setup = (sym, price, payout, details)
+
+            if best_setup:
+                sym, p, pay, det = best_setup
+                self.telegram.send_message(chat_id, f"🎯 <b>CONFLUENCE DETECTED ON {sym}!</b> Firing alert...")
+                self._trigger_signal(sym, p, pay, det)
+            else:
+                active = self.browser.active_pair
+                ticks = self.total_ticks
+                self.telegram.send_message(
+                    chat_id,
+                    f"🔍 <b>Live Market Scan Complete</b>\n\n"
+                    f"📊 Analyzed real-time Quotex OTC candles across <b>{scanned_count}</b> pairs ({ticks} live ticks ingested).\n"
+                    f"⏳ <b>Result:</b> No setup currently satisfies <b>MTF_ENGULFING_1M</b> criteria (5M trend + 1M solid body &gt; 65%).\n\n"
+                    f"• <b>Active Pair:</b> <code>{active}</code>\n"
+                    f"• <b>Total Ticks:</b> <code>{ticks}</code>\n"
+                    f"• <b>Scanner State:</b> {'🟢 SCANNING' if self.running else '⏹ STOPPED'}\n\n"
+                    f"🔒 <i>Scanners run 24/7 in the background and will alert you with a live chart screenshot the moment confluence confirms!</i>"
+                )
+
     # -----------------------------------------------------------------------
     # Main Scanning Loop
     # -----------------------------------------------------------------------
