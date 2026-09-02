@@ -80,6 +80,9 @@ class TelegramMessageFormatter:
 
         return text, keyboard
 
+    # Backward compatibility alias
+    format_signal_alert = format_main_signal
+
     @classmethod
     def format_ai_analysis_view(cls, signal: Dict[str, Any]) -> Tuple[str, List[List[Dict[str, str]]]]:
         sig_id = signal.get("id", "")

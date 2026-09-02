@@ -154,9 +154,19 @@ class BackgroundScheduler:
                                 "risk_per_trade_percent": getattr(prefs, "risk_per_trade_percent", 2.0)
                             }
 
+                        multi_tf_candles = None
+                        if "5M" in (pattern.timeframes_config or {}) or pattern.name == "MTF_ENGULFING_1M":
+                            try:
+                                candles_5m = await provider.get_candles(asset_symbol, timeframe="5M", limit=30)
+                                if candles_5m:
+                                    multi_tf_candles = {"5M": candles_5m}
+                            except Exception:
+                                pass
+
                         is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
                             pattern_dict=pattern_dict,
                             candles=candles,
+                            multi_timeframe_candles=multi_tf_candles,
                             user_preferences=user_prefs,
                             ai_provider=ai_manager.get_provider()
                         )

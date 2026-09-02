@@ -85,8 +85,8 @@ class SignalEvaluationPipeline:
         target_cfg = pattern_dict.get("target_config", {})
         entry_time = datetime.now(timezone.utc)
 
-        duration_minutes = int(target_cfg.get("duration_minutes", 1))
-        if duration_minutes <= 0 or market_id == "digital_options" or pattern_dict.get("timeframe") == "1M":
+        duration_minutes = rule_result.get("expiry_minutes") or int(target_cfg.get("duration_minutes", 1))
+        if duration_minutes <= 0:
             duration_minutes = 1
         expiry_time = entry_time + timedelta(minutes=duration_minutes)
 

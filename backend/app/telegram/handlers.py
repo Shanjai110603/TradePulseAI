@@ -288,9 +288,20 @@ class TelegramUpdateHandler:
                                 continue
 
                             pattern_dict["asset_symbol"] = asset_sym
+
+                            multi_tf_candles = None
+                            if "5M" in (p.timeframes_config or {}) or p.name == "MTF_ENGULFING_1M":
+                                try:
+                                    candles_5m = await provider.get_candles(asset_sym, timeframe="5M", limit=30, strict_live_only=False)
+                                    if candles_5m:
+                                        multi_tf_candles = {"5M": candles_5m}
+                                except Exception:
+                                    pass
+
                             is_created, sig_payload, reason, _ = await SignalEvaluationPipeline.evaluate_candidate(
                                 pattern_dict=pattern_dict,
                                 candles=candles,
+                                multi_timeframe_candles=multi_tf_candles,
                                 user_preferences=None,
                                 ai_provider=ai_manager.get_provider()
                             )
@@ -340,10 +351,11 @@ class TelegramUpdateHandler:
                             break
 
                     if not found_signal:
+                        strat_names = ", ".join([p.name for p in patterns]) if patterns else "MTF_ENGULFING_1M"
                         scan_complete_msg = (
                             "🔍 <b>Live Market Scan Complete</b>\n\n"
                             "📊 Analyzed real-time Quotex OTC candles across all currency pairs.\n"
-                            "⏳ <b>Result:</b> No setup currently satisfies institutional SMC (FVG / Liquidity Sweep / BOS / Wick Rejection) criteria at this exact second.\n\n"
+                            f"⏳ <b>Result:</b> No setup currently satisfies <b>{strat_names}</b> criteria at this exact second.\n\n"
                             "<i>🔒 100% Real Signal Guarantee: Scanners run 24/7 in the background and will alert you instantly the moment high-probability institutional confluence confirms!</i>"
                         )
                         await telegram_service.send_message(chat_id, scan_complete_msg)

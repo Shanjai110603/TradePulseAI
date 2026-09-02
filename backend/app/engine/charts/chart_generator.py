@@ -230,3 +230,25 @@ class TradeChartGenerator:
         # Save Image
         img.save(output_path, "PNG", quality=95)
         return output_path
+
+    @classmethod
+    def generate_candlestick_chart(
+        cls,
+        candles: List[Candle],
+        pattern_name: str = "Live Quotex Market",
+        direction: str = "DOWN",
+        entry_price: Optional[float] = None,
+        symbol: str = "EUR/USD (OTC)",
+        output_dir: str = "uploads/signals"
+    ) -> str:
+        """Convenience method for rendering on-demand currency charts from Telegram commands."""
+        ref = entry_price or (candles[-1].close if candles else 1.0850)
+        signal_data = {
+            "id": f"chart_{int(datetime.now().timestamp())}_{abs(hash(symbol)) % 10000}",
+            "asset_symbol": symbol,
+            "direction": direction,
+            "reference_price": ref,
+            "pattern_name": pattern_name,
+            "payout_percent": 95,
+        }
+        return cls.generate_chart(candles=candles, signal_data=signal_data, output_dir=output_dir)

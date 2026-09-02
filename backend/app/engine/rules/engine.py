@@ -79,7 +79,7 @@ class PatternRuleEngine:
         # 5. Composite AST Rules Evaluation (Candle sequence, S/R breakdown, Pattern Type 14, etc.)
         rules_cfg = pattern_config.get("rules_config", {})
         if rules_cfg:
-            rules_pass, rules_reason, context = cls._evaluate_rule_node(rules_cfg, candles, snapshot)
+            rules_pass, rules_reason, context = cls._evaluate_rule_node(rules_cfg, candles, snapshot, multi_timeframe_candles)
             log.append({"step": "rules_ast", "passed": rules_pass, "reason": rules_reason, "context": context})
             if not rules_pass:
                 return {"matched": False, "reason": f"Rule condition failed: {rules_reason}", "technical_snapshot": snapshot, "rule_evaluation_log": log}
@@ -221,7 +221,8 @@ class PatternRuleEngine:
         cls,
         node: Dict[str, Any],
         candles: List[Candle],
-        snapshot: Dict[str, Any]
+        snapshot: Dict[str, Any],
+        multi_timeframe_candles: Optional[Dict[str, List[Candle]]] = None
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """Evaluates AST node with support for nested AND, OR, NOT, and primitive conditions"""
         if not node:
@@ -232,7 +233,7 @@ class PatternRuleEngine:
 
         # If it's a leaf primitive node directly
         if "type" in node and not conditions:
-            return cls._evaluate_primitive(node, candles, snapshot)
+            return cls._evaluate_primitive(node, candles, snapshot, multi_timeframe_candles)
 
         # Composite node
         context: Dict[str, Any] = {}
@@ -240,7 +241,7 @@ class PatternRuleEngine:
         if operator == "AND":
             child_reasons = []
             for idx, child in enumerate(conditions):
-                pass_cond, reason, child_ctx = cls._evaluate_rule_node(child, candles, snapshot)
+                pass_cond, reason, child_ctx = cls._evaluate_rule_node(child, candles, snapshot, multi_timeframe_candles)
                 context.update(child_ctx)
                 child_reasons.append(reason)
                 if not pass_cond:
@@ -250,7 +251,7 @@ class PatternRuleEngine:
 
         elif operator == "OR":
             for idx, child in enumerate(conditions):
-                pass_cond, reason, child_ctx = cls._evaluate_rule_node(child, candles, snapshot)
+                pass_cond, reason, child_ctx = cls._evaluate_rule_node(child, candles, snapshot, multi_timeframe_candles)
                 if pass_cond:
                     context.update(child_ctx)
                     return True, reason, context
@@ -259,7 +260,7 @@ class PatternRuleEngine:
         elif operator == "NOT":
             if not conditions:
                 return True, "Empty NOT", {}
-            pass_cond, reason, child_ctx = cls._evaluate_rule_node(conditions[0], candles, snapshot)
+            pass_cond, reason, child_ctx = cls._evaluate_rule_node(conditions[0], candles, snapshot, multi_timeframe_candles)
             if pass_cond:
                 return False, f"NOT condition failed because child was true: {reason}", {}
             return True, "NOT condition passed", {}
@@ -271,7 +272,8 @@ class PatternRuleEngine:
         cls,
         node: Dict[str, Any],
         candles: List[Candle],
-        snapshot: Dict[str, Any]
+        snapshot: Dict[str, Any],
+        multi_timeframe_candles: Optional[Dict[str, List[Candle]]] = None
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Evaluates specialized primitives including:
@@ -371,7 +373,7 @@ class PatternRuleEngine:
 
         # Strategy 1: Multi-Timeframe Engulfing Breakout (MTF_ENGULFING_1M)
         elif p_type in ["mtf_engulfing_1m", "MTF_ENGULFING_1M", "mtf_engulfing", "engulfing_breakout"]:
-            return cls._evaluate_mtf_engulfing_1m(candles, params, snapshot)
+            return cls._evaluate_mtf_engulfing_1m(candles, params, snapshot, multi_timeframe_candles)
 
         # Legacy / Alternative Strategy Primitives
         elif p_type in ["snr_wick_reversal", "SNR_WICK_REVERSAL", "wick_reversal", "wick_rejection", "pinbar_rejection"]:
