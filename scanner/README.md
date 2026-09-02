@@ -1,65 +1,63 @@
-# TradePulse Quotex Multi-Currency Scanner
+# TradePulse Quotex Assistant (Local AI Browser + Telegram Remote)
 
-A standalone Windows application that automatically scans **20+ Quotex OTC currencies** 
-and streams live OHLC candles to the TradePulse Telegram Bot.
+A dedicated Windows Desktop Application inspired by the **Local AI Browser + Telegram Assistant** architecture.
 
-## How It Works
+It combines an undetectable Chromium controller (CDP), deterministic Multi-Timeframe Strategy Engine (`MTF_ENGULFING_1M`), real-time chart screenshot capture, and a **Two-Way Interactive Telegram Remote**.
 
-1. **Launches Chrome** with remote debugging (CDP protocol)
-2. **Opens Quotex** trading page in a real Chrome browser (undetectable)
-3. **Automatically rotates** through all 20+ OTC currency pairs
-4. **Reads live prices** from the Quotex DOM every 2-3 seconds
-5. **Accumulates ticks** into proper 1-minute OHLCV candles
-6. **Streams candles** to the TradePulse bot at `http://127.0.0.1:8000`
-7. **Bot evaluates** MTF_ENGULFING_1M strategy and fires Telegram alerts
+---
 
-## Quick Start
+## 🔒 Architectural Safe Mode
 
-### On Your AWS Windows Server:
+**Zero Trade Execution**: The application has no trading or transaction tools. It solely observes the Quotex chart, extracts live prices, evaluates strategy confluence, and sends research alerts to Telegram.
 
-1. Make sure the TradePulse bot backend is running:
+---
+
+## ⚡ Core Features
+
+1. **Undetectable Chromium Control (CDP)**:
+   - Controls Chrome or Edge on port `9222` with persistent user profile.
+   - Cloudflare-friendly: uses genuine browser cookies and sessions.
+
+2. **Multi-Tier Self-Healing Asset Switcher**:
+   - 4-tier selector fallback: Class/ID tabs ➔ text-matching ➔ '+' asset modal search ➔ direct navigation.
+   - Cycles through all 20+ high-payout OTC pairs automatically.
+
+3. **Deterministic Strategy 1 (`MTF_ENGULFING_1M`) Engine**:
+   - 1M chart execution with 5M trend alignment via Exponential Moving Average (EMA 20).
+   - Solid body ratio $> 65\%$, opposing wick filter $\le 30\%$, Doji rejection, and anomaly spike protection.
+   - 2-Minute expiry time synchronization.
+
+4. **Real-Time Live Chart Screenshots**:
+   - On confirmed confluence, commands CDP to snap a high-resolution screenshot of the actual Quotex chart.
+   - Uploads the chart photo directly to Telegram attached to the VIP Signal Card.
+
+5. **Two-Way Interactive Telegram Remote Control**:
+   - Control the desktop browser directly from your phone in `@TradePulse_QuotexBot`!
+
+| Telegram Command | Action Performed |
+|---|---|
+| **`/screenshot`** | Takes an instant live screenshot of the active chart and replies with the photo |
+| **`/status`** | Returns active pair, scanning telemetry, ticks, candle counts, and uptime |
+| **`/markets`** | Lists live prices and payouts of all 20 monitored OTC pairs |
+| **`/switch <pair>`** | Commands browser to navigate to that pair (e.g. `/switch EUR/USD`) |
+| **`/pause` & `/resume`** | Remotely pauses or resumes the automated scanner |
+| **`/analyze`** | Runs on-demand confluence evaluation on the active chart with explainability breakdown |
+
+---
+
+## 🚀 How to Run (AWS Windows Server or Local)
+
+1. Make sure Python 3.10+ and Google Chrome are installed.
+2. In PowerShell:
    ```powershell
-   cd C:\TradePulse\backend
-   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-   ```
-
-2. Double-click `START_SCANNER.bat` or run:
-   ```powershell
+   cd C:\TradePulse
+   git pull origin main
    cd C:\TradePulse\scanner
+   pip install httpx websockets
    python quotex_scanner.py
    ```
+*(Or simply double-click `START_SCANNER.bat` in File Explorer)*
 
-3. Chrome will open automatically — **log into Quotex** if not already logged in.
-
-4. The scanner will begin cycling through currencies and streaming to the bot!
-
-## Currencies Scanned
-
-| # | Currency | Pair Code |
-|---|----------|-----------|
-| 1 | EUR/USD (OTC) | EURUSD_otc |
-| 2 | GBP/USD (OTC) | GBPUSD_otc |
-| 3 | USD/JPY (OTC) | USDJPY_otc |
-| 4 | AUD/USD (OTC) | AUDUSD_otc |
-| 5 | USD/CHF (OTC) | USDCHF_otc |
-| 6 | USD/CAD (OTC) | USDCAD_otc |
-| 7 | NZD/USD (OTC) | NZDUSD_otc |
-| 8 | EUR/GBP (OTC) | EURGBP_otc |
-| 9 | EUR/JPY (OTC) | EURJPY_otc |
-| 10 | GBP/JPY (OTC) | GBPJPY_otc |
-| 11 | AUD/CAD (OTC) | AUDCAD_otc |
-| 12 | AUD/JPY (OTC) | AUDJPY_otc |
-| 13 | USD/INR (OTC) | USDINR_otc |
-| 14 | USD/BRL (OTC) | USDBRL_otc |
-| 15 | USD/PKR (OTC) | USDPKR_otc |
-| 16 | USD/ZAR (OTC) | USDZAR_otc |
-| 17 | NZD/CAD (OTC) | NZDCAD_otc |
-| 18 | USD/MXN (OTC) | USDMXN_otc |
-| 19 | USD/TRY (OTC) | USDTRY_otc |
-| 20 | USD/EGP (OTC) | USDEGP_otc |
-
-## Requirements
-
-- Python 3.10+
-- Google Chrome (already installed on the server)
-- `httpx` and `websockets` packages (auto-installed by the batch file)
+3. Click **▶ START SCANNER** in the app.
+4. Log into Quotex once in Chrome (if needed).
+5. The assistant handles the rest automatically!
