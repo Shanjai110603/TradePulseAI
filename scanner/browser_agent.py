@@ -157,10 +157,11 @@ class BrowserAgent:
 
     def switch_pair(self, pair_name: str) -> bool:
         """
-        Switches the Quotex chart to a specific pair:
-        1. Clicks tab if already open in the top bar
-        2. Clicks the top-left blue [+] button to open asset drawer, searches, and clicks row
-        3. Fallback: cycles to next open tab so chart visibly changes
+        Switches the Quotex chart to a specific pair using the 'Select trade pair' modal:
+        1. Checks if the target is already open in top tabs
+        2. If not, clicks the blue [+] button or asset tab to open 'Select trade pair' modal
+        3. Types pair code into search input using React/Vue native setter
+        4. Clicks the matching row in the modal
         """
         clean_code = pair_name.replace(" (OTC)", "").replace("/", "").strip()
         code_with_slash = pair_name.replace(" (OTC)", "").strip()
@@ -170,62 +171,45 @@ class BrowserAgent:
             const targetSlash = "{code_with_slash}";
             const targetClean = "{clean_code}";
 
-            // 1. Check existing open tabs in top bar
-            const tabs = Array.from(document.querySelectorAll(
-                '.tab-item, .pair-item, [class*="tab"], [class*="asset-item"], [class*="tabs__item"]'
-            )).filter(t => {{
-                if (t.offsetParent === null) return false;
-                const rect = t.getBoundingClientRect();
-                return rect.top < 120 && rect.height > 15;
-            }});
+            // 1. Check if the 'Select trade pair' modal is already open
+            const isModalOpen = () => {{
+                return Array.from(document.querySelectorAll('*')).some(el => {{
+                    return (el.innerText || '').includes('Select trade pair') && el.offsetParent !== null;
+                }});
+            }};
 
-            for (const t of tabs) {{
-                const txt = (t.innerText || t.textContent || '').trim();
-                if (txt.includes(targetSlash) || txt.includes(targetClean)) {{
-                    t.click();
-                    return {{success: true, method: "existing_tab_click"}};
-                }}
-            }}
-
-            // 2. Click the top-left blue [+] button to open Asset Drawer
-            const addButtons = Array.from(document.querySelectorAll('button, div, a, span')).filter(el => {{
-                if (el.offsetParent === null) return false;
-                const rect = el.getBoundingClientRect();
-                // Blue [+] button is at the top left (top < 120, left < 350, small square 20-60px)
-                if (rect.top < 120 && rect.left < 350 && rect.width >= 20 && rect.width <= 65 && rect.height >= 20 && rect.height <= 65) {{
-                    const txt = (el.innerText || el.textContent || '').trim();
-                    const cls = (el.className || '').toString().toLowerCase();
-                    return txt === '+' || txt === '＋' || cls.includes('add') || cls.includes('plus');
-                }}
-                return false;
-            }});
-
-            let openedModal = false;
-            if (addButtons.length > 0) {{
-                addButtons[0].click();
-                openedModal = true;
-            }} else {{
-                // Try finding asset selector on right panel
-                const rightBtn = Array.from(document.querySelectorAll('button, div')).find(el => {{
+            // 2. If modal not open, open it via blue [+] button or active tab
+            if (!isModalOpen()) {{
+                const openButtons = Array.from(document.querySelectorAll('button, div, a')).filter(el => {{
                     if (el.offsetParent === null) return false;
                     const rect = el.getBoundingClientRect();
-                    const txt = (el.innerText || '').trim();
-                    return rect.left > (window.innerWidth - 320) && rect.top > 120 && rect.top < 300 && /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt);
+                    // Don't click header deposit, withdrawal, or deal form
+                    if (rect.top < 150) return false;
+                    if (rect.left > (window.innerWidth - 250) && rect.top > 300) return false;
+
+                    const txt = (el.innerText || el.textContent || '').trim();
+                    const cls = (el.className || '').toString().toLowerCase();
+
+                    // Blue [+] button in top bar or active asset tab
+                    const isBluePlus = (txt === '+' || txt === '＋' || cls.includes('add')) && rect.left < 200 && rect.width < 80;
+                    const isAssetTab = /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt) && (txt.includes('%') || cls.includes('tab') || cls.includes('asset'));
+
+                    return isBluePlus || isAssetTab;
                 }});
-                if (rightBtn) {{
-                    rightBtn.click();
-                    openedModal = true;
+
+                if (openButtons.length > 0) {{
+                    openButtons[0].click();
+                    await new Promise(r => setTimeout(r, 450));
                 }}
             }}
 
-            if (openedModal) {{
-                await new Promise(r => setTimeout(r, 400));
-            }}
+            // 3. Search for target currency in the modal's search input
+            const searchInput = Array.from(document.querySelectorAll('input')).find(inp => {{
+                if (inp.offsetParent === null) return false;
+                const ph = (inp.placeholder || '').toLowerCase();
+                return ph.includes('search') || inp.type === 'search' || inp.type === 'text';
+            }});
 
-            // 3. Type into search input
-            const searchInput = document.querySelector(
-                'input[type="search"], input[type="text"], input[placeholder*="Search"], input[placeholder*="search"], [class*="search"] input'
-            );
             if (searchInput) {{
                 searchInput.focus();
                 try {{
@@ -240,34 +224,38 @@ class BrowserAgent:
                 await new Promise(r => setTimeout(r, 400));
             }}
 
-            // 4. Click matching row in search results
-            const rows = Array.from(document.querySelectorAll(
-                '[class*="asset-item"], [class*="table__item"], [class*="assets-table"] [class*="item"], [class*="modal"] [class*="row"], button'
-            )).filter(el => {{
+            // 4. Click the matching row inside the modal
+            const modalRows = Array.from(document.querySelectorAll('div, li, button, tr')).filter(el => {{
                 if (el.offsetParent === null) return false;
+                const rect = el.getBoundingClientRect();
+                if (rect.left > 600 || rect.top < 200) return false;
+                if (rect.height < 25 || rect.height > 85 || rect.width < 140) return false;
+
                 const txt = (el.innerText || el.textContent || '').trim();
                 return (txt.includes(targetSlash) || txt.includes(targetClean)) && (txt.includes('%') || txt.includes('OTC'));
             }});
 
-            if (rows.length > 0) {{
-                rows[0].click();
-                return {{success: true, method: "modal_row_click"}};
+            if (modalRows.length > 0) {{
+                modalRows[modalRows.length - 1].click();
+                return {{success: true, method: "modal_row_clicked", selected: targetSlash}};
             }}
 
-            // 5. Fallback: cycle to next open tab so chart visibly changes
-            if (tabs.length > 1) {{
-                // Find currently active tab and click the next one
-                for (let i = 0; i < tabs.length; i++) {{
-                    const t = tabs[i];
-                    const cls = (t.className || '').toString();
-                    if (!cls.includes('active') && !cls.includes('selected')) {{
-                        t.click();
-                        return {{success: true, method: "cycled_open_tab"}};
-                    }}
-                }}
+            // 5. Fallback: if search filtered, click first available row in the modal list
+            const firstRow = Array.from(document.querySelectorAll('div')).find(el => {{
+                if (el.offsetParent === null) return false;
+                const rect = el.getBoundingClientRect();
+                if (rect.left < 50 || rect.left > 550 || rect.top < 300 || rect.top > 700) return false;
+                if (rect.height < 30 || rect.height > 70 || rect.width < 200) return false;
+                const txt = (el.innerText || '').trim();
+                return /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt) && txt.includes('%');
+            }});
+
+            if (firstRow) {{
+                firstRow.click();
+                return {{success: true, method: "first_row_clicked"}};
             }}
 
-            return {{success: false}};
+            return {{success: false, modal_open: isModalOpen()}};
         }})()
         """
         res = self.evaluate_js(script)
@@ -284,8 +272,8 @@ class BrowserAgent:
 
     def read_live_price(self) -> Optional[float]:
         """
-        Extracts the real-time active price from Quotex chart axis scale.
-        STRICTLY excludes the deal form ($1.35 payout / $1.00 investment).
+        Extracts the real-time active price from Quotex chart scale (e.g. 0.58213).
+        Strictly requires 3-6 decimal places and chart positioning to reject deal form ($1.35).
         """
         script = """
         (() => {
@@ -303,7 +291,7 @@ class BrowserAgent:
                     if (el.closest && el.closest('.deal-form, [class*="deal-form"]')) continue;
                     const text = (el.textContent || '').trim();
                     if (text.includes('$') || text.includes('Payout')) continue;
-                    const m = text.match(/([0-9]{1,6}\\.[0-9]{2,6})/);
+                    const m = text.match(/([0-9]{1,6}\\.[0-9]{3,6})/);
                     if (m) {
                         const val = parseFloat(m[1]);
                         if (val > 0.0001 && val !== 1.35 && val !== 1.0) return val;
@@ -311,7 +299,7 @@ class BrowserAgent:
                 }
             }
 
-            // Priority 2: TreeWalker strictly scanning the chart container and right scale
+            // Priority 2: TreeWalker scanning the chart area strictly
             const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
             const candidates = [];
             while (walker.nextNode()) {
@@ -319,7 +307,7 @@ class BrowserAgent:
                 if (!parent) continue;
 
                 // CRITICAL: Exclude deal form, sidebar, account balance, deposit
-                if (parent.closest && parent.closest('.deal-form, [class*="deal-form"], [class*="sidebar"], [class*="header__user"]')) {
+                if (parent.closest && parent.closest('.deal-form, [class*="deal-form"], [class*="sidebar"], [class*="header"]')) {
                     continue;
                 }
 
@@ -329,23 +317,23 @@ class BrowserAgent:
                     continue;
                 }
 
-                // Match decimal number
-                const m = raw.match(/^([0-9]{1,6}\\.[0-9]{2,6})$/);
+                // Strictly match decimal numbers with 3 to 6 decimal digits (e.g. 0.58213, 1.08452)
+                // This eliminates $1.35 (only 2 decimals) and $1.00
+                const m = raw.match(/^([0-9]{1,6}\\.[0-9]{3,6})$/);
                 if (m) {
                     const val = parseFloat(m[1]);
-                    // Strictly reject 1.35 (deal payout) and 1.00 (investment)
                     if (val > 0.0001 && val !== 1.35 && val !== 1.0 && val !== 10.0 && val !== 50.0 && val !== 100.0) {
                         const rect = parent.getBoundingClientRect ? parent.getBoundingClientRect() : { top: 0, right: 0, left: 0 };
-                        // Must be in chart area: to the left of the deal form (x < window.innerWidth - 260)
-                        if (rect.left < (window.innerWidth - 260) && rect.top > 70 && rect.top < (window.innerHeight - 50)) {
+                        // Must be in chart area: to the left of the deal form (x < window.innerWidth - 250)
+                        if (rect.left > 50 && rect.left < (window.innerWidth - 250) && rect.top > 80 && rect.top < (window.innerHeight - 50)) {
                             candidates.push({ val: val, rect: rect, text: raw });
                         }
                     }
                 }
             }
 
-            // In Quotex, the active price tag is right at the boundary of the chart scale (x between window.innerWidth - 350 and window.innerWidth - 260)
-            const scaleMatches = candidates.filter(c => c.rect.right >= (window.innerWidth - 350));
+            // In Quotex, the active price tag is at the right edge of the chart scale (x between window.innerWidth - 360 and window.innerWidth - 260)
+            const scaleMatches = candidates.filter(c => c.rect.right >= (window.innerWidth - 360));
             if (scaleMatches.length > 0) {
                 return scaleMatches[scaleMatches.length - 1].val;
             }
@@ -360,27 +348,37 @@ class BrowserAgent:
         return self.evaluate_js(script)
 
     def read_payout(self) -> Optional[int]:
-        """Extracts active asset payout percentage (e.g. 95 or 35)."""
+        """Extracts active asset payout percentage (e.g. 35 or 94)."""
         script = """
         (() => {
-            // 1. Look for percentage inside active tab or asset button
-            const activeEls = Array.from(document.querySelectorAll('[class*="tab"].active, [class*="selected"], [class*="current"]'));
-            for (const el of activeEls) {
-                const txt = (el.innerText || el.textContent || '').trim();
-                const m = txt.match(/([0-9]{2,3})%/);
+            // 1. Look inside active tab or asset button (e.g. AUD/CHF 35%)
+            const activeTabs = Array.from(document.querySelectorAll('button, div, span, a')).filter(el => {
+                if (el.offsetParent === null) return false;
+                const rect = el.getBoundingClientRect();
+                if (rect.top < 150 || rect.top > 320 || rect.left > 350) return false;
+                const txt = (el.innerText || '').trim();
+                return /([A-Z]{3}\\/[A-Z]{3})/.test(txt) && txt.includes('%');
+            });
+
+            if (activeTabs.length > 0) {
+                const m = activeTabs[0].innerText.match(/([0-9]{2,3})%/);
                 if (m) return parseInt(m[1]);
             }
 
-            // 2. Scan text nodes excluding deal form
-            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-            while (walker.nextNode()) {
-                const str = (walker.currentNode.nodeValue || '').trim();
-                const m = str.match(/^([0-9]{2,3})%$/);
-                if (m) {
-                    const val = parseInt(m[1]);
-                    if (val >= 20 && val <= 100 && val !== 50) return val;
-                }
+            // 2. Right panel asset button (e.g. + AUD/CHF 35%)
+            const rightPanel = Array.from(document.querySelectorAll('button, div, span')).filter(el => {
+                if (el.offsetParent === null) return false;
+                const rect = el.getBoundingClientRect();
+                if (rect.left < (window.innerWidth - 300) || rect.top > 350) return false;
+                const txt = (el.innerText || '').trim();
+                return /([A-Z]{3}\\/[A-Z]{3})/.test(txt) && txt.includes('%');
+            });
+
+            if (rightPanel.length > 0) {
+                const m = rightPanel[0].innerText.match(/([0-9]{2,3})%/);
+                if (m) return parseInt(m[1]);
             }
+
             return null;
         })()
         """
