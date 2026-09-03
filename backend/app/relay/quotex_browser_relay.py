@@ -152,52 +152,96 @@ class QuotexBrowserRelay:
             logger.error("[RELAY] Playwright is not installed. Run: pip install playwright && playwright install chromium")
             raise
 
-        logger.info(f"[RELAY] Launching Chromium browser (headed={not self.headless})...")
+    async def _run_session(self):
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            logger.error("[RELAY] Playwright is not installed. Run: pip install playwright && playwright install chromium")
+            raise
+
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=self.headless,
-                args=[
+            context = None
+            is_cdp = False
+
+            # Tier 1: Check if genuine Chrome is ALREADY running with Quotex open on port 9222!
+            try:
+                r = await self.http.get("http://127.0.0.1:9222/json/version", timeout=1.5)
+                if r.status_code == 200:
+                    logger.info("[RELAY] Detected open Chrome terminal on port 9222! Connecting directly via CDP...")
+                    browser = await p.chromium.connect_over_cdp("http://127.0.0.1:9222")
+                    context = browser.contexts[0] if browser.contexts else await browser.new_context()
+                    is_cdp = True
+                    logger.info("[RELAY] Connected to your active Chrome browser via CDP. Zero Cloudflare required!")
+            except Exception:
+                pass
+
+            # Tier 2: Launch genuine retail Google Chrome with persistent profile
+            if not context:
+                profile_dir = BASE_DIR / "uploads" / "chrome_profile"
+                profile_dir.mkdir(parents=True, exist_ok=True)
+                args = [
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
                     "--disable-blink-features=AutomationControlled",
-                ],
-            )
-            context_kwargs = dict(
-                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
-                viewport={"width": 1400, "height": 900},
-            )
-            if STORAGE_STATE_PATH.exists():
-                context_kwargs["storage_state"] = str(STORAGE_STATE_PATH)
-                logger.info(f"[RELAY] Loaded saved login session from disk: {STORAGE_STATE_PATH}")
+                ]
 
-            context = await browser.new_context(**context_kwargs)
-            # Mask navigator.webdriver so Cloudflare Turnstile passes cleanly
+                try:
+                    logger.info("[RELAY] Launching genuine retail Google Chrome (channel='chrome')...")
+                    context = await p.chromium.launch_persistent_context(
+                        user_data_dir=str(profile_dir),
+                        channel="chrome",  # Genuine Chrome avoids 'Chrome for Testing' flags
+                        headless=self.headless,
+                        viewport={"width": 1400, "height": 900},
+                        args=args,
+                    )
+                except Exception as e:
+                    logger.info(f"[RELAY] Retail Chrome channel unavailable ({e}), launching standard Chromium...")
+                    context = await p.chromium.launch_persistent_context(
+                        user_data_dir=str(profile_dir),
+                        headless=self.headless,
+                        viewport={"width": 1400, "height": 900},
+                        args=args,
+                    )
+
+            # Mask webdriver property on all pages
             await context.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined
                 });
             """)
 
-            page = await context.new_page()
+            # Attach WebSocket listener to any existing or new tabs
+            for pg in context.pages:
+                pg.on("websocket", lambda ws: self._attach_ws_listener(ws))
+            context.on("page", lambda pg: pg.on("websocket", lambda ws: self._attach_ws_listener(ws)))
+
+            # Find active Quotex page or create one
+            page = None
+            for pg in context.pages:
+                if any(domain in pg.url for domain in ("qxbroker.com", "market-qx.pro", "quotex.com")):
+                    page = pg
+                    break
+
+            if not page:
+                page = context.pages[0] if context.pages else await context.new_page()
+
             page.on("websocket", lambda ws: self._attach_ws_listener(ws))
 
-            logger.info("[RELAY] Checking Quotex session status...")
+            logger.info("[RELAY] Verifying Quotex trading session...")
             logged_in = await self._ensure_logged_in(page, context)
             if not logged_in:
                 await self._debug_screenshot(page, "login_failed")
                 raise RuntimeError("Could not establish a logged-in Quotex session")
-
-            await self._save_storage_state(context)
 
             flush_task = asyncio.create_task(self._flush_loop())
             try:
                 await self._cycle_assets(page)
             finally:
                 flush_task.cancel()
-                await browser.close()
+                if not is_cdp:
+                    await context.close()
 
     async def _is_trade_ui_active(self, page) -> bool:
         """Verifies if the real Quotex trading canvas/terminal is loaded (not Cloudflare)."""
