@@ -468,6 +468,24 @@ class AssistantOrchestrator:
                     f"🔒 <i>Scanners run 24/7 in the background and will alert you with a live chart screenshot the moment confluence confirms!</i>"
                 )
 
+        # 9. /debug
+        elif cmd_lower in ["/debug", "cmd_debug"]:
+            active = self.browser.read_active_symbol_name() or "Unknown"
+            price = self.browser.read_live_price()
+            payout = self.browser.read_payout()
+            self.telegram.send_message(
+                chat_id,
+                f"🔧 <b>BROWSER DOM DIAGNOSTICS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"• <b>Detected Asset:</b> <code>{active}</code>\n"
+                f"• <b>Extracted Price:</b> <code>{format_price(price) if price else 'None'}</code>\n"
+                f"• <b>Extracted Payout:</b> <code>{payout}%</code>\n"
+                f"• <b>CDP Connection:</b> {'🟢 Connected' if self.browser._ws else '🔴 Disconnected'}\n"
+                f"• <b>Total Ticks:</b> <code>{self.total_ticks}</code>\n"
+                f"• <b>Active Monitored:</b> <code>{len(self.currencies_data)}/{len(OTC_CURRENCIES)}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
+            )
+
     # -----------------------------------------------------------------------
     # Main Scanning Loop
     # -----------------------------------------------------------------------
@@ -493,6 +511,16 @@ class AssistantOrchestrator:
         self._log("Browser connected. Safe mode engaged.", "BROWSER")
         self.app.set_status("scanning", f"Scanning {len(OTC_CURRENCIES)} OTC assets...")
 
+        # Detect and ingest currently open pair first
+        initial_pair = self.browser.read_active_symbol_name()
+        if initial_pair:
+            self._log(f"Detected active chart on screen: {initial_pair}", "BROWSER")
+            initial_price = self.browser.read_live_price()
+            initial_payout = self.browser.read_payout() or 85
+            if initial_price and initial_price > 0:
+                full_name = f"{initial_pair} (OTC)" if not initial_pair.endswith("(OTC)") else initial_pair
+                self._process_tick(full_name, initial_price, initial_payout)
+
         curr_idx = 0
         while self.running:
             if self.paused:
@@ -504,7 +532,7 @@ class AssistantOrchestrator:
             symbol = curr["name"]
 
             # Switch chart tab
-            self.browser.switch_pair(symbol)
+            switched = self.browser.switch_pair(symbol)
             time.sleep(1.0)
 
             # Read live price and payout
@@ -521,8 +549,7 @@ class AssistantOrchestrator:
             time.sleep(1.2)
             price2 = self.browser.read_live_price()
             if price2 and price2 > 0:
-                self.total_ticks += 1
-                self.buffer.add_tick(symbol, price2)
+                self._process_tick(symbol, price2, payout)
 
             curr_idx += 1
 
