@@ -560,6 +560,43 @@ class AssistantOrchestrator:
                     "SUMMARY"
                 )
 
+    def _process_tick(self, symbol: str, price: float, payout: float):
+        """Processes a single price tick, updates state, and evaluates strategy."""
+        self.scan_count += 1
+        self.total_ticks += 1
+
+        # Update currencies table data
+        prev_p = self.currencies_data.get(symbol, {}).get("price", 0)
+        direction = "up" if price > prev_p else ("down" if price < prev_p else "neutral")
+        self.currencies_data[symbol] = {
+            "price": price,
+            "payout": payout,
+            "direction": direction,
+            "ticks": self.currencies_data.get(symbol, {}).get("ticks", 0) + 1,
+            "candles": len(self.buffer.get_candles(symbol))
+        }
+
+        self._log(f"#{self.scan_count:<4} {symbol:<18} @ {format_price(price):<12} Payout: {payout}%")
+
+        # Accumulate candle
+        completed_bar = self.buffer.add_tick(symbol, price)
+        if completed_bar:
+            candles = self.buffer.get_candles(symbol)
+            self._log(
+                f"1M BAR [{symbol}]: O={format_price(completed_bar.open)} "
+                f"H={format_price(completed_bar.high)} L={format_price(completed_bar.low)} "
+                f"C={format_price(completed_bar.close)}",
+                "CANDLE"
+            )
+
+            # Strategy Confluence Evaluation
+            if len(candles) >= 6:
+                matched, reason, details = self.strategy.evaluate_mtf_engulfing(candles, payout_pct=payout)
+                if matched:
+                    self._trigger_signal(symbol, price, payout, details)
+
+        self.app.set_status("scanning", f"Monitoring {symbol} — {self.total_ticks} ticks")
+
     def _trigger_signal(self, symbol: str, price: float, payout: float, details: Dict):
         """Fires signal alert, captures live chart photo, and dispatches to Telegram."""
         # 3-minute cooldown per pair
