@@ -10,11 +10,11 @@ echo Closing existing Chrome windows...
 taskkill /F /IM chrome.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 
-echo Launching Chrome on port 9222...
+echo Launching Chrome on port 9222 with dedicated debug profile...
 if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
-    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 "https://qxbroker.com/en/trade"
+    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\TradePulse\chrome_debug_profile" "https://qxbroker.com/en/trade"
 ) else if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" (
-    start "" "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 "https://qxbroker.com/en/trade"
+    start "" "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\TradePulse\chrome_debug_profile" "https://qxbroker.com/en/trade"
 ) else (
     echo [ERROR] Chrome not found in standard directories!
     pause

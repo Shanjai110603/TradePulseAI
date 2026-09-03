@@ -498,18 +498,21 @@ def main():
     print("[RELAY] Initializing Quotex Browser Relay...", flush=True)
     logger.info("[RELAY] Starting Quotex Browser Relay process...")
     parser = argparse.ArgumentParser(description="Quotex live browser relay")
-    parser.add_argument("--headed", action="store_true", help="Show the browser window (useful for fixing selectors)")
+    parser.add_argument("--headed", action="store_true", default=True, help="Show the browser window (default: True)")
+    parser.add_argument("--headless", action="store_true", help="Run browser in invisible background mode")
     parser.add_argument("--assets", type=str, default="", help="Comma-separated subset of symbols to watch (default: all OTC pairs)")
     args = parser.parse_args()
+
+    is_headless = bool(args.headless)
 
     if args.assets:
         assets = [s.strip() for s in args.assets.split(",") if s.strip()]
     else:
         assets = [a["symbol"] for a in QUOTEX_ASSETS if a["is_otc"]]
 
-    print(f"[RELAY] Mode: {'Headed (Visible)' if args.headed else 'Headless'}, Tracking {len(assets)} assets.", flush=True)
-    logger.info(f"[RELAY] Mode: {'Headed (Visible)' if args.headed else 'Headless'}, Tracking {len(assets)} assets.")
-    relay = QuotexBrowserRelay(assets=assets, headless=not args.headed)
+    print(f"[RELAY] Mode: {'Headless' if is_headless else 'Headed (Visible)'}, Tracking {len(assets)} assets.", flush=True)
+    logger.info(f"[RELAY] Mode: {'Headless' if is_headless else 'Headed (Visible)'}, Tracking {len(assets)} assets.")
+    relay = QuotexBrowserRelay(assets=assets, headless=is_headless)
     asyncio.run(relay.run_forever())
 
 
