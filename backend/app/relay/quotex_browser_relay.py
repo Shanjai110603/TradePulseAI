@@ -152,18 +152,12 @@ class QuotexBrowserRelay:
             logger.error("[RELAY] Playwright is not installed. Run: pip install playwright && playwright install chromium")
             raise
 
-    async def _run_session(self):
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            logger.error("[RELAY] Playwright is not installed. Run: pip install playwright && playwright install chromium")
-            raise
-
         async with async_playwright() as p:
             context = None
             is_cdp = False
 
             # Tier 1: Check if genuine Chrome is ALREADY running with Quotex open on port 9222!
+            logger.info("[RELAY] Checking for existing open Chrome on port 9222...")
             try:
                 r = await self.http.get("http://127.0.0.1:9222/json/version", timeout=1.5)
                 if r.status_code == 200:
@@ -173,7 +167,7 @@ class QuotexBrowserRelay:
                     is_cdp = True
                     logger.info("[RELAY] Connected to your active Chrome browser via CDP. Zero Cloudflare required!")
             except Exception:
-                pass
+                logger.info("[RELAY] Port 9222 not open. Proceeding to launch standalone Chrome...")
 
             # Tier 2: Launch genuine retail Google Chrome with persistent profile
             if not context:
