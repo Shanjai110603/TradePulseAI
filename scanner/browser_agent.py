@@ -158,8 +158,8 @@ class BrowserAgent:
     def switch_pair(self, pair_name: str) -> bool:
         """
         Switches the Quotex chart to a specific pair using the 'Select trade pair' modal:
-        1. Checks if the target is already open in top tabs
-        2. If not, clicks the blue [+] button or asset tab to open 'Select trade pair' modal
+        1. Checks if the modal is already open
+        2. If not, clicks the blue [+] button (top bar at top: 50-110px, left < 250px) or active tab
         3. Types pair code into search input using React/Vue native setter
         4. Clicks the matching row in the modal
         """
@@ -178,27 +178,25 @@ class BrowserAgent:
                 }});
             }};
 
-            // 2. If modal not open, open it via blue [+] button or active tab
+            // 2. If modal not open, open it via blue [+] button or active tab in top bar
             if (!isModalOpen()) {{
-                const openButtons = Array.from(document.querySelectorAll('button, div, a')).filter(el => {{
+                const openBtn = Array.from(document.querySelectorAll('button, div, a, span')).find(el => {{
                     if (el.offsetParent === null) return false;
                     const rect = el.getBoundingClientRect();
-                    // Don't click header deposit, withdrawal, or deal form
-                    if (rect.top < 150) return false;
-                    if (rect.left > (window.innerWidth - 250) && rect.top > 300) return false;
-
-                    const txt = (el.innerText || el.textContent || '').trim();
-                    const cls = (el.className || '').toString().toLowerCase();
-
-                    // Blue [+] button in top bar or active asset tab
-                    const isBluePlus = (txt === '+' || txt === '＋' || cls.includes('add')) && rect.left < 200 && rect.width < 80;
-                    const isAssetTab = /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt) && (txt.includes('%') || cls.includes('tab') || cls.includes('asset'));
-
-                    return isBluePlus || isAssetTab;
+                    // In top bar: top between 45px and 120px, left < 250px
+                    if (rect.top >= 45 && rect.top <= 120 && rect.left < 250) {{
+                        const txt = (el.innerText || el.textContent || '').trim();
+                        const cls = (el.className || '').toString().toLowerCase();
+                        // Blue [+] button
+                        if (txt === '+' || txt === '＋' || cls.includes('add') || cls.includes('plus')) return true;
+                        // Or active asset tab
+                        if (/([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt)) return true;
+                    }}
+                    return false;
                 }});
 
-                if (openButtons.length > 0) {{
-                    openButtons[0].click();
+                if (openBtn) {{
+                    openBtn.click();
                     await new Promise(r => setTimeout(r, 450));
                 }}
             }}
@@ -228,15 +226,15 @@ class BrowserAgent:
             const modalRows = Array.from(document.querySelectorAll('div, li, button, tr')).filter(el => {{
                 if (el.offsetParent === null) return false;
                 const rect = el.getBoundingClientRect();
-                if (rect.left > 600 || rect.top < 200) return false;
-                if (rect.height < 25 || rect.height > 85 || rect.width < 140) return false;
+                if (rect.left > 650 || rect.top < 150) return false;
+                if (rect.height < 25 || rect.height > 85 || rect.width < 120) return false;
 
                 const txt = (el.innerText || el.textContent || '').trim();
                 return (txt.includes(targetSlash) || txt.includes(targetClean)) && (txt.includes('%') || txt.includes('OTC'));
             }});
 
             if (modalRows.length > 0) {{
-                modalRows[modalRows.length - 1].click();
+                modalRows[0].click();
                 return {{success: true, method: "modal_row_clicked", selected: targetSlash}};
             }}
 
@@ -244,8 +242,8 @@ class BrowserAgent:
             const firstRow = Array.from(document.querySelectorAll('div')).find(el => {{
                 if (el.offsetParent === null) return false;
                 const rect = el.getBoundingClientRect();
-                if (rect.left < 50 || rect.left > 550 || rect.top < 300 || rect.top > 700) return false;
-                if (rect.height < 30 || rect.height > 70 || rect.width < 200) return false;
+                if (rect.left < 50 || rect.left > 550 || rect.top < 250 || rect.top > 700) return false;
+                if (rect.height < 30 || rect.height > 70 || rect.width < 180) return false;
                 const txt = (el.innerText || '').trim();
                 return /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt) && txt.includes('%');
             }});
@@ -272,8 +270,8 @@ class BrowserAgent:
 
     def read_live_price(self) -> Optional[float]:
         """
-        Extracts the real-time active price from Quotex chart scale (e.g. 0.58213).
-        Strictly requires 3-6 decimal places and chart positioning to reject deal form ($1.35).
+        Extracts the real-time active price from Quotex chart scale (e.g. 0.58220).
+        Uses textContent to combine child spans (<span class='value'>0.582</span><span class='tail'>20</span>).
         """
         script = """
         (() => {
@@ -283,15 +281,17 @@ class BrowserAgent:
                 '[class*="chart-current-price"]',
                 '[class*="strike-value"]',
                 '[class*="pane-legend-line"]',
-                '[class*="current-price"]'
+                '[class*="current-price"]',
+                '[class*="value-line"]'
             ];
             for (const sel of specificSelectors) {
                 const els = document.querySelectorAll(sel);
                 for (const el of els) {
                     if (el.closest && el.closest('.deal-form, [class*="deal-form"]')) continue;
-                    const text = (el.textContent || '').trim();
+                    // textContent concatenates all child spans (e.g. '0.582' + '20' = '0.58220')
+                    const text = (el.textContent || '').trim().replace(/\\s+/g, '');
                     if (text.includes('$') || text.includes('Payout')) continue;
-                    const m = text.match(/([0-9]{1,6}\\.[0-9]{3,6})/);
+                    const m = text.match(/([0-9]{1,6}\\.[0-9]{2,6})/);
                     if (m) {
                         const val = parseFloat(m[1]);
                         if (val > 0.0001 && val !== 1.35 && val !== 1.0) return val;
@@ -299,47 +299,32 @@ class BrowserAgent:
                 }
             }
 
-            // Priority 2: TreeWalker scanning the chart area strictly
-            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-            const candidates = [];
-            while (walker.nextNode()) {
-                const parent = walker.currentNode.parentNode;
-                if (!parent) continue;
+            // Priority 2: Scan leaf elements near the chart's right-hand scale
+            const allElements = document.querySelectorAll('div, span');
+            for (let i = allElements.length - 1; i >= 0; i--) {
+                const el = allElements[i];
+                if (el.children.length > 3) continue;
+                if (el.offsetParent === null) continue;
 
-                // CRITICAL: Exclude deal form, sidebar, account balance, deposit
-                if (parent.closest && parent.closest('.deal-form, [class*="deal-form"], [class*="sidebar"], [class*="header"]')) {
+                // Exclude deal form, sidebar, header
+                if (el.closest && el.closest('.deal-form, [class*="deal-form"], [class*="sidebar"], [class*="header"]')) {
                     continue;
                 }
 
-                const raw = (walker.currentNode.nodeValue || '').trim();
-                // Reject anything containing currency symbols, words Payout, Investment
-                if (raw.includes('$') || raw.includes('Payout') || raw.includes('Investment') || raw.includes('%')) {
-                    continue;
-                }
+                const rect = el.getBoundingClientRect();
+                // Target the chart scale area (right between window.innerWidth - 360 and window.innerWidth - 240)
+                if (rect.right >= (window.innerWidth - 360) && rect.left <= (window.innerWidth - 240) && rect.top > 80 && rect.top < (window.innerHeight - 50)) {
+                    const text = (el.textContent || '').trim().replace(/\\s+/g, '');
+                    if (text.includes('$') || text.includes('Payout') || text.includes('Investment') || text.includes('%')) continue;
 
-                // Strictly match decimal numbers with 3 to 6 decimal digits (e.g. 0.58213, 1.08452)
-                // This eliminates $1.35 (only 2 decimals) and $1.00
-                const m = raw.match(/^([0-9]{1,6}\\.[0-9]{3,6})$/);
-                if (m) {
-                    const val = parseFloat(m[1]);
-                    if (val > 0.0001 && val !== 1.35 && val !== 1.0 && val !== 10.0 && val !== 50.0 && val !== 100.0) {
-                        const rect = parent.getBoundingClientRect ? parent.getBoundingClientRect() : { top: 0, right: 0, left: 0 };
-                        // Must be in chart area: to the left of the deal form (x < window.innerWidth - 250)
-                        if (rect.left > 50 && rect.left < (window.innerWidth - 250) && rect.top > 80 && rect.top < (window.innerHeight - 50)) {
-                            candidates.push({ val: val, rect: rect, text: raw });
+                    const m = text.match(/^([0-9]{1,6}\\.[0-9]{2,6})$/);
+                    if (m) {
+                        const val = parseFloat(m[1]);
+                        if (val > 0.0001 && val !== 1.35 && val !== 1.0 && val !== 10.0 && val !== 50.0 && val !== 100.0) {
+                            return val;
                         }
                     }
                 }
-            }
-
-            // In Quotex, the active price tag is at the right edge of the chart scale (x between window.innerWidth - 360 and window.innerWidth - 260)
-            const scaleMatches = candidates.filter(c => c.rect.right >= (window.innerWidth - 360));
-            if (scaleMatches.length > 0) {
-                return scaleMatches[scaleMatches.length - 1].val;
-            }
-
-            if (candidates.length > 0) {
-                return candidates[candidates.length - 1].val;
             }
 
             return null;

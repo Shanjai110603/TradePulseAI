@@ -70,7 +70,17 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 # Comprehensive Monitored Quotex Assets (Forex OTC, Crypto & Commodities)
 OTC_CURRENCIES = [
-    # Top 90%+ High Payout OTC Pairs
+    # Top Active OTC Pairs from Quotex Live Terminal
+    {"name": "AUD/CHF (OTC)", "code": "AUD/CHF", "ws_asset": "AUDCHF_otc", "payout": 40},
+    {"name": "USD/EGP (OTC)", "code": "USD/EGP", "ws_asset": "USDEGP_otc", "payout": 94},
+    {"name": "USD/INR (OTC)", "code": "USD/INR", "ws_asset": "USDINR_otc", "payout": 94},
+    {"name": "CAD/CHF (OTC)", "code": "CAD/CHF", "ws_asset": "CADCHF_otc", "payout": 93},
+    {"name": "USD/IDR (OTC)", "code": "USD/IDR", "ws_asset": "USDIDR_otc", "payout": 91},
+    {"name": "USD/PKR (OTC)", "code": "USD/PKR", "ws_asset": "USDPKR_otc", "payout": 91},
+    {"name": "AUD/NZD (OTC)", "code": "AUD/NZD", "ws_asset": "AUDNZD_otc", "payout": 89},
+    {"name": "NZD/JPY (OTC)", "code": "NZD/JPY", "ws_asset": "NZDJPY_otc", "payout": 87},
+    {"name": "USD/MXN (OTC)", "code": "USD/MXN", "ws_asset": "USDMXN_otc", "payout": 87},
+    # 93% - 95% High Payout OTC Pairs
     {"name": "EUR/USD (OTC)", "code": "EUR/USD", "ws_asset": "EURUSD_otc", "payout": 95},
     {"name": "GBP/USD (OTC)", "code": "GBP/USD", "ws_asset": "GBPUSD_otc", "payout": 95},
     {"name": "USD/BRL (OTC)", "code": "USD/BRL", "ws_asset": "USDBRL_otc", "payout": 95},
@@ -79,11 +89,7 @@ OTC_CURRENCIES = [
     {"name": "NZD/CAD (OTC)", "code": "NZD/CAD", "ws_asset": "NZDCAD_otc", "payout": 93},
     {"name": "USD/ZAR (OTC)", "code": "USD/ZAR", "ws_asset": "USDZAR_otc", "payout": 93},
     {"name": "USD/ARS (OTC)", "code": "USD/ARS", "ws_asset": "USDARS_otc", "payout": 93},
-    {"name": "USD/PKR (OTC)", "code": "USD/PKR", "ws_asset": "USDPKR_otc", "payout": 92},
-    # 85% - 89% High Payout OTC Pairs
-    {"name": "USD/EGP (OTC)", "code": "USD/EGP", "ws_asset": "USDEGP_otc", "payout": 89},
-    {"name": "USD/INR (OTC)", "code": "USD/INR", "ws_asset": "USDINR_otc", "payout": 88},
-    {"name": "USD/IDR (OTC)", "code": "USD/IDR", "ws_asset": "USDIDR_otc", "payout": 88},
+    # 85% - 89% Pairs
     {"name": "USD/PHP (OTC)", "code": "USD/PHP", "ws_asset": "USDPHP_otc", "payout": 88},
     {"name": "AUD/CAD (OTC)", "code": "AUD/CAD", "ws_asset": "AUDCAD_otc", "payout": 86},
     {"name": "AUD/USD (OTC)", "code": "AUD/USD", "ws_asset": "AUDUSD_otc", "payout": 85},
@@ -93,7 +99,6 @@ OTC_CURRENCIES = [
     {"name": "EUR/JPY (OTC)", "code": "EUR/JPY", "ws_asset": "EURJPY_otc", "payout": 85},
     {"name": "GBP/JPY (OTC)", "code": "GBP/JPY", "ws_asset": "GBPJPY_otc", "payout": 85},
     {"name": "CHF/JPY (OTC)", "code": "CHF/JPY", "ws_asset": "CHFJPY_otc", "payout": 85},
-    {"name": "USD/MXN (OTC)", "code": "USD/MXN", "ws_asset": "USDMXN_otc", "payout": 85},
     {"name": "USD/TRY (OTC)", "code": "USD/TRY", "ws_asset": "USDTRY_otc", "payout": 85},
     {"name": "AUD/JPY (OTC)", "code": "AUD/JPY", "ws_asset": "AUDJPY_otc", "payout": 84},
     {"name": "CAD/JPY (OTC)", "code": "CAD/JPY", "ws_asset": "CADJPY_otc", "payout": 84},
@@ -927,6 +932,9 @@ class TradePulseGUI:
                 r["price"].configure(text=format_price(p), fg=col)
                 r["ticks"].configure(text=str(ticks), fg=COLORS["text_secondary"])
                 r["bars"].configure(text=str(bars), fg=COLORS["accent_green"] if bars >= 6 else COLORS["text_dim"])
+                live_pay = d.get("payout")
+                if live_pay:
+                    r["pay"].configure(text=f"{live_pay}%", fg=COLORS["accent_green"])
 
         self.root.after(200, self._tick)
 
