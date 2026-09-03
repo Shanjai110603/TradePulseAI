@@ -97,16 +97,27 @@ class BrowserAgent:
             return []
 
     def find_quotex_target(self) -> Optional[dict]:
+        """Find the Quotex trading tab, STRICTLY filtering for 'type': 'page' (never service workers)."""
         targets = self.get_targets()
-        for t in targets:
+        page_targets = [t for t in targets if t.get("type") == "page"]
+
+        # 1. Look for Quotex / QxBroker page tab
+        for t in page_targets:
             url = t.get("url", "").lower()
             title = t.get("title", "").lower()
             if any(k in url or k in title for k in ["qxbroker", "quotex", "trade", "qx-"]):
                 return t
+
+        # 2. Fallback: Any non-internal page tab
+        for t in page_targets:
+            url = t.get("url", "").lower()
+            if not url.startswith("chrome://") and not url.startswith("chrome-extension://") and not url.startswith("edge://"):
+                return t
+
         return None
 
     def connect(self, timeout: int = 30) -> bool:
-        """Wait for CDP and connect to Quotex tab via WebSocket."""
+        """Wait for CDP and connect to Quotex tab via WebSocket with no ping timeout drops."""
         import websockets.sync.client as ws_sync
 
         start = time.time()
@@ -115,9 +126,21 @@ class BrowserAgent:
                 target = self.find_quotex_target()
                 if target and target.get("webSocketDebuggerUrl"):
                     try:
-                        self._ws = ws_sync.connect(target["webSocketDebuggerUrl"], max_size=20_000_000)
+                        if self._ws:
+                            try:
+                                self._ws.close()
+                            except Exception:
+                                pass
+                        # Disable ping timeouts so heavy chart rendering never drops the connection
+                        self._ws = ws_sync.connect(
+                            target["webSocketDebuggerUrl"],
+                            max_size=30_000_000,
+                            ping_interval=None,
+                            ping_timeout=None
+                        )
                         self.send_cdp_command("Runtime.enable")
                         self.send_cdp_command("Page.enable")
+                        logger.info(f"CDP Connected to page tab: {target.get('title')}")
                         return True
                     except Exception as e:
                         logger.debug(f"WS Connect retry: {e}")
@@ -125,21 +148,44 @@ class BrowserAgent:
         return False
 
     def send_cdp_command(self, method: str, params: Optional[dict] = None) -> dict:
+        """Send command over CDP WebSocket with resilient auto-reconnect."""
         if not self._ws:
-            return {}
+            if not self.connect(timeout=5):
+                return {}
+
         self._msg_id += 1
         payload = {"id": self._msg_id, "method": method, "params": params or {}}
         try:
             self._ws.send(json.dumps(payload))
             deadline = time.time() + 10
             while time.time() < deadline:
-                raw = self._ws.recv(timeout=5)
+                try:
+                    raw = self._ws.recv(timeout=4)
+                except TimeoutError:
+                    continue
+                except Exception:
+                    break
+
                 data = json.loads(raw)
                 if data.get("id") == self._msg_id:
                     return data
         except Exception as e:
             logger.debug(f"CDP command error: {e}")
             self._ws = None
+            # Auto-reconnect once and retry
+            if self.connect(timeout=4):
+                try:
+                    self._msg_id += 1
+                    payload["id"] = self._msg_id
+                    self._ws.send(json.dumps(payload))
+                    deadline = time.time() + 6
+                    while time.time() < deadline:
+                        raw = self._ws.recv(timeout=3)
+                        data = json.loads(raw)
+                        if data.get("id") == self._msg_id:
+                            return data
+                except Exception:
+                    pass
         return {}
 
     def evaluate_js(self, script: str) -> any:
@@ -149,19 +195,21 @@ class BrowserAgent:
             "returnByValue": True,
             "awaitPromise": True
         })
-        return res.get("result", {}).get("result", {}).get("value")
+        result = res.get("result", {}).get("result", {})
+        return result.get("value")
 
     # -----------------------------------------------------------------------
-    # Multi-Level Self-Healing Asset Switcher
+    # Multi-Tier Layout-Agnostic Asset Switcher
     # -----------------------------------------------------------------------
 
     def switch_pair(self, pair_name: str) -> bool:
         """
-        Switches the Quotex chart to a specific pair using the 'Select trade pair' modal:
-        1. Checks if the modal is already open
-        2. If not, clicks the blue [+] button (top bar at top: 50-110px, left < 250px) or active tab
+        Switches the Quotex chart to a specific pair:
+        1. Direct Click on visible tab in top bar (instant!)
+        2. Clicks the blue [+] button to open 'Select trade pair' modal
         3. Types pair code into search input using React/Vue native setter
         4. Clicks the matching row in the modal
+        5. Fallback: cycles to next open tab in top bar
         """
         clean_code = pair_name.replace(" (OTC)", "").replace("/", "").strip()
         code_with_slash = pair_name.replace(" (OTC)", "").strip()
@@ -171,37 +219,49 @@ class BrowserAgent:
             const targetSlash = "{code_with_slash}";
             const targetClean = "{clean_code}";
 
-            // 1. Check if the 'Select trade pair' modal is already open
+            // 1. Direct Click on existing open tab in top bar
+            const openTabs = Array.from(document.querySelectorAll('*')).filter(el => {{
+                if (el.offsetParent === null) return false;
+                const rect = el.getBoundingClientRect();
+                // Top tab bar is at top: 35px to 130px, left < window.innerWidth - 300
+                if (rect.top >= 35 && rect.top <= 130 && rect.left < (window.innerWidth - 300)) {{
+                    const txt = (el.innerText || el.textContent || '').trim();
+                    return (txt.includes(targetSlash) || txt.includes(targetClean)) && (txt.includes('%') || txt.includes('/'));
+                }}
+                return false;
+            }});
+
+            if (openTabs.length > 0) {{
+                openTabs[0].click();
+                return {{success: true, method: "direct_tab_click", symbol: targetSlash}};
+            }}
+
+            // 2. Open 'Select trade pair' modal via the blue [+] button in top bar
             const isModalOpen = () => {{
                 return Array.from(document.querySelectorAll('*')).some(el => {{
                     return (el.innerText || '').includes('Select trade pair') && el.offsetParent !== null;
                 }});
             }};
 
-            // 2. If modal not open, open it via blue [+] button or active tab in top bar
             if (!isModalOpen()) {{
-                const openBtn = Array.from(document.querySelectorAll('button, div, a, span')).find(el => {{
+                const plusBtn = Array.from(document.querySelectorAll('button, div, a, span')).find(el => {{
                     if (el.offsetParent === null) return false;
                     const rect = el.getBoundingClientRect();
-                    // In top bar: top between 45px and 120px, left < 250px
-                    if (rect.top >= 45 && rect.top <= 120 && rect.left < 250) {{
+                    if (rect.top >= 35 && rect.top <= 130 && rect.left < 200) {{
                         const txt = (el.innerText || el.textContent || '').trim();
                         const cls = (el.className || '').toString().toLowerCase();
-                        // Blue [+] button
-                        if (txt === '+' || txt === '＋' || cls.includes('add') || cls.includes('plus')) return true;
-                        // Or active asset tab
-                        if (/([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt)) return true;
+                        return txt === '+' || txt === '＋' || cls.includes('add') || cls.includes('plus');
                     }}
                     return false;
                 }});
 
-                if (openBtn) {{
-                    openBtn.click();
+                if (plusBtn) {{
+                    plusBtn.click();
                     await new Promise(r => setTimeout(r, 450));
                 }}
             }}
 
-            // 3. Search for target currency in the modal's search input
+            // 3. Search for target currency in modal
             const searchInput = Array.from(document.querySelectorAll('input')).find(inp => {{
                 if (inp.offsetParent === null) return false;
                 const ph = (inp.placeholder || '').toLowerCase();
@@ -222,7 +282,7 @@ class BrowserAgent:
                 await new Promise(r => setTimeout(r, 400));
             }}
 
-            // 4. Click the matching row inside the modal
+            // 4. Click matching row in modal
             const modalRows = Array.from(document.querySelectorAll('div, li, button, tr')).filter(el => {{
                 if (el.offsetParent === null) return false;
                 const rect = el.getBoundingClientRect();
@@ -238,22 +298,24 @@ class BrowserAgent:
                 return {{success: true, method: "modal_row_clicked", selected: targetSlash}};
             }}
 
-            // 5. Fallback: if search filtered, click first available row in the modal list
-            const firstRow = Array.from(document.querySelectorAll('div')).find(el => {{
+            // 5. Fallback: cycle to any other open tab in top bar so chart visibly updates
+            const anyTabs = Array.from(document.querySelectorAll('*')).filter(el => {{
                 if (el.offsetParent === null) return false;
                 const rect = el.getBoundingClientRect();
-                if (rect.left < 50 || rect.left > 550 || rect.top < 250 || rect.top > 700) return false;
-                if (rect.height < 30 || rect.height > 70 || rect.width < 180) return false;
-                const txt = (el.innerText || '').trim();
-                return /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt) && txt.includes('%');
+                if (rect.top >= 35 && rect.top <= 130 && rect.left < (window.innerWidth - 300) && rect.width > 50 && rect.width < 250) {{
+                    const txt = (el.innerText || '').trim();
+                    const cls = (el.className || '').toString();
+                    return /([A-Z]{{3}}\\/[A-Z]{{3}})/.test(txt) && !cls.includes('active');
+                }}
+                return false;
             }});
 
-            if (firstRow) {{
-                firstRow.click();
-                return {{success: true, method: "first_row_clicked"}};
+            if (anyTabs.length > 0) {{
+                anyTabs[0].click();
+                return {{success: true, method: "cycled_existing_tab"}};
             }}
 
-            return {{success: false, modal_open: isModalOpen()}};
+            return {{success: false}};
         }})()
         """
         res = self.evaluate_js(script)
