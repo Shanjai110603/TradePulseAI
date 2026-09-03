@@ -10,13 +10,19 @@ import time
 import sys
 from pathlib import Path
 
-# Add scanner directory to path
+# Add project root and scanner directory to path
+root_dir = str(Path(__file__).resolve().parent.parent.parent)
 scanner_dir = str(Path(__file__).resolve().parent.parent.parent / "scanner")
-if scanner_dir not in sys.path:
-    sys.path.insert(0, scanner_dir)
+for p in [root_dir, scanner_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-from strategy_engine import StrategyEngine, Candle
-from quotex_scanner import CandleBuffer, format_price, OTC_CURRENCIES
+try:
+    from scanner.strategy_engine import StrategyEngine, Candle
+    from scanner.quotex_scanner import CandleBuffer, format_price, OTC_CURRENCIES
+except ImportError:
+    from strategy_engine import StrategyEngine, Candle
+    from quotex_scanner import CandleBuffer, format_price, OTC_CURRENCIES
 
 
 def test_format_price():
