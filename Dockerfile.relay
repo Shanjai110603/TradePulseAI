@@ -14,4 +14,4 @@ RUN playwright install --with-deps chromium
 COPY backend/app ./app
 COPY backend/uploads ./uploads
 
-CMD ["python", "-m", "app.relay.quotex_browser_relay"]
+CMD ["python", "-m", "app.relay.quotex_browser_relay", "--headless"]

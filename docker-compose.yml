@@ -73,6 +73,7 @@ services:
       RELAY_API_KEY: ${RELAY_API_KEY}
       QUOTEX_EMAIL: ${QUOTEX_EMAIL}
       QUOTEX_PASSWORD: ${QUOTEX_PASSWORD}
+      QUOTEX_PROXY: ${QUOTEX_PROXY:-}
     volumes:
       - ./uploads:/app/uploads
 
