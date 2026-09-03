@@ -130,9 +130,11 @@ class AssetBuffer:
 
 
 class QuotexBrowserRelay:
-    def __init__(self, assets: List[str], headless: bool = True):
+    def __init__(self, assets: List[str], headless: bool = False, proxy: Optional[str] = None):
         self.assets = assets
         self.headless = headless
+        raw_proxy = proxy or os.environ.get("QUOTEX_PROXY") or getattr(settings, "QUOTEX_PROXY", "") or ""
+        self.proxy = raw_proxy.strip() or None
         self.buffers: Dict[str, AssetBuffer] = {a: AssetBuffer() for a in assets}
         self.http = httpx.AsyncClient(timeout=10.0)
         DEBUG_DIR.mkdir(parents=True, exist_ok=True)
@@ -181,6 +183,11 @@ class QuotexBrowserRelay:
                     "--disable-blink-features=AutomationControlled",
                 ]
 
+                proxy_config = None
+                if self.proxy:
+                    proxy_config = {"server": self.proxy}
+                    logger.info(f"[RELAY] Routing traffic through proxy: {self.proxy.split('@')[-1] if '@' in self.proxy else self.proxy}")
+
                 try:
                     logger.info("[RELAY] Launching genuine retail Google Chrome (channel='chrome')...")
                     context = await p.chromium.launch_persistent_context(
@@ -188,6 +195,7 @@ class QuotexBrowserRelay:
                         channel="chrome",  # Genuine Chrome avoids 'Chrome for Testing' flags
                         headless=self.headless,
                         viewport={"width": 1400, "height": 900},
+                        proxy=proxy_config,
                         args=args,
                     )
                 except Exception as e:
@@ -196,6 +204,7 @@ class QuotexBrowserRelay:
                         user_data_dir=str(profile_dir),
                         headless=self.headless,
                         viewport={"width": 1400, "height": 900},
+                        proxy=proxy_config,
                         args=args,
                     )
 
@@ -500,6 +509,7 @@ def main():
     parser = argparse.ArgumentParser(description="Quotex live browser relay")
     parser.add_argument("--headed", action="store_true", default=True, help="Show the browser window (default: True)")
     parser.add_argument("--headless", action="store_true", help="Run browser in invisible background mode")
+    parser.add_argument("--proxy", type=str, default="", help="Proxy URL e.g. http://user:pass@ip:port")
     parser.add_argument("--assets", type=str, default="", help="Comma-separated subset of symbols to watch (default: all OTC pairs)")
     args = parser.parse_args()
 
@@ -512,7 +522,7 @@ def main():
 
     print(f"[RELAY] Mode: {'Headless' if is_headless else 'Headed (Visible)'}, Tracking {len(assets)} assets.", flush=True)
     logger.info(f"[RELAY] Mode: {'Headless' if is_headless else 'Headed (Visible)'}, Tracking {len(assets)} assets.")
-    relay = QuotexBrowserRelay(assets=assets, headless=is_headless)
+    relay = QuotexBrowserRelay(assets=assets, headless=is_headless, proxy=args.proxy)
     asyncio.run(relay.run_forever())
 
 

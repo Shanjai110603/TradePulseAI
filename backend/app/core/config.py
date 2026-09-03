@@ -37,10 +37,11 @@ class Settings(BaseSettings):
     MARKET_DATA_API_KEY: Optional[str] = ""
     MARKET_POLL_INTERVAL_SECONDS: int = 10
 
-    # Quotex Account Credentials
+    # Quotex Account Credentials & Proxy
     QUOTEX_EMAIL: Optional[str] = ""
     QUOTEX_PASSWORD: Optional[str] = ""
     QUOTEX_SESSION_TOKEN: Optional[str] = ""
+    QUOTEX_PROXY: Optional[str] = ""  # e.g. http://user:pass@proxy.example.com:8080
 
     # Shared secret required by the /markets/candles/ingest endpoint.
     # This endpoint accepts price data from the browser relay — without a
