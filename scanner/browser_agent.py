@@ -160,7 +160,8 @@ class BrowserAgent:
         Switches the Quotex chart to a specific pair across all layouts:
         1. Checks top tabs if in desktop wide layout
         2. Clicks asset selector button (whether in top bar or right panel above 'PENDING TRADE')
-        3. Types pair code in search box and selects first matching asset row
+        3. Sets search input using React/Vue native prototype setter
+        4. Selects matching asset row
         """
         clean_code = pair_name.replace(" (OTC)", "").replace("/", "").strip()
         code_with_slash = pair_name.replace(" (OTC)", "").strip()
@@ -171,11 +172,14 @@ class BrowserAgent:
             const targetClean = "{clean_code}";
 
             // 1. Check if already active
-            const pageText = document.body ? document.body.innerText : '';
             const isAlreadyActive = Array.from(document.querySelectorAll('button, div, span, a')).some(el => {{
+                if (el.offsetParent === null) return false;
                 const t = (el.innerText || '').trim();
-                return t.includes(targetSlash) && (t.includes('%') || t.includes('+')) && el.offsetParent !== null;
+                return (t.includes(targetSlash) || t.includes(targetClean)) && (t.includes('%') || t.includes('+'));
             }});
+            if (isAlreadyActive && !document.querySelector('input[placeholder*="Search"], input[placeholder*="search"]')) {{
+                return {{success: true, method: "already_active"}};
+            }}
 
             // 2. Check desktop top tabs
             const tabs = Array.from(document.querySelectorAll(
@@ -189,32 +193,33 @@ class BrowserAgent:
                 }}
             }}
 
-            // 3. Find Asset Selector Button anywhere on screen (Top header or Right panel above trade form)
+            // 3. Find Asset Selector Button (Right panel above trade form or Top bar)
             const allElements = Array.from(document.querySelectorAll('button, div, a'));
             const assetButtons = allElements.filter(el => {{
                 if (el.offsetParent === null) return false;
                 const rect = el.getBoundingClientRect();
-                if (rect.width < 35 || rect.height < 18 || rect.width > 350 || rect.height > 90) return false;
+                if (rect.width < 40 || rect.height < 18 || rect.width > 350 || rect.height > 90) return false;
+
                 const txt = (el.innerText || el.textContent || '').trim();
                 const cls = (el.className || '').toString().toLowerCase();
 
-                return (
-                    cls.includes('asset-select') ||
-                    cls.includes('pair-select') ||
-                    cls.includes('current-asset') ||
-                    txt === '+' ||
-                    txt.includes('+') ||
-                    /^[+\\s]*[A-Z]{{3}}\\s*\\/\\s*[A-Z]{{3}}/.test(txt) ||
-                    /^[+\\s]*[A-Z]{{6}}/.test(txt)
-                );
+                // Exclude deposit, withdrawal, amount/time adjustment buttons
+                if (txt.includes('Deposit') || txt.includes('Withdraw') || txt.includes('Account')) return false;
+                if (cls.includes('amount') || cls.includes('time') || cls.includes('stepper') || cls.includes('header__user')) return false;
+
+                // Match: contains a currency pair code (e.g. "AUD/CHF", "EUR/USD") OR has explicit asset selector class
+                const hasPair = /([A-Z]{{3}}\\s*\\/\\s*[A-Z]{{3}})/.test(txt);
+                const isAssetClass = cls.includes('asset-select') || cls.includes('pair-select') || cls.includes('current-asset');
+                const isTopPlus = (txt === '+' || txt === '＋') && rect.top < 150 && rect.left < (window.innerWidth - 300);
+
+                return hasPair || isAssetClass || isTopPlus;
             }});
 
             let clickedSelector = false;
-            for (const btn of assetButtons) {{
+            if (assetButtons.length > 0) {{
                 try {{
-                    btn.click();
+                    assetButtons[0].click();
                     clickedSelector = true;
-                    break;
                 }} catch (e) {{}}
             }}
 
@@ -223,31 +228,42 @@ class BrowserAgent:
                 await new Promise(r => setTimeout(r, 450));
             }}
 
-            // 4. In opened modal, find search box and type target
+            // 4. In opened modal, find search box and set value via native prototype setter
             const searchInput = document.querySelector(
                 'input[type="search"], input[type="text"], input[placeholder*="Search"], input[placeholder*="search"], [class*="search"] input'
             );
             if (searchInput) {{
                 searchInput.focus();
-                searchInput.value = targetSlash;
+                try {{
+                    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                    if (nativeSetter) {{
+                        nativeSetter.call(searchInput, targetSlash);
+                    }} else {{
+                        searchInput.value = targetSlash;
+                    }}
+                }} catch (e) {{
+                    searchInput.value = targetSlash;
+                }}
                 searchInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
                 searchInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
                 await new Promise(r => setTimeout(r, 400));
             }}
 
-            // 5. Click the matching asset row in the list
+            // 5. Click the matching asset row in the search results
             const rows = Array.from(document.querySelectorAll(
-                '[class*="asset-item"], [class*="table__item"], [class*="assets-table"] [class*="item"], [class*="modal"] [class*="row"], button'
-            ));
-            for (const row of rows) {{
-                const txt = (row.innerText || row.textContent || '').trim();
-                if (txt.includes(targetSlash) || txt.includes(targetClean)) {{
-                    row.click();
-                    return {{success: true, method: "modal_row_click"}};
-                }}
+                '[class*="asset-item"], [class*="table__item"], [class*="assets-table"] [class*="item"], [class*="modal"] [class*="row"], [class*="list"] [class*="item"], button, div'
+            )).filter(el => {{
+                if (el.offsetParent === null) return false;
+                const txt = (el.innerText || el.textContent || '').trim();
+                return (txt.includes(targetSlash) || txt.includes(targetClean)) && (txt.includes('%') || txt.includes('OTC'));
+            }});
+
+            if (rows.length > 0) {{
+                rows[0].click();
+                return {{success: true, method: "modal_row_click"}};
             }}
 
-            // 6. Fallback: if search filtered, click first asset item in modal
+            // 6. Fallback: first available row in modal if search filtered
             const firstRow = document.querySelector(
                 '.assets-table__item, .asset-item, [class*="asset-select"] [class*="item"]'
             );
