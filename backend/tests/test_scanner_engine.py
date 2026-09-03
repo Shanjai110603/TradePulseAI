@@ -17,12 +17,8 @@ for p in [root_dir, scanner_dir]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-try:
-    from scanner.strategy_engine import StrategyEngine, Candle
-    from scanner.quotex_scanner import CandleBuffer, format_price, OTC_CURRENCIES
-except ImportError:
-    from strategy_engine import StrategyEngine, Candle
-    from quotex_scanner import CandleBuffer, format_price, OTC_CURRENCIES
+from scanner.strategy_engine import StrategyEngine, Candle
+from scanner.quotex_scanner import CandleBuffer, format_price, OTC_CURRENCIES
 
 
 def test_format_price():
