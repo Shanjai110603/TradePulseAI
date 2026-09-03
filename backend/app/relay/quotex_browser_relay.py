@@ -156,7 +156,13 @@ class QuotexBrowserRelay:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=self.headless,
-                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-blink-features=AutomationControlled",
+                ],
             )
             context_kwargs = dict(
                 user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -168,6 +174,13 @@ class QuotexBrowserRelay:
                 logger.info(f"[RELAY] Loaded saved login session from disk: {STORAGE_STATE_PATH}")
 
             context = await browser.new_context(**context_kwargs)
+            # Mask navigator.webdriver so Cloudflare Turnstile passes cleanly
+            await context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            """)
+
             page = await context.new_page()
             page.on("websocket", lambda ws: self._attach_ws_listener(ws))
 
@@ -186,14 +199,60 @@ class QuotexBrowserRelay:
                 flush_task.cancel()
                 await browser.close()
 
+    async def _is_trade_ui_active(self, page) -> bool:
+        """Verifies if the real Quotex trading canvas/terminal is loaded (not Cloudflare)."""
+        try:
+            title = (await page.title()).lower()
+            if "just a moment" in title or "security verification" in title:
+                return False
+            ui = page.locator('.deal-form, [class*="deal-form"], .tab-item, [class*="tab"], .chart__current-price, button:has-text("+")')
+            return (await ui.count()) > 0
+        except Exception:
+            return False
+
+    async def _wait_for_cloudflare(self, page, max_seconds: int = 60) -> bool:
+        """If Cloudflare Turnstile appears, waits for user to click or auto-clearance."""
+        for i in range(max_seconds):
+            if await self._is_trade_ui_active(page):
+                return True
+            title = (await page.title()).lower()
+            if "just a moment" not in title and "security verification" not in title:
+                try:
+                    text = await page.evaluate("() => document.body ? document.body.innerText : ''")
+                    if "Performing security verification" not in text and "Verify you are human" not in text:
+                        return True
+                except Exception:
+                    pass
+            if i % 5 == 0:
+                logger.info(f"[RELAY] Cloudflare Turnstile active ({i}/{max_seconds}s) — please click the checkbox if visible.")
+            # Auto-click Turnstile checkbox inside iframes if accessible
+            try:
+                for frame in page.frames:
+                    box = frame.locator('input[type="checkbox"], .ctp-checkbox-label, #challenge-stage')
+                    if await box.count() > 0:
+                        await box.first.click(timeout=1000)
+                        logger.info("[RELAY] Clicked Cloudflare Turnstile checkbox.")
+                        break
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+        return await self._is_trade_ui_active(page)
+
     async def _ensure_logged_in(self, page, context) -> bool:
         for url in QUOTEX_TRADE_URLS:
             try:
                 logger.info(f"[RELAY] Checking trade page directly: {url}")
-                await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 await asyncio.sleep(2)
-                if "sign-in" not in page.url and "login" not in page.url:
-                    logger.info(f"[RELAY] Already authenticated at {page.url}")
+
+                # Check if Cloudflare is present
+                title = (await page.title()).lower()
+                if "just a moment" in title or "security verification" in title:
+                    logger.info("[RELAY] Cloudflare Turnstile detected on trade page.")
+                    await self._wait_for_cloudflare(page, max_seconds=60)
+
+                if await self._is_trade_ui_active(page):
+                    logger.info(f"[RELAY] Trade UI is active and authenticated at {page.url}")
                     return True
             except Exception as e:
                 logger.info(f"[RELAY] Trade page check at {url}: {e}")
@@ -207,11 +266,19 @@ class QuotexBrowserRelay:
         for url in QUOTEX_SIGNIN_URLS:
             try:
                 logger.info(f"[RELAY] Logging in via {url} ...")
-                await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 await asyncio.sleep(2)
+
+                # Check if Cloudflare is on the sign-in page
+                title = (await page.title()).lower()
+                if "just a moment" in title or "security verification" in title:
+                    logger.info("[RELAY] Cloudflare Turnstile detected on sign-in page.")
+                    await self._wait_for_cloudflare(page, max_seconds=60)
+
                 email_input = page.locator(SELECTORS["email_input"])
                 if await email_input.count() == 0:
                     continue
+                logger.info(f"[RELAY] Entering credentials for {email}...")
                 await email_input.first.fill(email)
                 await page.fill(SELECTORS["password_input"], password)
                 submit = page.locator(SELECTORS["submit_button"])
@@ -219,15 +286,20 @@ class QuotexBrowserRelay:
                     await submit.first.click()
                 else:
                     await page.keyboard.press("Enter")
-                await asyncio.sleep(6)
-                if "sign-in" not in page.url and "login" not in page.url:
-                    logger.info("[RELAY] Login successful.")
+
+                for _ in range(15):
+                    await asyncio.sleep(1)
+                    if await self._is_trade_ui_active(page):
+                        logger.info("[RELAY] Login successful. Quotex terminal is ready!")
+                        return True
+
+                if await self._is_trade_ui_active(page):
                     return True
             except Exception as e:
                 logger.debug(f"[RELAY] Login attempt at {url} failed: {e}")
                 continue
 
-        return False
+        return await self._is_trade_ui_active(page)
 
     async def _save_storage_state(self, context):
         try:
