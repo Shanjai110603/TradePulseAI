@@ -152,6 +152,7 @@ class QuotexBrowserRelay:
             logger.error("[RELAY] Playwright is not installed. Run: pip install playwright && playwright install chromium")
             raise
 
+        logger.info(f"[RELAY] Launching Chromium browser (headed={not self.headless})...")
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=self.headless,
@@ -164,12 +165,13 @@ class QuotexBrowserRelay:
             )
             if STORAGE_STATE_PATH.exists():
                 context_kwargs["storage_state"] = str(STORAGE_STATE_PATH)
-                logger.info("[RELAY] Loaded saved login session from disk.")
+                logger.info(f"[RELAY] Loaded saved login session from disk: {STORAGE_STATE_PATH}")
 
             context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
             page.on("websocket", lambda ws: self._attach_ws_listener(ws))
 
+            logger.info("[RELAY] Checking Quotex session status...")
             logged_in = await self._ensure_logged_in(page, context)
             if not logged_in:
                 await self._debug_screenshot(page, "login_failed")
@@ -187,13 +189,14 @@ class QuotexBrowserRelay:
     async def _ensure_logged_in(self, page, context) -> bool:
         for url in QUOTEX_TRADE_URLS:
             try:
+                logger.info(f"[RELAY] Checking trade page directly: {url}")
                 await page.goto(url, wait_until="domcontentloaded", timeout=25000)
                 await asyncio.sleep(2)
                 if "sign-in" not in page.url and "login" not in page.url:
-                    logger.info(f"[RELAY] Already authenticated (storage_state worked) at {page.url}")
+                    logger.info(f"[RELAY] Already authenticated at {page.url}")
                     return True
             except Exception as e:
-                logger.debug(f"[RELAY] Could not open trade page directly: {e}")
+                logger.info(f"[RELAY] Trade page check at {url}: {e}")
 
         email = settings.QUOTEX_EMAIL
         password = settings.QUOTEX_PASSWORD
@@ -382,6 +385,8 @@ class QuotexBrowserRelay:
 
 
 def main():
+    print("[RELAY] Initializing Quotex Browser Relay...", flush=True)
+    logger.info("[RELAY] Starting Quotex Browser Relay process...")
     parser = argparse.ArgumentParser(description="Quotex live browser relay")
     parser.add_argument("--headed", action="store_true", help="Show the browser window (useful for fixing selectors)")
     parser.add_argument("--assets", type=str, default="", help="Comma-separated subset of symbols to watch (default: all OTC pairs)")
@@ -392,6 +397,8 @@ def main():
     else:
         assets = [a["symbol"] for a in QUOTEX_ASSETS if a["is_otc"]]
 
+    print(f"[RELAY] Mode: {'Headed (Visible)' if args.headed else 'Headless'}, Tracking {len(assets)} assets.", flush=True)
+    logger.info(f"[RELAY] Mode: {'Headed (Visible)' if args.headed else 'Headless'}, Tracking {len(assets)} assets.")
     relay = QuotexBrowserRelay(assets=assets, headless=not args.headed)
     asyncio.run(relay.run_forever())
 
