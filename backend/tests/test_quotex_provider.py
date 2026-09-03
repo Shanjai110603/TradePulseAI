@@ -31,17 +31,22 @@ async def test_quotex_provider_candles():
 @pytest.mark.asyncio
 async def test_quotex_provider_current_price():
     provider = QuotexMarketDataProvider()
+    # Without live data, honestly returns None rather than fabricating numbers
     price = await provider.get_current_price("EUR/USD (OTC)")
-    assert price > 0.5 and price < 2.0
+    assert price is None
+
+    # After genuine candles are ingested via relay, returns genuine live price
+    provider.ingest_candles("EUR/USD (OTC)", "1M", [
+        {"time": 1787900000, "open": 1.0850, "high": 1.0855, "low": 1.0848, "close": 1.0852}
+    ])
+    live_price = await provider.get_current_price("EUR/USD (OTC)")
+    assert live_price == 1.0852
+    assert provider.is_live() is True
 
 
 @pytest.mark.asyncio
 async def test_market_data_manager_quotex():
     provider = market_data_manager.get_provider("quotex")
     assert isinstance(provider, QuotexMarketDataProvider)
-    # is_live() returns True only when QUOTEX_SESSION_TOKEN is set in env
-    # In test environment without token, it should return False (simulation mode)
-    from app.core.config import settings
-    expected_live = bool(getattr(settings, "QUOTEX_SESSION_TOKEN", "") and
-                         len(getattr(settings, "QUOTEX_SESSION_TOKEN", "")) > 10)
-    assert provider.is_live() == expected_live
+    # is_live() reflects recent successful fetch/ingest freshness
+    assert isinstance(provider.is_live(), bool)

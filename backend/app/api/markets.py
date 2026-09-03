@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.market import Market, Asset, DataSource, Timeframe
 from app.schemas.market import MarketResponse, AssetResponse, DataSourceResponse, TimeframeResponse, CandleSchema, TickerItem
 from app.engine.market_data.manager import market_data_manager
@@ -124,6 +125,11 @@ async def ingest_market_candles(
         ]
     }
     """
+    # Require the shared relay secret — this endpoint accepts external price
+    # data, so without auth anyone could feed the bot fabricated candles.
+    if not api_key or api_key != settings.RELAY_API_KEY:
+        raise HTTPException(status_code=401, detail="Missing or invalid api_key")
+
     symbol = payload.get("symbol")
     timeframe = payload.get("timeframe", "1M")
     raw_candles = payload.get("candles", [])

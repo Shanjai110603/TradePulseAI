@@ -40,11 +40,15 @@ async def test_currency_monitor_card_rendering():
         tech_snapshot=tech_snapshot
     )
     assert "LIVE ASSET MONITOR: USD/BRL (OTC)" in text
-    assert f"{current_price:.5f}" in text
-    assert "95%" in text
-    assert any("Refresh Live Price" in b["text"] for row in kb for b in row)
-    assert any("Generate 1M Chart" in b["text"] for row in kb for b in row)
-    assert any("Set Signal Alert" in b["text"] for row in kb for b in row)
+    if current_price is not None:
+        assert f"{current_price:.5f}" in text
+        assert "95%" in text
+        assert any("Refresh Live Price" in b["text"] for row in kb for b in row)
+        assert any("Generate 1M Chart" in b["text"] for row in kb for b in row)
+        assert any("Set Signal Alert" in b["text"] for row in kb for b in row)
+    else:
+        assert "No live data right now" in text
+        assert any("Retry" in b["text"] for row in kb for b in row)
 
 
 @pytest.mark.asyncio

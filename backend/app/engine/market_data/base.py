@@ -62,8 +62,10 @@ class MarketDataProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_current_price(self, symbol: str) -> float:
-        """Returns latest reference/spot price for an asset"""
+    async def get_current_price(self, symbol: str) -> Optional[float]:
+        """Returns latest genuine reference/spot price for an asset, or None if unavailable.
+        Implementations must NOT fabricate/guess a price — callers rely on None to mean
+        "skip this, don't act on it"."""
         pass
 
     @abstractmethod

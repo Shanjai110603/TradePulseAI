@@ -164,12 +164,26 @@ class TelegramMessageFormatter:
         return text, keyboard
 
     @classmethod
-    def format_live_signal_view(cls, signal: Dict[str, Any], current_price: float) -> Tuple[str, List[List[Dict[str, str]]]]:
+    def format_live_signal_view(cls, signal: Dict[str, Any], current_price: Optional[float]) -> Tuple[str, List[List[Dict[str, str]]]]:
         sig_id = signal.get("id", "")
         asset = signal.get("asset_symbol", "EUR/USD (OTC)")
         direction = signal.get("direction", "DOWN")
         ref_price = signal.get("reference_price", 0.0)
         status = signal.get("status", "ACTIVE")
+
+        if current_price is None:
+            text = (
+                f"📈 <b>LIVE PRICE TRACKING</b>\n"
+                f"💎 <b>{asset}</b> | Direction: <b>{direction}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ <b>Live feed is currently unavailable.</b>\n"
+                f"Entry price was <code>{ref_price}</code>. Try again shortly."
+            )
+            keyboard = [
+                [{"text": "🔄 Refresh Price", "callback_data": f"live:{sig_id}"}],
+                [{"text": "⬅️ Back to Signal", "callback_data": f"back:{sig_id}"}]
+            ]
+            return text, keyboard
 
         diff = current_price - ref_price
         diff_pct = (diff / ref_price * 100) if ref_price > 0 else 0.0
@@ -377,7 +391,7 @@ class TelegramMessageFormatter:
         cls,
         symbol_name: str,
         symbol_code: str,
-        current_price: float,
+        current_price: Optional[float],
         payout_pct: str,
         candles_count: int,
         latest_candle: Optional[Dict[str, Any]],
@@ -386,6 +400,19 @@ class TelegramMessageFormatter:
         """Renders the full real-time live monitor card for a chosen currency pair."""
         now_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%H:%M:%S")
         now_utc = datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+        if current_price is None:
+            text = (
+                f"⚡ <b>LIVE ASSET MONITOR: {symbol_name}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ <b>Feed Status:</b> 🔴 <b>No live data right now</b>\n"
+                f"The Quotex relay/session isn't delivering ticks for this asset "
+                f"at the moment. This is shown honestly instead of a guessed price — "
+                f"check the relay process or /session.\n"
+                f"⏰ <b>Checked (IST):</b> <code>{now_ist}</code> | <b>(UTC):</b> <code>{now_utc}</code>"
+            )
+            keyboard = [[{"text": "🔄 Retry", "callback_data": f"curr_monitor:{symbol_code}"}]]
+            return text, keyboard
 
         rsi = tech_snapshot.get("rsi_14", 50.0)
         trend = tech_snapshot.get("trend", "Neutral")

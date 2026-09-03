@@ -231,3 +231,13 @@ async def root():
         "status": "operational",
         "docs": "/docs"
     }
+
+
+@app.get("/health")
+@app.get(f"{api_prefix}/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "market_provider": settings.MARKET_DATA_PROVIDER
+    }

@@ -371,10 +371,18 @@ class QuotexMarketDataProvider(MarketDataProvider):
         self._email: Optional[str] = getattr(settings, "QUOTEX_EMAIL", None) or ""
         self._password: Optional[str] = getattr(settings, "QUOTEX_PASSWORD", None) or ""
         self._ws_client: Optional[QuotexWebSocketClient] = None
+        # NOTE: having a token configured only means we *can attempt* a live
+        # connection — it does NOT mean data is actually flowing. Real
+        # "live" status is tracked separately via _last_live_success_ts,
+        # which is only updated when a real candle/tick fetch succeeds
+        # (either the ingest relay or the direct WS client).
         self._live_mode = bool(self._ssid and len(self._ssid) > 10)
+        self._last_live_success_ts: float = 0.0
         self._login_attempted = False
         self._ingested_candles: Dict[str, List[Candle]] = {}
         self._last_ingest_ts: Dict[str, float] = {}
+
+    LIVE_FRESHNESS_SECONDS = 180  # how recent a successful fetch must be to count as "live"
 
     def ingest_candles(self, symbol: str, timeframe: str, raw_candles: List[Dict[str, Any]]) -> int:
         """Stores real live external candles streamed from an online cloud relay or provider."""
@@ -396,6 +404,7 @@ class QuotexMarketDataProvider(MarketDataProvider):
             self._ingested_candles[key] = converted[-100:]
             self._last_ingest_ts[key] = time.time()
             self._price_cache[symbol] = converted[-1].close
+            self._last_live_success_ts = time.time()
             return len(converted)
         return 0
 
@@ -478,9 +487,10 @@ class QuotexMarketDataProvider(MarketDataProvider):
                     ]
                     if candles:
                         self._price_cache[symbol] = candles[-1].close
+                        self._last_live_success_ts = time.time()
                         return candles
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[QUOTEX_PROVIDER] Direct WS candle fetch failed for {symbol}: {e}")
 
         # Strict Live Mode: Do NOT generate fake/synthetic candles
         if strict_live_only:
@@ -558,27 +568,43 @@ class QuotexMarketDataProvider(MarketDataProvider):
 
         return candles
 
-    async def get_current_price(self, symbol: str) -> float:
+    async def get_current_price(self, symbol: str) -> Optional[float]:
+        """
+        Returns the latest genuine price for `symbol`, or None if no live data
+        is currently available. Callers MUST treat None as "no data" and skip
+        the operation rather than substituting a guessed/stale number — this
+        provider previously fell back to a hardcoded 2024 snapshot price here,
+        which silently corrupted signal-outcome tracking with fake numbers.
+        """
         await self.ensure_live_connection()
+
+        # 1. Freshly ingested real data from the browser relay is the most trustworthy.
+        cache_key = f"{symbol}_1M"
+        if cache_key in self._ingested_candles and self._ingested_candles[cache_key]:
+            last_ts = self._last_ingest_ts.get(cache_key, 0.0)
+            if (time.time() - last_ts) < self.LIVE_FRESHNESS_SECONDS:
+                return self._ingested_candles[cache_key][-1].close
+
+        # 2. Direct WS tick (unreliable, but try it).
         if self._live_mode and self._ws_client:
             ws_asset = SYMBOL_TO_WS.get(symbol, symbol.replace("/", "").replace(" (OTC)", "_OTC"))
             try:
                 price = await asyncio.wait_for(self._ws_client.get_current_price(ws_asset), timeout=6)
                 if price and price > 0:
                     self._price_cache[symbol] = price
+                    self._last_live_success_ts = time.time()
                     return price
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[QUOTEX_PROVIDER] Direct WS price fetch failed for {symbol}: {e}")
 
-        if symbol in self._price_cache:
+        # 3. Recent in-memory cache from a previous genuinely-live fetch.
+        if symbol in self._price_cache and (time.time() - self._last_live_success_ts) < self.LIVE_FRESHNESS_SECONDS:
             return self._price_cache[symbol]
 
-        cache_key = f"{symbol}_1M"
-        if cache_key in self._ingested_candles and self._ingested_candles[cache_key]:
-            return self._ingested_candles[cache_key][-1].close
-
-        candles = await self.get_candles(symbol, limit=2, strict_live_only=True)
-        return candles[-1].close if candles else BASE_PRICES.get(symbol, 1.08500)
+        # 4. Genuinely no live data available. Do NOT fabricate a number.
+        logger.warning(f"[QUOTEX_PROVIDER] No live price available for {symbol} — "
+                        f"relay/WS both unavailable. Refusing to fake a price.")
+        return None
 
     def get_supported_timeframes(self) -> List[str]:
         return ["1M", "5M", "15M", "1H"]
@@ -587,7 +613,17 @@ class QuotexMarketDataProvider(MarketDataProvider):
         return "quotex"
 
     def is_live(self) -> bool:
-        return self._live_mode
+        """
+        True only if a real fetch (relay ingest or direct WS) has succeeded
+        recently. A configured token/credentials alone no longer counts —
+        that only means a live connection *can be attempted*.
+        """
+        if (time.time() - self._last_live_success_ts) < self.LIVE_FRESHNESS_SECONDS:
+            return True
+        for ts in self._last_ingest_ts.values():
+            if (time.time() - ts) < self.LIVE_FRESHNESS_SECONDS:
+                return True
+        return False
 
     def compute_technical_snapshot(self, candles: List[Candle], current_price: Optional[float] = None) -> Dict[str, Any]:
         """Calculates a comprehensive technical snapshot dictionary from current candles"""

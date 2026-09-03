@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     QUOTEX_PASSWORD: Optional[str] = ""
     QUOTEX_SESSION_TOKEN: Optional[str] = ""
 
+    # Shared secret required by the /markets/candles/ingest endpoint.
+    # This endpoint accepts price data from the browser relay — without a
+    # secret, anyone on the internet could POST fabricated candles to it.
+    RELAY_API_KEY: str = "change_me_generate_a_random_secret"
+
     # AI Provider
     AI_PROVIDER: str = "mock"  # Built-in deterministic quantitative AI engine
     AI_API_KEY: Optional[str] = ""

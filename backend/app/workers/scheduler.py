@@ -104,9 +104,10 @@ class BackgroundScheduler:
                             if (time.time() - last_ts) < 180:
                                 has_live_relay = True
 
-                        is_live = has_live_relay or getattr(provider, "_live_mode", False)
+                        is_live = has_live_relay or (hasattr(provider, "is_live") and provider.is_live())
                         if not is_live:
-                            logger.debug(f"[SCHEDULER] Skipping {asset_symbol} ({tf}): Market data provider is not in live mode. Provide active Quotex SSID via /session.")
+                            logger.debug(f"[SCHEDULER] Skipping {asset_symbol} ({tf}): no genuinely live data right now "
+                                         f"(relay/WS both stale or down). Not generating a signal on guessed data.")
                             continue
 
                         candles = await provider.get_candles(asset_symbol, timeframe=tf, limit=50)
@@ -281,6 +282,11 @@ class BackgroundScheduler:
             for signal in active_signals:
                 try:
                     current_price = await provider.get_current_price(signal.asset_symbol)
+                    if current_price is None:
+                        logger.debug(f"[SCHEDULER] No live price for {signal.asset_symbol} — "
+                                     f"skipping lifecycle tick for signal {signal.id} this cycle "
+                                     f"(will retry, not marking a result on guessed data).")
+                        continue
                     sig_dict = {
                         "id": signal.id,
                         "direction": signal.direction,

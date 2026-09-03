@@ -28,6 +28,12 @@ services:
         value: "false"
       - key: QUOTEX_SESSION_TOKEN
         sync: false
+      - key: RELAY_API_KEY
+        sync: false
+        # NOTE: Render's free web-service tier cannot run the Playwright
+        # browser relay reliably (sleeps on idle, tight RAM). Run
+        # quotex_browser_relay.py separately (e.g. on the Oracle/AWS VM)
+        # and point its RELAY_TARGET_URL at this service's public URL.
       - key: MARKET_DATA_PROVIDER
         value: quotex
       - key: AI_PROVIDER

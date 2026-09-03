@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from app.core.config import settings
 from app.engine.market_data.manager import market_data_manager
 
 
@@ -20,7 +21,7 @@ async def test_live_candle_ingestion_and_retrieval():
                 {"time": 1787900300, "open": 1.0863, "high": 1.0868, "low": 1.0860, "close": 1.0866, "volume": 2500},
             ]
         }
-        res = await ac.post("/api/v1/markets/candles/ingest", json=payload)
+        res = await ac.post("/api/v1/markets/candles/ingest", json=payload, params={"api_key": settings.RELAY_API_KEY})
         assert res.status_code == 200
         data = res.json()
         assert data["ok"] is True
@@ -37,7 +38,7 @@ async def test_live_candle_ingestion_and_retrieval():
 @pytest.mark.asyncio
 async def test_live_candle_ingestion_validation():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # Test missing fields
+        # Test missing fields with valid auth
         bad_payload = {"symbol": "EUR/USD (OTC)"}
-        res = await ac.post("/api/v1/markets/candles/ingest", json=bad_payload)
+        res = await ac.post("/api/v1/markets/candles/ingest", json=bad_payload, params={"api_key": settings.RELAY_API_KEY})
         assert res.status_code == 400
