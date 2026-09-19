@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradePulse — Institutional Signal & Confluence Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ========================================================================
+       Left Sidebar Navigation
+       ======================================================================== -->
+  <aside class="sidebar">
+    <div>
+      <!-- Brand Logo -->
+      <div class="brand-section">
+        <div class="brand-logo-icon">⚡</div>
+        <div class="brand-meta">
+          <h1>TradePulse</h1>
+          <span>Real Market & OTC Signal Station</span>
+        </div>
+      </div>
+
+      <!-- Navigation Items -->
+      <nav class="nav-menu">
+        <div class="nav-item active" id="nav-monitor" onclick="switchView('monitor')">
+          <span class="nav-item-icon">🧭</span>
+          <span>Live Monitor</span>
+        </div>
+        <div class="nav-item" id="nav-chart" onclick="switchView('chart')">
+          <span class="nav-item-icon">📈</span>
+          <span>Live Chart</span>
+        </div>
+        <div class="nav-item" id="nav-broker" onclick="switchView('broker')">
+          <span class="nav-item-icon">🌐</span>
+          <span>Quotex Terminal</span>
+        </div>
+        <div class="nav-item" id="nav-strategies" onclick="switchView('strategies')">
+          <span class="nav-item-icon">🎯</span>
+          <span>Strategy Lab</span>
+        </div>
+        <div class="nav-item" id="nav-alerts" onclick="switchView('alerts')">
+          <span class="nav-item-icon">📡</span>
+          <span>Alerts & Relay</span>
+        </div>
+        <div class="nav-item" id="nav-telegram" onclick="switchView('telegram')">
+          <span class="nav-item-icon">✈️</span>
+          <span>Telegram Manager</span>
+        </div>
+        <div class="nav-item" id="nav-history" onclick="switchView('history')">
+          <span class="nav-item-icon">📊</span>
+          <span>History & PnL</span>
+        </div>
+        <div class="nav-item" id="nav-preferences" onclick="switchView('preferences')">
+          <span class="nav-item-icon">⚙️</span>
+          <span>Preferences</span>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Sidebar Footer & Broker Connection Status -->
+    <div class="sidebar-footer">
+      <div class="broker-card">
+        <div class="broker-status-row">
+          <div class="status-indicator">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-text">Disconnected</span>
+          </div>
+          <span class="latency-badge" id="latency-text"></span>
+        </div>
+        <button class="btn-broker-login" id="btn-broker-connect" onclick="switchView('broker')">
+          🔑 Connect Broker
+        </button>
+      </div>
+      <div class="app-version-tag">TradePulse v2.0 · Personal Edition</div>
+    </div>
+  </aside>
+
+
+  <!-- ========================================================================
+       Main Content Workspace
+       ======================================================================== -->
+  <main class="main-workspace">
+
+    <!-- ======================================================================
+         VIEW 1: Live Monitor
+         ====================================================================== -->
+    <section class="view-pane active" id="view-monitor">
+      <!-- Header -->
+      <div class="view-header">
+        <div class="view-title-group">
+          <h2>Live Market Monitor <span class="badge-live-stream">● LIVE</span></h2>
+        </div>
+        <div class="header-action-group">
+          <!-- Quick Live Chart Button -->
+          <button type="button" class="btn-sound-pill" id="btn-quick-open-chart" onclick="switchView('chart')" title="Open Interactive Real-Time Candlestick Chart" style="border-color: rgba(0, 240, 255, 0.35); color: var(--cyan-bright); background: rgba(0, 240, 255, 0.08);">
+            <span>📈</span>
+            <span>Live Chart</span>
+          </button>
+
+          <div class="market-clock-badge">
+            <span style="opacity: 0.6;">UTC</span>
+            <span class="clock-utc" id="live-utc-clock">--:--:--</span>
+            <span style="opacity: 0.3;">|</span>
+            <span id="live-local-clock">--:--</span>
+          </div>
+          <button type="button" class="btn-sound-pill active" id="quick-sound-btn" onclick="toggleQuickSound()" title="Toggle Signal Audio Chime">
+            <span id="quick-sound-icon">🔔</span>
+            <span id="quick-sound-text">Audio</span>
+          </button>
+          <button class="scanner-toggle-btn" id="scanner-btn" onclick="toggleEngine()">
+            <span id="scanner-btn-icon">⏸</span>
+            <span id="scanner-btn-text">Pause</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Broker Connection Prompt Banner -->
+      <div id="broker-connect-banner" class="broker-banner" style="display: none;">
+        <div class="broker-banner-content">
+          <span class="broker-banner-icon">⚠️</span>
+          <div class="broker-banner-text">
+            <strong>Quotex Broker Not Linked</strong>
+            <span>Sign into your Quotex account in the Quotex Terminal to activate 60+ live OTC market feeds and signals.</span>
+          </div>
+        </div>
+        <button type="button" class="btn-primary" onclick="switchView('broker')" style="padding: 6px 14px; font-size: 11px; white-space: nowrap;">
+          🔑 Open Quotex Terminal
+        </button>
+      </div>
+
+      <!-- Compact Low-Profile Telemetry Strip -->
+      <div class="telemetry-strip">
+        <div class="telemetry-item" onclick="switchView('strategies')" style="cursor: pointer;" title="Open Strategy Lab">
+          <div class="telemetry-item-left">
+            <span class="telemetry-icon">🎯</span>
+            <span class="telemetry-label">Active Strategies</span>
+          </div>
+          <span class="telemetry-val text-cyan" id="stat-active-strats">0</span>
+        </div>
+        <div class="telemetry-divider"></div>
+        <div class="telemetry-item">
+          <div class="telemetry-item-left">
+            <span class="telemetry-icon">⚡</span>
+            <span class="telemetry-label">Signals Today</span>
+          </div>
+          <span class="telemetry-val text-amber" id="stat-signals">0</span>
+        </div>
+        <div class="telemetry-divider"></div>
+        <div class="telemetry-item">
+          <div class="telemetry-item-left">
+            <span class="telemetry-icon">🏆</span>
+            <span class="telemetry-label">Win Rate</span>
+          </div>
+          <span class="telemetry-val text-emerald" id="stat-win-rate">0%</span>
+        </div>
+        <div class="telemetry-divider"></div>
+        <div class="telemetry-item">
+          <div class="telemetry-item-left">
+            <span class="telemetry-icon">🌐</span>
+            <span class="telemetry-label">Markets Watched</span>
+          </div>
+          <span class="telemetry-val" id="stat-markets-watched">100 / 100</span>
+        </div>
+      </div>
+
+      <!-- Safeguards Real-Time Status Indicator Strip -->
+      <div class="safeguards-strip" id="safeguards-strip">
+        <div class="safeguards-strip-header">
+          <span class="safeguards-strip-title">INSTITUTIONAL SAFEGUARDS</span>
+          <button type="button" class="btn-safeguards-config" onclick="switchView('preferences')" title="Open Safeguards Preferences">⚙️ Configure</button>
+        </div>
+        <div class="safeguards-chips-row">
+          <div class="safeguard-chip active" id="chip-news-status" onclick="switchView('preferences'); scrollToPrefCard('pref-card-news');" title="Macro Economic News Blackout Filter">
+            <span class="chip-dot dot-active" id="dot-news"></span>
+            <span class="chip-icon">📰</span>
+            <span class="chip-text" id="label-news">News Guard: Active</span>
+          </div>
+          <div class="safeguard-chip active" id="chip-schedule-status" onclick="switchView('preferences'); scrollToPrefCard('pref-card-schedule');" title="Session Hours Schedule Filter">
+            <span class="chip-dot dot-active" id="dot-schedule"></span>
+            <span class="chip-icon">⏰</span>
+            <span class="chip-text" id="label-schedule">Session: 24/7 Scanning</span>
+          </div>
+          <div class="safeguard-chip active" id="chip-ev-status" onclick="switchView('preferences'); scrollToPrefCard('pref-card-ev');" title="Expected Value Quant Mathematical Gating">
+            <span class="chip-dot dot-active" id="dot-ev"></span>
+            <span class="chip-icon">🧮</span>
+            <span class="chip-text" id="label-ev">EV Guard: Active (EV &gt; 0)</span>
+          </div>
+          <div class="safeguard-chip active" id="chip-risk-status" onclick="switchView('preferences'); scrollToPrefCard('pref-card-risk');" title="Risk Management & Session TP/SL Circuit Breakers">
+            <span class="chip-dot dot-active" id="dot-risk"></span>
+            <span class="chip-icon">🛡️</span>
+            <span class="chip-text" id="label-risk">Risk: Rec $10 | PnL $0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2-Column Work Area -->
+      <div class="monitor-grid">
+        <!-- Left: Markets & Trades Watch Table -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div class="panel-title">
+                <span>📈</span>
+                <span>Live Markets</span>
+              </div>
+
+              <!-- Tool Start / Stop Controls -->
+              <div class="tool-control-group">
+                <div class="tool-status-badge active" id="market-tool-status" title="Current Signal Scanner Status">
+                  <span class="tool-pulse-dot"></span>
+                  <span id="market-tool-status-text">SCANNER ACTIVE</span>
+                </div>
+                <div class="tool-actions-pill">
+                  <button type="button" class="btn-tool-ctrl btn-tool-start active" id="btn-market-start" onclick="startTool()" title="Start market scanner & signal generation">
+                    <span class="btn-tool-icon">▶</span>
+                    <span>Start</span>
+                  </button>
+                  <button type="button" class="btn-tool-ctrl btn-tool-stop" id="btn-market-stop" onclick="stopTool()" title="Stop market scanner & signal generation">
+                    <span class="btn-tool-icon">⏹</span>
+                    <span>Stop</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="payout-filter-group">
+                <button type="button" class="payout-filter-pill" id="payout-filter-90" onclick="setPayoutFilter(90)" title="Filter pairs with 90%+ payout">🔥 90%+</button>
+                <button type="button" class="payout-filter-pill" id="payout-filter-85" onclick="setPayoutFilter(85)" title="Filter pairs with 85%+ payout">⚡ 85%+</button>
+              </div>
+              <div class="view-mode-toggle">
+                <button type="button" class="btn-view-mode active" id="btn-market-table" onclick="setMarketViewMode('table')" title="List Table View">📋 Table</button>
+                <button type="button" class="btn-view-mode" id="btn-market-heatmap" onclick="setMarketViewMode('heatmap')" title="Visual Heatmap Grid">🔲 Heatmap</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Category Tabs & Quick Search Toolbar -->
+          <div class="market-toolbar">
+            <div class="market-cat-tabs">
+              <button type="button" class="cat-pill active" id="cat-tab-all" onclick="filterMarketCategory('ALL')">All Pairs</button>
+              <button type="button" class="cat-pill" id="cat-tab-favs" onclick="filterMarketCategory('FAVORITES')">⭐ Favorites</button>
+              <button type="button" class="cat-pill pill-otc" id="cat-tab-otc" onclick="filterMarketCategory('OTC')">🌙 OTC 24/7</button>
+              <button type="button" class="cat-pill pill-real" id="cat-tab-real" onclick="filterMarketCategory('REAL')">⚡ Real Forex</button>
+              <button type="button" class="cat-pill" id="cat-tab-crypto" onclick="filterMarketCategory('CRYPTO')">Crypto</button>
+              <button type="button" class="cat-pill" id="cat-tab-commodities" onclick="filterMarketCategory('COMMODITIES')">Commodities</button>
+            </div>
+            <div class="market-search-container">
+              <input type="text" id="market-search-input" class="market-search-input" placeholder="Search pair (EUR, OTC, GOLD)..." oninput="handleMarketSearch(this.value)">
+            </div>
+          </div>
+
+          <div class="table-container" id="markets-table-container">
+            <table class="markets-table">
+              <thead>
+                <tr>
+                  <th style="width: 32px; text-align: center;">⭐</th>
+                  <th style="width: 34px; text-align: center;">
+                    <input type="checkbox" class="custom-checkbox" id="check-all-markets" checked onclick="toggleAllMarkets(this)">
+                  </th>
+                  <th style="width: 42%;">Trade Pair / Market</th>
+                  <th style="width: 36%;">Live Rate</th>
+                  <th style="width: 70px; text-align: right;">Payout</th>
+                </tr>
+              </thead>
+              <tbody id="markets-table-body">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Heatmap View Container -->
+          <div id="markets-heatmap-grid" class="heatmap-grid" style="display: none;">
+            <!-- Dynamically populated tiles -->
+          </div>
+
+          <!-- Interactive Quick Candlestick Chart Drawer -->
+          <div id="market-chart-drawer" class="chart-preview-drawer" style="display: none;">
+            <div class="chart-drawer-header">
+              <div class="chart-drawer-title">
+                <span id="chart-symbol-badge" class="chart-badge">EUR/USD (OTC)</span>
+                <span class="chart-tf-badge">1M</span>
+                <span id="chart-price-badge" class="chart-price">--</span>
+              </div>
+              <div class="chart-controls">
+                <button type="button" class="btn-chart-tf active" id="chart-tf-1m" onclick="switchChartTf('1M')">1M</button>
+                <button type="button" class="btn-chart-tf" id="chart-tf-5m" onclick="switchChartTf('5M')">5M</button>
+                <button type="button" class="btn-drawer-close" onclick="closeChartDrawer()">✕</button>
+              </div>
+            </div>
+            <div class="chart-canvas-container">
+              <canvas id="marketCandleCanvas"></canvas>
+            </div>
+            <div class="chart-drawer-footer">
+              <span class="chart-legend"><span class="dot-cyan"></span> EMA 20</span>
+              <span class="chart-legend"><span class="dot-gold"></span> EMA 50</span>
+              <span style="margin-left: auto; opacity: 0.6; font-size: 10px;">Hover crosshair displays real OHLCV</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Confirmed Signals Feed -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🎯</span>
+              <span>Confirmed Signals Feed</span>
+            </div>
+            <div class="panel-subtext">Multi-Rule Confluence Verified</div>
+          </div>
+          <div class="signals-feed-container" id="signals-feed">
+            <div class="empty-state-card" id="empty-feed-card">
+              <div class="empty-state-icon">📡</div>
+              <div style="font-weight: 700; color: var(--text-muted);">No signals fired yet</div>
+              <div style="font-size: 11px;">Scanner is continuously tracking candle closures across active Real Market & OTC assets.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split View Broker Dock -->
+      <div id="split-broker-container" style="display: none; height: calc(100vh - 120px); width: 100%; flex-direction: column;">
+        <div class="split-top-bar" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid var(--border); height: 40px; box-sizing: border-box;">
+          <span class="broker-status-chip" style="font-size: 11px; font-weight: 700; color: var(--accent-cyan);">⚡ Quotex High-Speed Execution Dock</span>
+          <span class="radar-count-chip" id="split-radar-count" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 240, 255, 0.15); color: var(--accent-cyan); font-weight: 700;">0 Live</span>
+        </div>
+        <div id="split-broker-anchor" class="split-broker-anchor" style="flex: 1; width: 100%; min-height: 400px; background: #0b0e14; position: relative;"></div>
+        <div id="split-signals-feed" class="split-signals-drawer" style="max-height: 180px; overflow-y: auto; padding: 8px; background: var(--bg-surface); border-top: 1px solid var(--border);"></div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================================
+         VIEW: Real-Time Interactive Live Chart Station
+         ====================================================================== -->
+    <section class="view-pane" id="view-chart" style="padding: 14px 18px; gap: 12px; height: 100vh; flex-direction: column; overflow: hidden; box-sizing: border-box;">
+      <!-- Chart Top Control Bar -->
+      <div class="chart-station-header">
+        <div class="chart-station-left">
+          <!-- Asset Selector Dropdown with Search / Live Rates -->
+          <div class="chart-asset-selector-wrapper">
+            <span class="chart-asset-icon">📈</span>
+            <select id="chart-asset-select" class="chart-asset-dropdown" onchange="onStationAssetChanged(this.value)">
+              <option value="EUR/USD (OTC)">EUR/USD (OTC)</option>
+            </select>
+          </div>
+
+          <!-- Quick High-Payout Watchlist Pills -->
+          <div class="chart-quick-pills" id="chart-quick-watchlist">
+            <!-- Populated dynamically with high payout pairs -->
+          </div>
+        </div>
+
+        <div class="chart-station-center">
+          <div class="chart-live-price-group">
+            <span class="chart-price-val" id="chart-live-price">--.---</span>
+            <span class="payout-badge payout-high" id="chart-live-payout">--%</span>
+            <span class="feed-badge feed-quotex" id="chart-live-source" style="font-size: 10px;">OTC STREAM</span>
+          </div>
+          <!-- Real-Time Bar Countdown -->
+          <div class="chart-countdown-badge" id="chart-candle-countdown" title="Countdown to current candle close">
+            <span class="countdown-icon">⏱️</span>
+            <span class="countdown-time" id="chart-countdown-text">00:00</span>
+          </div>
+        </div>
+
+        <div class="chart-station-right">
+          <!-- Timeframe Selector -->
+          <div class="chart-timeframe-group">
+            <button type="button" class="btn-station-tf active" id="station-tf-1m" onclick="switchStationTf('1M')">1M</button>
+            <button type="button" class="btn-station-tf" id="station-tf-3m" onclick="switchStationTf('3M')">3M</button>
+            <button type="button" class="btn-station-tf" id="station-tf-5m" onclick="switchStationTf('5M')">5M</button>
+            <button type="button" class="btn-station-tf" id="station-tf-15m" onclick="switchStationTf('15M')">15M</button>
+          </div>
+
+          <!-- Indicators Group -->
+          <div class="chart-indicators-group">
+            <button type="button" class="btn-indicator active" id="btn-ind-ema20" onclick="toggleStationIndicator('ema20')" title="Toggle EMA 20 (Cyan)">
+              <span class="dot-cyan"></span> EMA 20
+            </button>
+            <button type="button" class="btn-indicator active" id="btn-ind-ema50" onclick="toggleStationIndicator('ema50')" title="Toggle EMA 50 (Gold)">
+              <span class="dot-gold"></span> EMA 50
+            </button>
+            <button type="button" class="btn-indicator active" id="btn-ind-pivots" onclick="toggleStationIndicator('pivots')" title="Toggle Support & Resistance Dynamic Pivots">
+              <span class="dot-pivots"></span> S/R Pivots
+            </button>
+            <button type="button" class="btn-indicator" id="btn-ind-rsi" onclick="toggleStationIndicator('rsi')" title="Toggle RSI(14) Sub-Chart">
+              📊 RSI (14)
+            </button>
+            <button type="button" class="btn-indicator active" id="btn-ind-volume" onclick="toggleStationIndicator('volume')" title="Toggle Volume Histogram">
+              📶 Vol
+            </button>
+          </div>
+
+          <!-- Interactive Chart Actions (Zoom In, Zoom Out, Reset, Follow Live) -->
+          <div class="chart-actions-group">
+            <button type="button" class="btn-chart-action" onclick="zoomStationChart(1.25)" title="Zoom In (+)">🔍+</button>
+            <button type="button" class="btn-chart-action" onclick="zoomStationChart(0.8)" title="Zoom Out (-)">🔍-</button>
+            <button type="button" class="btn-chart-action" onclick="resetStationChartZoom()" title="Reset Zoom">⟲</button>
+            <button type="button" class="btn-chart-action active" id="btn-chart-autofollow" onclick="toggleStationAutoFollow()" title="Follow Live Candle (Snap to latest)">● Live</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Signal HUD Overlay Alert (if signal exists for this asset) -->
+      <div id="chart-signal-banner" class="chart-signal-banner" style="display: none;">
+        <div class="chart-signal-meta">
+          <span class="signal-tag" id="chart-signal-dir">CALL</span>
+          <span class="signal-entry-txt" id="chart-signal-entry">Entry: 1.08500</span>
+          <span class="signal-pips-txt" id="chart-signal-pips">▲ +1.4 Pips ITM</span>
+          <span class="signal-conf-txt" id="chart-signal-conf">92% Confluence</span>
+        </div>
+      </div>
+
+      <!-- Interactive Canvas Workspace -->
+      <div class="chart-main-viewport" id="chart-main-viewport">
+        <!-- Floating Real-Time OHLCV HUD Card -->
+        <div class="chart-hud-card" id="chart-hud-card">
+          <span class="hud-symbol" id="hud-symbol">EUR/USD (OTC)</span>
+          <span class="hud-item">O: <strong id="hud-open">--</strong></span>
+          <span class="hud-item">H: <strong id="hud-high">--</strong></span>
+          <span class="hud-item">L: <strong id="hud-low">--</strong></span>
+          <span class="hud-item">C: <strong id="hud-close">--</strong></span>
+          <span class="hud-item">Change: <strong id="hud-change" class="hud-val-up">+0.00%</strong></span>
+          <span class="hud-item">Vol: <strong id="hud-volume">--</strong></span>
+        </div>
+
+        <canvas id="liveStationCanvas"></canvas>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         VIEW: Quotex Broker Terminal (Full Workspace In-App Access)
+         ====================================================================== -->
+    <section class="view-pane" id="view-broker" style="padding: 0; gap: 0; height: 100vh; flex-direction: column; overflow: hidden;">
+      <div style="display: flex; align-items: center; justify-content: space-between; height: 52px; min-height: 52px; max-height: 52px; padding: 0 16px; background: var(--bg-surface); border-bottom: 1px solid var(--border); z-index: 10; flex-shrink: 0; box-sizing: border-box; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; white-space: nowrap;">
+          <span style="font-size: 16px;">⚡</span>
+          <div>
+            <div style="font-weight: 800; font-size: 12px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+              <span>Quotex Live In-App Terminal</span>
+              <span class="payout-badge payout-high" id="broker-terminal-status-badge">Embedded Session</span>
+            </div>
+            <div style="font-size: 10px; color: var(--text-dim);">Hardware-accelerated native access · No popup windows · Zero bot detection</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
+          <div style="display: flex; align-items: center; gap: 4px; background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: var(--radius-sm); padding: 2px 6px;">
+            <span style="font-size: 9px; color: var(--accent-blue); font-weight: 800;">SWITCH ASSET:</span>
+            <select id="quick-pair-select" onchange="switchPairDirect(this.value)" style="background: transparent; color: #fff; border: none; font-size: 11px; font-weight: 700; cursor: pointer; outline: none; padding: 2px 4px;">
+              <option value="USD/INR (OTC)" style="background: #111827; color: #fff;">USD/INR (OTC)</option>
+              <option value="EUR/USD (OTC)" style="background: #111827; color: #fff;">EUR/USD (OTC)</option>
+              <option value="GBP/USD (OTC)" style="background: #111827; color: #fff;">GBP/USD (OTC)</option>
+              <option value="USD/IDR (OTC)" style="background: #111827; color: #fff;">USD/IDR (OTC)</option>
+              <option value="USD/BDT (OTC)" style="background: #111827; color: #fff;">USD/BDT (OTC)</option>
+              <option value="USD/PHP (OTC)" style="background: #111827; color: #fff;">USD/PHP (OTC)</option>
+              <option value="GOLD (OTC)" style="background: #111827; color: #fff;">GOLD (OTC)</option>
+              <option value="Bitcoin (OTC)" style="background: #111827; color: #fff;">Bitcoin (OTC)</option>
+              <option value="Ethereum (OTC)" style="background: #111827; color: #fff;">Ethereum (OTC)</option>
+              <option value="USD/JPY (OTC)" style="background: #111827; color: #fff;">USD/JPY (OTC)</option>
+              <option value="NZD/USD (OTC)" style="background: #111827; color: #fff;">NZD/USD (OTC)</option>
+              <option value="AUD/USD (OTC)" style="background: #111827; color: #fff;">AUD/USD (OTC)</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px 5px;">
+            <span style="font-size: 9px; color: var(--text-dim); font-weight: 700;">MIRROR:</span>
+            <button type="button" class="btn-station-action active-mirror" id="mirror-btn-qxbroker" style="padding: 2px 6px; font-size: 10px;" onclick="navigateBrokerDomain('https://qxbroker.com')">qxbroker.com</button>
+            <button type="button" class="btn-station-action" id="mirror-btn-qxmarket" style="padding: 2px 6px; font-size: 10px;" onclick="navigateBrokerDomain('https://qx-market.com')">qx-market.com</button>
+            <button type="button" class="btn-station-action" id="mirror-btn-qxbrokerio" style="padding: 2px 6px; font-size: 10px;" onclick="navigateBrokerDomain('https://qxbroker.io')">qxbroker.io</button>
+            <button type="button" class="btn-station-action" id="mirror-btn-quotexbroker" style="padding: 2px 6px; font-size: 10px;" onclick="navigateBrokerDomain('https://quotex-broker.com')">quotex-broker.com</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 3px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px 6px;">
+            <input type="text" id="broker-url-input" value="https://qxbroker.com" style="background: transparent; border: none; color: var(--text-main); font-size: 11px; width: 140px; outline: none; font-family: var(--font-mono);" placeholder="https://..." onkeydown="if(event.key==='Enter') navigateCustomUrl()">
+            <button type="button" class="btn-station-action" style="padding: 2px 6px; font-size: 10px;" onclick="navigateCustomUrl()">Go</button>
+          </div>
+          <button type="button" class="btn-station-action" style="padding: 4px 8px; font-size: 10px;" onclick="navigateBrokerSignIn()" title="Go to Sign-In Page">
+            🔑 Sign-In
+          </button>
+          <button type="button" class="btn-station-action" style="padding: 4px 8px; font-size: 10px;" onclick="navigateBrokerTrade()" title="Go to Live Trade Room">
+            🎯 Trade Room
+          </button>
+          <button type="button" class="btn-station-action" style="padding: 4px 8px; font-size: 10px;" onclick="refreshBrokerView()" title="Reload Broker Page">
+            🔄 Refresh
+          </button>
+          <button type="button" class="btn-station-action" onclick="switchView('monitor')" style="padding: 4px 8px; font-size: 10px; background: rgba(249, 115, 22, 0.15); color: var(--accent-orange); border-color: rgba(249, 115, 22, 0.3);">
+            🧭 Back to Scanner
+          </button>
+        </div>
+      </div>
+      <div id="broker-terminal-canvas" style="flex: 1; width: 100%; height: calc(100vh - 52px); background: #0b0e14; position: relative;">
+        <div class="broker-station-placeholder">
+          <div style="font-size: 32px; margin-bottom: 12px;">🌐</div>
+          <div style="font-weight: 800; font-size: 15px; color: var(--text-main);">Quotex In-App Trading Terminal</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px; max-width: 440px;">
+            Direct access to Quotex inside TradePulse. Sign in or click Trade Room to start streaming live prices and payouts.
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================================
+         VIEW 2: Strategy Lab (Visual Rule Studio & Backtester)
+         ====================================================================== -->
+    <section class="view-pane" id="view-strategies">
+      <div class="view-header">
+        <div class="view-title-group">
+          <h2>Strategy Lab</h2>
+          <p>Build, tune, and backtest your proprietary price action and indicator rules</p>
+        </div>
+        <button class="btn-primary" onclick="createNewStrategy()">
+          <span>+</span> New Strategy
+        </button>
+      </div>
+
+      <!-- Top Horizontal Live Strategy Leaderboard Strip -->
+      <div class="panel-card strategy-leaderboard-bar">
+        <div class="leaderboard-bar-header">
+          <div class="leaderboard-bar-title">
+            <span class="leaderboard-trophy-icon">🏆</span>
+            <span class="leaderboard-bar-heading">Live Strategy Leaderboard</span>
+            <span class="leaderboard-bar-badge">Win-Rate Ranked</span>
+          </div>
+          <span class="leaderboard-bar-meta">Session Real-Time Confluence Breakdown</span>
+        </div>
+        <div id="strategy-leaderboard-container" class="leaderboard-horizontal-track">
+          <!-- Dynamically populated from left to right as cards -->
+        </div>
+      </div>
+
+      <div class="strategy-lab-layout">
+        <!-- Strategies List (Left Column) -->
+        <div class="panel-card strategy-lab-sidebar-panel">
+          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; letter-spacing: 0.5px;">
+            Your Custom Strategies
+          </div>
+          <div class="strategy-list" id="strategy-list-container">
+            <!-- Dynamically populated strategy cards -->
+          </div>
+        </div>
+
+        <!-- Strategy Editor Form -->
+        <div class="panel-card" style="padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 15px; font-weight: 800;" id="strat-editor-title">Create New Strategy</h3>
+            <button class="btn-secondary" style="font-size: 11px; padding: 6px 12px;" onclick="runStrategyBacktest()">
+              ⚡ Run Backtest
+            </button>
+          </div>
+
+          <form id="strategy-form" onsubmit="handleSaveStrategy(event)">
+            <input type="hidden" id="strat-id">
+
+            <div class="form-group">
+              <label class="form-label">Strategy Name</label>
+              <input type="text" class="form-input" id="strat-name" placeholder="e.g. 1M OTC Rejection Pinbar" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+              <div class="form-group">
+                <label class="form-label">Signal Direction</label>
+                <div class="pill-group" id="strat-direction-pills">
+                  <button type="button" class="pill-btn active" data-val="BOTH" onclick="selectPill(this, 'direction')">BOTH</button>
+                  <button type="button" class="pill-btn" data-val="CALL" onclick="selectPill(this, 'direction')">CALL (Buy)</button>
+                  <button type="button" class="pill-btn" data-val="PUT" onclick="selectPill(this, 'direction')">PUT (Sell)</button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Timeframe</label>
+                <div class="pill-group" id="strat-tf-pills">
+                  <button type="button" class="pill-btn active" data-val="1M" onclick="selectPill(this, 'timeframe')">1M</button>
+                  <button type="button" class="pill-btn" data-val="5M" onclick="selectPill(this, 'timeframe')">5M</button>
+                  <button type="button" class="pill-btn" data-val="15M" onclick="selectPill(this, 'timeframe')">15M</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+              <div class="form-group">
+                <label class="form-label">Trade Expiry Duration (Minutes)</label>
+                <input type="number" class="form-input" id="strat-duration" min="1" max="15" value="2" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Min Broker Payout %</label>
+                <input type="number" class="form-input" id="strat-min-payout" min="50" max="98" value="85" required>
+              </div>
+            </div>
+
+            <!-- Target Currencies & Asset Scope -->
+            <div class="form-group" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">Target Currencies & Asset Scope</label>
+                <span class="scope-count-badge" id="strat-asset-count-badge">All Markets Active</span>
+              </div>
+              
+              <!-- Scope Preset Pills -->
+              <div class="pill-group" id="strat-asset-pills" style="margin-bottom: 8px;">
+                <button type="button" class="pill-btn active" data-scope="ALL_MARKETS" onclick="setAssetScopePreset('ALL_MARKETS')">🌐 All Markets</button>
+                <button type="button" class="pill-btn" data-scope="ALL_OTC" onclick="setAssetScopePreset('ALL_OTC')">🌙 All OTC (24/7)</button>
+                <button type="button" class="pill-btn" data-scope="ALL_REAL" onclick="setAssetScopePreset('ALL_REAL')">🏛️ All Real Forex</button>
+                <button type="button" class="pill-btn" data-scope="CUSTOM" onclick="setAssetScopePreset('CUSTOM')">🎯 Specific Currencies</button>
+              </div>
+
+              <!-- Custom Currency Multi-Select Container -->
+              <div id="strat-custom-assets-box" class="asset-picker-box" style="display: none;">
+                <!-- Toolbar: Filter Input & Quick Actions -->
+                <div class="asset-picker-toolbar">
+                  <div class="asset-picker-search-wrap">
+                    <span style="font-size: 11px; color: var(--text-dim);">🔍</span>
+                    <input type="text" id="strat-asset-search" class="asset-picker-search" placeholder="Search pairs (e.g. EUR, OTC, JPY, GOLD)..." oninput="filterAssetChips(this.value)">
+                    <button type="button" class="asset-picker-clear-btn" onclick="clearAssetFilter()" title="Clear search">✕</button>
+                  </div>
+                  <div class="asset-picker-actions">
+                    <button type="button" class="btn-micro" onclick="selectAssetPresetGroup('OTC')">⚡ All OTC</button>
+                    <button type="button" class="btn-micro" onclick="selectAssetPresetGroup('REAL')">🏛️ Real Forex</button>
+                    <button type="button" class="btn-micro" onclick="selectAssetPresetGroup('TOP')">✨ Top Forex</button>
+                    <button type="button" class="btn-micro" onclick="selectAssetPresetGroup('CLEAR')" style="color: var(--rose);">Clear All</button>
+                  </div>
+                </div>
+
+                <!-- Scrollable Grid of Currency Chips -->
+                <div class="asset-chip-grid" id="strat-asset-chip-grid">
+                  <!-- Dynamically populated currency chips -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Rule Block Selector -->
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label">Rule Confluence Logic</label>
+              <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                  <input type="checkbox" class="custom-checkbox" id="rule-solid-body" checked>
+                  <span>Candle Anatomy: Require Strong Solid Body (&gt;50% of range)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                  <input type="checkbox" class="custom-checkbox" id="rule-engulfing">
+                  <span>Price Action: Require Engulfing Pattern</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                  <input type="checkbox" class="custom-checkbox" id="rule-wick" checked>
+                  <span>Rejection: Opposing wick &lt; 25% (Clean price drive)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                  <input type="checkbox" class="custom-checkbox" id="rule-trend">
+                  <span>Trend Confluence: EMA 9 slope aligned with direction</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                  <input type="checkbox" class="custom-checkbox" id="rule-rsi">
+                  <span>Momentum: RSI not in extreme overbought/oversold</span>
+                </label>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 18px;">
+              <button type="submit" class="btn-primary" style="flex: 1;">
+                💾 Save Strategy
+              </button>
+              <button type="button" class="btn-secondary" id="btn-delete-strat" onclick="handleDeleteSelectedStrategy()" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: var(--rose);" title="Delete this strategy">
+                🗑️ Delete
+              </button>
+              <button type="button" class="btn-secondary" onclick="resetStrategyForm()" title="Clear and reset form fields">
+                🔄 Clear
+              </button>
+            </div>
+          </form>
+
+          <!-- Backtest Result Card -->
+          <div id="backtest-result-box" style="display: none; margin-top: 18px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
+            <div style="font-weight: 700; font-size: 12px; margin-bottom: 8px; color: var(--accent-orange);">
+              ⚡ In-Memory Backtest Result
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-family: var(--font-mono); font-size: 12px;" id="backtest-metrics-grid">
+              <!-- Backtest output -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================================
+         VIEW 3: Alerts & Relay (Multi-Channel Dispatcher)
+         ====================================================================== -->
+    <section class="view-pane" id="view-alerts">
+      <div class="view-header">
+        <div class="view-title-group">
+          <h2>Alerts & Dispatch Relay</h2>
+          <p>Configure automated Telegram VIP broadcast cards and TradingView webhooks</p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <!-- Telegram VIP Card -->
+        <div class="panel-card" style="padding: 20px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+            <span style="font-size: 20px;">✈️</span>
+            <h3 style="font-size: 15px; font-weight: 800;">Telegram VIP Signal Channel</h3>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+            Dispatches rich HTML signal cards with candlestick chart snapshots and real-time WIN/LOSS outcome updates.
+          </p>
+
+          <form id="telegram-form" onsubmit="handleSaveTelegram(event)">
+            <div class="form-group">
+              <label class="form-label">Telegram Bot Token</label>
+              <input type="password" class="form-input" id="tg-token" placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Channel / Chat ID</label>
+              <input type="text" class="form-input" id="tg-chat-id" placeholder="-1001234567890" required>
+            </div>
+
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 12px 0;">
+              <input type="checkbox" class="custom-checkbox" id="tg-send-charts" checked>
+              <span>Attach High-Resolution Candlestick Chart with Signal</span>
+            </label>
+
+            <div style="display: flex; gap: 10px; margin-top: 14px;">
+              <button type="submit" class="btn-primary" style="flex: 1;">
+                Save Telegram Config
+              </button>
+              <button type="button" class="btn-secondary" onclick="testTelegramBroadcast()">
+                Send Test Signal
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- TradingView / External Webhook Receiver -->
+        <div class="panel-card" style="padding: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 20px;">🔗</span>
+              <h3 style="font-size: 15px; font-weight: 800;">Webhook Receiver & Relay</h3>
+            </div>
+            <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: var(--accent-green); font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
+              ● Listening (:8765)
+            </span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+            Pipe signals into TradePulse from TradingView alert webhooks or MetaTrader scripts.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Local Webhook Endpoint</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" class="form-input" id="webhook-url" value="http://127.0.0.1:8765/webhook" readonly style="flex: 1;">
+              <button class="btn-secondary" onclick="copyWebhookUrl()">Copy</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">TradingView Alert Message JSON</label>
+            <textarea class="form-input" style="height: 110px; font-family: var(--font-mono); font-size: 11px;" id="webhook-json" readonly>
+{
+  "key": "tradepulse_personal_secret",
+  "symbol": "{{ticker}}",
+  "side": "{{strategy.order.action}}",
+  "duration": 2
+}</textarea>
+          </div>
+
+          <button class="btn-secondary" style="width: 100%; margin-top: 6px;" onclick="copyWebhookJson()">
+            Copy JSON Template
+          </button>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================================
+         VIEW: Telegram Bot & Message Manager
+         ====================================================================== -->
+    <section class="view-pane" id="view-telegram" style="overflow-y: auto; padding-bottom: 50px;">
+      <div class="view-header">
+        <div class="view-title-group">
+          <h2>Telegram Bot & Message Manager</h2>
+          <p>Control bot credentials, multi-channel distribution, event routing rules, and customize live message templates with dynamic tokens.</p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <span id="tg-manager-bot-badge" class="badge-neutral" style="padding: 6px 12px; font-size: 11px; font-weight: 700; border-radius: var(--radius-xs); display: flex; align-items: center; gap: 6px;">
+            <span id="tg-manager-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); display: inline-block;"></span>
+            <span id="tg-manager-bot-name">Bot Checking...</span>
+          </span>
+          <button class="btn-secondary" onclick="refreshTelegramManagerState()">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Sub-Tabs Navigation -->
+      <div class="tg-tabs-nav">
+        <button class="tg-tab-btn active" id="tg-subtab-bot" onclick="switchTelegramTab('bot')">
+          <span>🤖</span> Bot & Channels
+        </button>
+        <button class="tg-tab-btn" id="tg-subtab-rules" onclick="switchTelegramTab('rules')">
+          <span>⚡</span> Event Dispatch Rules
+        </button>
+        <button class="tg-tab-btn" id="tg-subtab-templates" onclick="switchTelegramTab('templates')">
+          <span>📝</span> Message Templates & Live Preview
+        </button>
+        <button class="tg-tab-btn" id="tg-subtab-broadcast" onclick="switchTelegramTab('broadcast')">
+          <span>📢</span> Instant Broadcast
+        </button>
+      </div>
+
+      <!-- TAB 1: Bot & Channels -->
+      <div class="tg-tab-pane active" id="tg-pane-bot">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Panel 1: Bot Credentials -->
+          <div class="panel-card" style="padding: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">🔑</span>
+                <h3 style="font-size: 15px; font-weight: 800;">Bot Authentication & API</h3>
+              </div>
+              <span id="tg-bot-status-tag" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--text-muted); font-weight: 700; border: 1px solid var(--border-dim);">
+                Unverified
+              </span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              Enter your Telegram bot token from <code>@BotFather</code>. Test verification checks the Telegram API directly.
+            </p>
+
+            <form id="tg-bot-form" onsubmit="saveTelegramBotCredentials(event)">
+              <div class="form-group">
+                <label class="form-label">Telegram Bot Token</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="password" class="form-input" id="tg-mgr-token" placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ" required style="flex: 1;">
+                  <button type="button" class="btn-secondary" onclick="toggleTokenVisibility('tg-mgr-token')" title="Toggle Mask">👁️</button>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 14px;">
+                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                  <div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text-main);">Interactive Command Polling</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">Listen for remote /status, /rates, /payouts commands</div>
+                  </div>
+                  <input type="checkbox" class="custom-checkbox" id="tg-mgr-polling" checked>
+                </label>
+              </div>
+
+              <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn-primary" style="flex: 1;">
+                  💾 Save Credentials
+                </button>
+                <button type="button" class="btn-secondary" onclick="verifyTelegramBotToken()">
+                  ⚡ Verify via Telegram
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Panel 2: Multi-Channel Manager -->
+          <div class="panel-card" style="padding: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">📢</span>
+                <h3 style="font-size: 15px; font-weight: 800;">Destination Channels & Groups</h3>
+              </div>
+              <span id="tg-channel-count-badge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(0, 240, 255, 0.1); color: var(--cyan-bright); font-weight: 700; border: 1px solid rgba(0, 240, 255, 0.25);">
+                0 Channels
+              </span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+              Route signals simultaneously to multiple VIP groups, free channels, or private admin monitors.
+            </p>
+
+            <!-- Add Channel Form -->
+            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+              <input type="text" class="form-input" id="tg-new-channel-title" placeholder="Alias (e.g. VIP Signals)" style="flex: 1; font-size: 12px;">
+              <input type="text" class="form-input" id="tg-new-channel-id" placeholder="Chat ID (-100...)" style="flex: 1; font-size: 12px; font-family: var(--font-mono);">
+              <button class="btn-secondary" onclick="addTelegramChannel()" style="white-space: nowrap; font-size: 12px;">
+                ➕ Add
+              </button>
+            </div>
+
+            <!-- Channel Cards List -->
+            <div class="tg-channel-list" id="tg-channels-container">
+              <!-- Rendered via app.js -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Event Dispatch Rules -->
+      <div class="tg-tab-pane" id="tg-pane-rules">
+        <div class="panel-card" style="padding: 22px; margin-bottom: 20px;">
+          <div style="margin-bottom: 16px;">
+            <h3 style="font-size: 15px; font-weight: 800;">Event Notification Toggles</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Select which system events are automatically dispatched to your Telegram subscribers.</p>
+          </div>
+
+          <div class="tg-rules-grid">
+            <!-- Rule 1: Confirmed VIP Signals -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">🎯</span>
+                <div class="tg-rule-text">
+                  <h4>Confirmed VIP Signals</h4>
+                  <p>Fires the official signal entry card immediately upon candle close with exact strike price.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-signals" checked>
+            </div>
+
+            <!-- Rule 2: Pre-Signal Radar -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">⚡</span>
+                <div class="tg-rule-text">
+                  <h4>Pre-Signal Radar Alert</h4>
+                  <p>Early heads-up ~15 seconds before candle close so subscribers can prepare their pair & stake.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-pre-signals" checked>
+            </div>
+
+            <!-- Rule 3: Trade Outcomes -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">🏁</span>
+                <div class="tg-rule-text">
+                  <h4>Trade Outcomes (WIN / LOSS)</h4>
+                  <p>Sends real-time post-expiry outcome cards with profit return and strike verification.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-outcomes" checked>
+            </div>
+
+            <!-- Rule 4: Circuit Breaker Alerts -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">🛑</span>
+                <div class="tg-rule-text">
+                  <h4>Daily Circuit Breaker Protection</h4>
+                  <p>Dispatches high-priority emergency alerts if daily loss or profit targets halt trading.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-circuit-breaker" checked>
+            </div>
+
+            <!-- Rule 5: News Blackout Warnings -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">📰</span>
+                <div class="tg-rule-text">
+                  <h4>Economic News Blackout</h4>
+                  <p>Notifies subscribers when high-impact CPI/NFP news triggers institutional trading halt.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-news" checked>
+            </div>
+
+            <!-- Rule 6: HD Candlestick Chart -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">📸</span>
+                <div class="tg-rule-text">
+                  <h4>Attach HD Chart Snapshot</h4>
+                  <p>Generates and attaches a high-resolution dark mode technical chart snapshot to VIP signals.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-charts" checked>
+            </div>
+          </div>
+
+          <!-- Quality & Payout Threshold Filters -->
+          <div style="border-top: 1px solid var(--border-dim); padding-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label class="form-label" style="margin-bottom: 0;">Minimum Setup Quality Score</label>
+                <span id="tg-score-badge" style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--cyan-bright); padding: 2px 8px; border-radius: 4px; background: rgba(0, 240, 255, 0.1);">80%</span>
+              </div>
+              <input type="range" min="50" max="95" step="1" value="80" class="custom-range" id="tg-rule-min-score" oninput="document.getElementById('tg-score-badge').innerText = this.value + '%'">
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Signals scoring below this confidence score will NOT be dispatched to Telegram.</p>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label class="form-label" style="margin-bottom: 0;">Minimum Asset Payout Filter</label>
+                <span id="tg-payout-badge" style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--emerald); padding: 2px 8px; border-radius: 4px; background: rgba(16, 185, 129, 0.1);">75%</span>
+              </div>
+              <input type="range" min="50" max="95" step="1" value="75" class="custom-range" id="tg-rule-min-payout" oninput="document.getElementById('tg-payout-badge').innerText = this.value + '%'">
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Assets offering lower broker payout will be excluded from VIP broadcast.</p>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+            <button class="btn-primary" onclick="saveTelegramEventRules()">
+              💾 Save Event Dispatch Rules
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Message Templates & Live Preview -->
+      <div class="tg-tab-pane" id="tg-pane-templates">
+        <div style="display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 20px;">
+          <!-- Left: Template Editor -->
+          <div class="panel-card" style="padding: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">📝</span>
+                <h3 style="font-size: 15px; font-weight: 800;">Message Template Designer</h3>
+              </div>
+              <select class="form-select" id="tg-template-selector" onchange="onSelectTelegramTemplate(this.value)" style="width: 220px; font-size: 12px;">
+                <option value="signal">VIP Signal Card</option>
+                <option value="pre_signal">Pre-Signal Radar Alert</option>
+                <option value="outcome">Trade Outcome (WIN/LOSS)</option>
+                <option value="circuit_breaker">Circuit Breaker Protection</option>
+              </select>
+            </div>
+
+            <!-- Mode Switcher: Visual Designer vs Raw Code -->
+            <div class="tg-editor-mode-toggle">
+              <button type="button" class="tg-mode-btn active" id="tg-mode-btn-visual" onclick="setTemplateEditorMode('visual')">
+                <span>🎨</span> Visual Designer (No-Code)
+              </button>
+              <button type="button" class="tg-mode-btn" id="tg-mode-btn-code" onclick="setTemplateEditorMode('code')">
+                <span>💻</span> Raw HTML Code (Advanced)
+              </button>
+            </div>
+
+            <!-- 1. VISUAL NO-CODE DESIGNER CONTAINER -->
+            <div id="tg-visual-designer">
+              <!-- 1-Click Style Themes -->
+              <div style="margin-bottom: 12px;">
+                <label class="form-label" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">
+                  1-Click Card Styles
+                </label>
+                <div class="tg-preset-group">
+                  <button type="button" class="tg-preset-chip active" id="tg-preset-vip" onclick="applyTelegramCardPreset('vip')">
+                    <span class="tg-preset-icon">🌟</span>
+                    <div class="tg-preset-text">
+                      <div class="tg-preset-title">VIP Complete</div>
+                      <div class="tg-preset-sub">Full analytics & details</div>
+                    </div>
+                  </button>
+                  <button type="button" class="tg-preset-chip" id="tg-preset-clean" onclick="applyTelegramCardPreset('clean')">
+                    <span class="tg-preset-icon">⚡</span>
+                    <div class="tg-preset-text">
+                      <div class="tg-preset-title">Clean Minimal</div>
+                      <div class="tg-preset-sub">Pair, entry & direction</div>
+                    </div>
+                  </button>
+                  <button type="button" class="tg-preset-chip" id="tg-preset-pro" onclick="applyTelegramCardPreset('pro')">
+                    <span class="tg-preset-icon">💎</span>
+                    <div class="tg-preset-text">
+                      <div class="tg-preset-title">Pro Confluence</div>
+                      <div class="tg-preset-sub">EV, MTG step & score</div>
+                    </div>
+                  </button>
+                  <button type="button" class="tg-preset-chip" id="tg-preset-compact" onclick="applyTelegramCardPreset('compact')">
+                    <span class="tg-preset-icon">🎯</span>
+                    <div class="tg-preset-text">
+                      <div class="tg-preset-title">Direct Signal</div>
+                      <div class="tg-preset-sub">Ultra-fast 3-line card</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Signal Card Visual Configuration Fields -->
+              <div id="tg-visual-fields-signal">
+                <!-- Header Section -->
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">🚀 Header & Alert Banner</div>
+                  <label class="tg-visual-label" style="margin-bottom: 6px;">
+                    <input type="checkbox" id="tg-vis-sig-header-toggle" checked onchange="onVisualDesignerChange()">
+                    <span>Show Header Banner</span>
+                  </label>
+                  <input type="text" class="tg-visual-input" id="tg-vis-sig-header-text" value="SIGNAL ALERT: {strategy}" placeholder="Header title (e.g. VIP SIGNAL ALERT)" oninput="onVisualDesignerChange()">
+                </div>
+
+                <!-- Trade Parameters Section -->
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">📊 Trade Parameters</div>
+                  <div class="tg-visual-grid">
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-asset" checked onchange="onVisualDesignerChange()">
+                      <span>Asset & Market Type</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-payout" checked onchange="onVisualDesignerChange()">
+                      <span>Payout Percentage (%)</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-direction" checked onchange="onVisualDesignerChange()">
+                      <span>Direction & Arrow (CALL/PUT)</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-timeframe" checked onchange="onVisualDesignerChange()">
+                      <span>Timeframe & Expiry Duration</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-entrytime" checked onchange="onVisualDesignerChange()">
+                      <span>Entry Time (Next Candle Open)</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-entryprice" checked onchange="onVisualDesignerChange()">
+                      <span>Strike Price at Entry</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-expirytime" checked onchange="onVisualDesignerChange()">
+                      <span>Target Expiry Clock Time</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Intelligence & Confluence Section -->
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">🧠 Confluence & Risk Metrics</div>
+                  <div class="tg-visual-grid">
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-confluence" checked onchange="onVisualDesignerChange()">
+                      <span>Confirming Strategies</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-score" checked onchange="onVisualDesignerChange()">
+                      <span>Quality Score & Tier Badge</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-stake" checked onchange="onVisualDesignerChange()">
+                      <span>Recommended Stake & Step</span>
+                    </label>
+                    <label class="tg-visual-label">
+                      <input type="checkbox" id="tg-vis-sig-ev" checked onchange="onVisualDesignerChange()">
+                      <span>Mathematical Edge (Quant EV)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Custom Note / Channel Promo -->
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">📢 Custom Channel Note / Promo</div>
+                  <label class="tg-visual-label" style="margin-bottom: 6px;">
+                    <input type="checkbox" id="tg-vis-sig-note-toggle" onchange="onVisualDesignerChange()">
+                    <span>Include Custom Message / Channel Link</span>
+                  </label>
+                  <input type="text" class="tg-visual-input" id="tg-vis-sig-note-text" placeholder="e.g. ⚡ Follow strict 1-step MTG rules | @MyTelegramChannel" oninput="onVisualDesignerChange()">
+                </div>
+
+                <!-- Watermark & Footer -->
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">🔒 Footer & Watermark</div>
+                  <label class="tg-visual-label" style="margin-bottom: 6px;">
+                    <input type="checkbox" id="tg-vis-sig-footer-toggle" checked onchange="onVisualDesignerChange()">
+                    <span>Show Footer Watermark</span>
+                  </label>
+                  <input type="text" class="tg-visual-input" id="tg-vis-sig-footer-text" value="TradePulse VIP Institutional Signal" placeholder="Watermark text" oninput="onVisualDesignerChange()">
+                </div>
+              </div>
+
+              <!-- Pre-Signal Visual Configuration Fields -->
+              <div id="tg-visual-fields-pre_signal" style="display: none;">
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">⚡ Pre-Signal Radar Header</div>
+                  <input type="text" class="tg-visual-input" id="tg-vis-pre-header-text" value="PRE-SIGNAL RADAR: PREPARE ENTRY" oninput="onVisualDesignerChange()">
+                </div>
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">📊 Radar Parameters</div>
+                  <div class="tg-visual-grid">
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-asset" checked onchange="onVisualDesignerChange()"> <span>Asset Symbol</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-direction" checked onchange="onVisualDesignerChange()"> <span>Direction Badge</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-timeframe" checked onchange="onVisualDesignerChange()"> <span>Timeframe & Expiry</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-payout" checked onchange="onVisualDesignerChange()"> <span>Payout %</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-seconds" checked onchange="onVisualDesignerChange()"> <span>Countdown Remaining</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-pattern" checked onchange="onVisualDesignerChange()"> <span>Forming Pattern</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-pre-stake" checked onchange="onVisualDesignerChange()"> <span>Recommended Stake</span></label>
+                  </div>
+                </div>
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">📝 Guidance Footer</div>
+                  <input type="text" class="tg-visual-input" id="tg-vis-pre-footer-text" value="Prepare pair & stake in Quotex. Official entry fires on candle close." oninput="onVisualDesignerChange()">
+                </div>
+              </div>
+
+              <!-- Outcome Visual Configuration Fields -->
+              <div id="tg-visual-fields-outcome" style="display: none;">
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">🏁 Trade Outcome Header</div>
+                  <div class="tg-visual-grid">
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-out-asset" checked onchange="onVisualDesignerChange()"> <span>Asset Symbol</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-out-strategy" checked onchange="onVisualDesignerChange()"> <span>Strategy Name</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-out-direction" checked onchange="onVisualDesignerChange()"> <span>Direction</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-out-badge" checked onchange="onVisualDesignerChange()"> <span>Result Badge (WIN/LOSS)</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-out-prices" checked onchange="onVisualDesignerChange()"> <span>Strike & Exit Prices</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-out-profit" checked onchange="onVisualDesignerChange()"> <span>Profit / Return Line</span></label>
+                  </div>
+                </div>
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">🔒 Verification Footer</div>
+                  <input type="text" class="tg-visual-input" id="tg-vis-out-footer-text" value="TradePulse 24/7 Real-Time Outcome Verification" oninput="onVisualDesignerChange()">
+                </div>
+              </div>
+
+              <!-- Circuit Breaker Visual Configuration Fields -->
+              <div id="tg-visual-fields-circuit_breaker" style="display: none;">
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">🛑 Protection Alert</div>
+                  <input type="text" class="tg-visual-input" id="tg-vis-cb-header-text" value="TRADEPULSE CIRCUIT BREAKER ACTIVATED" oninput="onVisualDesignerChange()">
+                </div>
+                <div class="tg-visual-card">
+                  <div class="tg-visual-card-title">⚠️ Risk Metrics</div>
+                  <div class="tg-visual-grid">
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-cb-reason" checked onchange="onVisualDesignerChange()"> <span>Trigger Reason</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-cb-pnl" checked onchange="onVisualDesignerChange()"> <span>Session Net PnL</span></label>
+                    <label class="tg-visual-label"><input type="checkbox" id="tg-vis-cb-trades" checked onchange="onVisualDesignerChange()"> <span>Total Trades Taken</span></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. RAW HTML CODE EDITOR CONTAINER (Advanced Mode) -->
+            <div id="tg-code-editor-container" style="display: none;">
+              <p style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px;">
+                Advanced Mode: Directly customize raw Telegram HTML tags. Click any token pill below to insert it at your cursor.
+              </p>
+
+              <!-- Dynamic Token Pills Palette -->
+              <div class="tg-token-palette" id="tg-token-palette">
+                <!-- Dynamically populated per template -->
+              </div>
+
+              <div class="form-group" style="margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <label class="form-label" style="margin-bottom: 0;">HTML Template Code</label>
+                  <span id="tg-template-char-count" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">0 chars</span>
+                </div>
+                <textarea class="form-input" id="tg-template-editor" style="height: 300px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; resize: vertical;" oninput="onTelegramTemplateInput()"></textarea>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 14px;">
+              <button class="btn-primary" onclick="saveActiveTelegramTemplate()" style="flex: 1.2;">
+                💾 Save Custom Template
+              </button>
+              <button class="btn-secondary" onclick="sendTestPreviewToChannel()" style="flex: 1;" title="Send live sample card to connected Telegram chat">
+                📨 Send Test to Channel
+              </button>
+              <button class="btn-secondary" onclick="resetActiveTelegramTemplate()">
+                ↩️ Reset Default
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: Interactive Live Telegram Chat Preview -->
+          <div class="panel-card" style="padding: 20px; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">📱</span>
+                <h3 style="font-size: 15px; font-weight: 800;">Telegram Live Preview</h3>
+              </div>
+              <span style="font-size: 10px; font-weight: 700; color: #64b5f6; background: rgba(100, 181, 246, 0.1); border: 1px solid rgba(100, 181, 246, 0.25); padding: 2px 7px; border-radius: 4px;">
+                Real-Time Render
+              </span>
+            </div>
+
+            <p style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px;">
+              Simulated Telegram channel view displaying rendered HTML styling, tags, and tokens.
+            </p>
+
+            <div class="tg-preview-container" style="flex: 1; display: flex; align-items: flex-start;">
+              <div class="tg-preview-bubble" style="width: 100%;">
+                <div class="tg-preview-author">
+                  <span>⚡ TradePulse Signals</span>
+                  <span class="tg-bot-tag">bot</span>
+                </div>
+                <div class="tg-preview-content" id="tg-preview-body">
+                  <!-- Live interpolated HTML content -->
+                </div>
+                <div class="tg-preview-buttons" id="tg-preview-buttons">
+                  <div class="tg-preview-btn">📈 Trade on Quotex</div>
+                </div>
+                <div class="tg-preview-footer">
+                  <span id="tg-preview-time">10:45</span>
+                  <span>✓✓</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: Instant Broadcast Tool -->
+      <div class="tg-tab-pane" id="tg-pane-broadcast">
+        <div class="panel-card" style="padding: 22px; max-width: 780px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+            <span style="font-size: 22px;">📣</span>
+            <div>
+              <h3 style="font-size: 15px; font-weight: 800;">Manual Announcement Composer</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">Send immediate announcements, VIP market recaps, or custom notices to selected channels.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Destination Channel</label>
+            <select class="form-select" id="tg-broadcast-target-select">
+              <option value="ALL">🌐 Broadcast to All Configured Channels</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top: 14px;">
+            <label class="form-label">Announcement Message (HTML Supported)</label>
+            <textarea class="form-input" id="tg-broadcast-text" placeholder="📢 <b>VIP Trading Session Starting!</b>&#10;&#10;Get ready on Quotex. Market volatility is optimal." style="height: 140px; font-family: var(--font-sans); font-size: 13px;"></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+            <div id="tg-broadcast-feedback" style="font-size: 12px; font-weight: 600;"></div>
+            <button class="btn-primary" onclick="sendCustomTelegramAnnouncement()">
+              🚀 Send Announcement Now
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================================
+         VIEW 4: History & PnL
+         ====================================================================== -->
+    <section class="view-pane" id="view-history">
+      <div class="view-header">
+        <div class="view-title-group">
+          <h2>Signal History & Performance</h2>
+          <p>Complete audit trail of all generated signals, strike entries, and real-time outcomes</p>
+        </div>
+        <button class="btn-secondary" onclick="exportHistoryCSV()">
+          📥 Export CSV
+        </button>
+      </div>
+
+      <!-- Filters Row -->
+      <div style="display: flex; gap: 12px; align-items: center; background: var(--bg-surface); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-md);">
+        <div class="pill-group" id="history-filter-pills">
+          <button class="pill-btn active" data-val="ALL" onclick="filterHistory(this)">All</button>
+          <button class="pill-btn" data-val="WIN" onclick="filterHistory(this)">Won</button>
+          <button class="pill-btn" data-val="LOSS" onclick="filterHistory(this)">Lost</button>
+          <button class="pill-btn" data-val="DRAW" onclick="filterHistory(this)">Draw</button>
+        </div>
+        <div style="flex: 1; margin-left: 10px;">
+          <input type="text" class="form-input" id="history-search" placeholder="Search asset (e.g. USD/INR)..." oninput="filterHistorySearch(this.value)">
+        </div>
+      </div>
+
+      <!-- Trading Journal & Cumulative Bankroll Equity Curve -->
+      <div class="panel-card" style="padding: 16px; margin: 14px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div style="font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+            <span>📈</span>
+            <span>Live Trading Journal & Cumulative Return Curve</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="streak-badge" id="journal-current-streak">🔥 Current Streak: 0 W</div>
+            <div class="streak-badge streak-best" id="journal-best-streak">🏆 Best Streak: 0 W</div>
+            <div class="streak-badge" id="journal-net-return" style="color: var(--emerald);">💰 Return: +0.0%</div>
+          </div>
+        </div>
+        <div style="width: 100%; height: 160px; background: #07090d; border-radius: 6px; overflow: hidden; position: relative;">
+          <canvas id="equityCurveCanvas" height="160"></canvas>
+        </div>
+      </div>
+
+      <!-- History Table -->
+      <div class="panel-card">
+        <div class="table-container" style="max-height: 520px;">
+          <table class="markets-table history-table">
+            <thead>
+              <tr>
+                <th style="width: 110px;">Timestamp</th>
+                <th style="width: 140px;">Asset Symbol</th>
+                <th style="width: 210px;">Strategy</th>
+                <th style="width: 90px; text-align: center;">Direction</th>
+                <th style="width: 100px;">Strike</th>
+                <th style="width: 100px;">Exit Price</th>
+                <th style="width: 75px; text-align: right;">Payout</th>
+                <th style="width: 95px; text-align: center;">Outcome</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ======================================================================
+         VIEW 5: Preferences & Safeguards
+         ====================================================================== -->
+    <section class="view-pane" id="view-preferences" style="overflow-y: auto; padding-bottom: 50px;">
+      <div class="view-header">
+        <div class="view-title-group">
+          <h2>Platform Preferences & Safeguards</h2>
+          <p>Macro news blackout rules, mathematical EV quant filters, risk suite & trading schedules</p>
+        </div>
+      </div>
+
+      <!-- Institutional Signal Safeguards Section -->
+      <div style="margin-top: 14px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <h3 style="font-size: 13px; font-weight: 800; color: var(--cyan-bright); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+            <span>🛡️</span> Institutional Safeguards & Filters
+          </h3>
+          <span style="font-size: 11px; color: var(--text-dim);">All 4 safeguards can be toggled on/off independently</span>
+        </div>
+      </div>
+
+      <div class="safeguards-pref-grid">
+        <!-- 1. Real-Time Economic News Filter Card -->
+        <div class="panel-card safeguard-card" id="pref-card-news">
+          <div class="safeguard-card-header">
+            <div class="safeguard-card-title">
+              <span class="safeguard-icon">📰</span>
+              <div>
+                <div class="safeguard-name">Economic News Calendar</div>
+                <div class="safeguard-desc">Blackout signals around high-impact global macro events</div>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-news-toggle" checked onchange="toggleAdvancedFilter('news_calendar', 'enabled', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="safeguard-card-body">
+            <!-- Window Duration -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label class="form-label">Pause Before (Minutes)</label>
+                <input type="number" class="form-input" id="pref-news-before" value="30" min="1" max="120" onchange="updateNewsConfig()">
+              </div>
+              <div>
+                <label class="form-label">Pause After (Minutes)</label>
+                <input type="number" class="form-input" id="pref-news-after" value="30" min="1" max="120" onchange="updateNewsConfig()">
+              </div>
+            </div>
+
+            <!-- Impact Severity -->
+            <div style="margin-bottom: 12px;">
+              <label class="form-label" style="margin-bottom: 6px;">Filter Impact Levels</label>
+              <div class="impact-checkbox-row">
+                <label class="impact-check-label">
+                  <input type="checkbox" id="pref-news-impact-high" checked onchange="updateNewsConfig()">
+                  <span class="impact-tag tag-high">🔴 High (3-Bull)</span>
+                </label>
+                <label class="impact-check-label">
+                  <input type="checkbox" id="pref-news-impact-med" checked onchange="updateNewsConfig()">
+                  <span class="impact-tag tag-med">🟠 Medium (2-Bull)</span>
+                </label>
+                <label class="impact-check-label">
+                  <input type="checkbox" id="pref-news-impact-low" onchange="updateNewsConfig()">
+                  <span class="impact-tag tag-low">🟡 Low (1-Bull)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- OTC Bypass Switch -->
+            <label class="pref-switch-row" style="margin-bottom: 14px;">
+              <div>
+                <div style="font-weight: 600; font-size: 12px;">Bypass Blackout for OTC Pairs</div>
+                <div style="font-size: 11px; color: var(--text-dim);">Keep 24/7 OTC markets scanning even during real-market macro events</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="pref-news-bypass-otc" onchange="updateNewsConfig()">
+                <span class="slider"></span>
+              </label>
+            </label>
+
+            <!-- Upcoming Events Feed Preview -->
+            <div class="upcoming-news-header">
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);">UPCOMING MACRO RELEASES</span>
+              <button type="button" class="btn-tiny-refresh" onclick="refreshUpcomingNews()" title="Refresh Calendar">🔄 Refresh</button>
+            </div>
+            <div class="upcoming-news-list" id="pref-news-upcoming-list">
+              <div class="news-loading-placeholder">Loading institutional calendar...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Expected Value (EV) Quant Filter Card -->
+        <div class="panel-card safeguard-card" id="pref-card-ev">
+          <div class="safeguard-card-header">
+            <div class="safeguard-card-title">
+              <span class="safeguard-icon">🧮</span>
+              <div>
+                <div class="safeguard-name">Expected Value (EV) Filter</div>
+                <div class="safeguard-desc">Gating signals based on broker payout breakeven math</div>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-ev-toggle" checked onchange="toggleAdvancedFilter('quant_ev', 'enabled', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="safeguard-card-body">
+            <!-- Positive EV Switch -->
+            <label class="pref-switch-row" style="margin-bottom: 14px;">
+              <div>
+                <div style="font-weight: 600; font-size: 12px;">Enforce Positive Expected Value (EV &gt; 0)</div>
+                <div style="font-size: 11px; color: var(--text-dim);">Reject signals if modeled probability is below broker breakeven rate</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="pref-ev-positive-only" checked onchange="updateQuantEVConfig()">
+                <span class="slider"></span>
+              </label>
+            </label>
+
+            <!-- Min Confidence Slider -->
+            <div style="margin-bottom: 14px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">Minimum Win Rate Confidence</label>
+                <span style="font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--cyan-bright);" id="pref-ev-conf-label">55%</span>
+              </div>
+              <input type="range" class="form-range" id="pref-ev-conf-slider" min="50" max="90" value="55" step="1" oninput="document.getElementById('pref-ev-conf-label').textContent = this.value + '%'" onchange="updateQuantEVConfig()">
+            </div>
+
+            <!-- Engine Mode -->
+            <div style="margin-bottom: 14px;">
+              <label class="form-label">Quant Decision Engine Mode</label>
+              <select class="form-input" id="pref-ev-mode" onchange="updateQuantEVConfig()">
+                <option value="quant">Strict Quant EV (Payout Math Gating)</option>
+                <option value="confluence">Confluence Multi-Model Consensus</option>
+                <option value="learned">Historical ML Edge Scoring</option>
+              </select>
+            </div>
+
+            <!-- Breakeven Formula Pill -->
+            <div class="ev-formula-pill">
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-dim);">
+                <span>📐</span>
+                <span>BREAKEVEN FORMULA</span>
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-bright); margin-top: 4px;">
+                Win Rate Req = 100 / (100 + Payout)%
+              </div>
+              <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                E.g. At 85% Quotex payout, trade requires &gt;54.05% win rate for positive EV.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Advanced Risk Management Suite Card -->
+        <div class="panel-card safeguard-card" id="pref-card-risk">
+          <div class="safeguard-card-header">
+            <div class="safeguard-card-title">
+              <span class="safeguard-icon">🛡️</span>
+              <div>
+                <div class="safeguard-name">Advanced Risk Management Suite</div>
+                <div class="safeguard-desc">Martingale position sizing & daily TP/SL circuit breakers</div>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-risk-toggle" checked onchange="toggleAdvancedFilter('risk_manager', 'enabled', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="safeguard-card-body">
+            <!-- Base Stake -->
+            <div style="margin-bottom: 12px;">
+              <label class="form-label">Recommended Base Stake ($)</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="number" class="form-input" id="pref-risk-base-stake" value="10.0" min="1" step="1" onchange="updateRiskConfig()">
+              </div>
+            </div>
+
+            <!-- Martingale Recovery Group -->
+            <div class="risk-sub-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div>
+                  <div style="font-size: 12px; font-weight: 700;">Martingale Recovery Sizing</div>
+                  <div style="font-size: 10px; color: var(--text-dim);">Multiply stake recommendations on consecutive losses</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="pref-risk-martingale-toggle" onchange="updateRiskConfig()">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                  <label class="form-label">Multiplier</label>
+                  <input type="number" class="form-input" id="pref-risk-martingale-mult" value="2.0" min="1.1" max="5.0" step="0.1" onchange="updateRiskConfig()">
+                </div>
+                <div>
+                  <label class="form-label">Max Steps</label>
+                  <input type="number" class="form-input" id="pref-risk-martingale-steps" value="3" min="1" max="10" step="1" onchange="updateRiskConfig()">
+                </div>
+              </div>
+            </div>
+
+            <!-- Circuit Breakers Group -->
+            <div class="risk-sub-card" style="margin-top: 10px;">
+              <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--amber);">
+                ⚡ Daily Circuit Breakers (Auto-Pause Scanner)
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; font-weight: 600;">
+                    <input type="checkbox" id="pref-risk-tp-toggle" onchange="updateRiskConfig()"> Take Profit ($)
+                  </label>
+                  <input type="number" class="form-input" id="pref-risk-tp-amount" value="100.0" min="5" step="5" onchange="updateRiskConfig()">
+                </div>
+                <div>
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; font-weight: 600;">
+                    <input type="checkbox" id="pref-risk-sl-toggle" onchange="updateRiskConfig()"> Stop Loss ($)
+                  </label>
+                  <input type="number" class="form-input" id="pref-risk-sl-amount" value="50.0" min="5" step="5" onchange="updateRiskConfig()">
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Session Telemetry & Reset -->
+            <div class="risk-telemetry-box">
+              <div class="risk-telem-item">
+                <span class="risk-telem-label">Daily PnL:</span>
+                <span class="risk-telem-val" id="risk-session-pnl">$0.00</span>
+              </div>
+              <div class="risk-telem-item">
+                <span class="risk-telem-label">Record:</span>
+                <span class="risk-telem-val" id="risk-session-record">0W / 0L</span>
+              </div>
+              <div class="risk-telem-item">
+                <span class="risk-telem-label">Next Stake:</span>
+                <span class="risk-telem-val text-cyan" id="risk-session-stake">$10.00</span>
+              </div>
+              <button type="button" class="btn-secondary" id="btn-reset-risk" onclick="resetDailyRiskSession()" style="padding: 4px 8px; font-size: 10px;">🔄 Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Trading Hours & Session Schedule Card -->
+        <div class="panel-card safeguard-card" id="pref-card-schedule">
+          <div class="safeguard-card-header">
+            <div class="safeguard-card-title">
+              <span class="safeguard-icon">⏰</span>
+              <div>
+                <div class="safeguard-name">Trading Hours & Schedule</div>
+                <div class="safeguard-desc">Automatic standby outside operating session windows</div>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-schedule-toggle" onchange="toggleAdvancedFilter('session_scheduler', 'enabled', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="safeguard-card-body">
+            <!-- Active Days Selection -->
+            <div style="margin-bottom: 14px;">
+              <label class="form-label" style="margin-bottom: 6px;">Active Trading Days</label>
+              <div class="day-pills-row" id="schedule-day-pills">
+                <button type="button" class="day-pill active" data-day="Su" onclick="toggleScheduleDay('Su')">Su</button>
+                <button type="button" class="day-pill active" data-day="Mo" onclick="toggleScheduleDay('Mo')">Mo</button>
+                <button type="button" class="day-pill active" data-day="Tu" onclick="toggleScheduleDay('Tu')">Tu</button>
+                <button type="button" class="day-pill active" data-day="We" onclick="toggleScheduleDay('We')">We</button>
+                <button type="button" class="day-pill active" data-day="Th" onclick="toggleScheduleDay('Th')">Th</button>
+                <button type="button" class="day-pill active" data-day="Fr" onclick="toggleScheduleDay('Fr')">Fr</button>
+                <button type="button" class="day-pill active" data-day="Sa" onclick="toggleScheduleDay('Sa')">Sa</button>
+              </div>
+            </div>
+
+            <!-- Operating Time Window -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+              <div>
+                <label class="form-label">Start Time</label>
+                <input type="time" class="form-input" id="pref-schedule-start" value="00:00" onchange="updateScheduleConfig()">
+              </div>
+              <div>
+                <label class="form-label">End Time</label>
+                <input type="time" class="form-input" id="pref-schedule-end" value="23:59" onchange="updateScheduleConfig()">
+              </div>
+            </div>
+
+            <!-- Timezone Mode -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div>
+                <div style="font-weight: 600; font-size: 12px;">Timezone Reference</div>
+                <div style="font-size: 11px; color: var(--text-dim);">Use institutional UTC or local computer clock</div>
+              </div>
+              <div class="tz-pill-group">
+                <button type="button" class="tz-pill active" id="tz-pill-utc" onclick="setScheduleTimezone(true)">UTC</button>
+                <button type="button" class="tz-pill" id="tz-pill-local" onclick="setScheduleTimezone(false)">Local</button>
+              </div>
+            </div>
+
+            <!-- Current Status Box -->
+            <div class="schedule-status-box" id="pref-schedule-status-banner">
+              <span class="schedule-status-dot dot-active" id="pref-schedule-dot"></span>
+              <span id="pref-schedule-status-text">Schedule disabled (24/7 scanning active)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- General Platform Settings Section -->
+      <div style="margin-top: 26px; margin-bottom: 10px;">
+        <h3 style="font-size: 13px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+          <span>⚙️</span> Platform Settings & Engine Controls
+        </h3>
+      </div>
+
+      <div class="preferences-general-grid">
+        <div class="panel-card" style="padding: 20px;">
+          <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 14px;">Audio & Voice Intelligence</h3>
+          
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
+            <div>
+              <div style="font-weight: 600;">Sound Chimes</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Play real-time audio chime tones on confirmed signals</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-sound-toggle" checked onchange="toggleSoundPref(this)">
+              <span class="slider"></span>
+            </label>
+          </label>
+
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 14px;">
+            <div>
+              <div style="font-weight: 600;">Voice Speech Announcements (TTS)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Speaks asset name, direction, and expiry duration hands-free</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-voice-toggle" checked onchange="toggleVoicePref(this)">
+              <span class="slider"></span>
+            </label>
+          </label>
+
+          <button type="button" class="btn-secondary" style="font-size: 11px; padding: 6px 12px;" onclick="testVoiceAlert()">
+            🗣️ Test Voice Speech Alert
+          </button>
+        </div>
+
+        <div class="panel-card" style="padding: 20px;">
+          <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 14px;">Institutional Precision Filters</h3>
+          
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
+            <div>
+              <div style="font-weight: 600;">Pre-Signal / Early Warning Radar</div>
+              <div style="font-size: 11px; color: var(--text-muted);">15s heads-up warning banner before candle close to set Quotex stake</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-presignal-toggle" checked onchange="toggleFeaturePref('pre_alerts', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </label>
+
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
+            <div>
+              <div style="font-weight: 600;">OTC Flatline & Freeze Guard</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Reject signals when an OTC market has frozen or formed flat Dojis</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-flatline-toggle" checked onchange="toggleFeaturePref('otc_flatline_guard', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </label>
+
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+            <div>
+              <div style="font-weight: 600;">Multi-Strategy Confluence Scanner</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Group multiple simultaneous strategy triggers into Ultra Confluence VIP cards</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pref-confluence-toggle" checked onchange="toggleFeaturePref('confluence_scanner', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </label>
+        </div>
+
+        <div class="panel-card" style="padding: 20px;">
+          <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 12px;">Signal Frequency & Risk</h3>
+          <div class="form-group">
+            <label class="form-label">Global Signal Cooldown Period (Seconds)</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="number" class="form-input" id="pref-cooldown" value="120" min="15" max="600" style="flex: 1;" onchange="saveCooldownPref(this.value)">
+              <button type="button" class="btn-secondary" onclick="saveCooldownPref(document.getElementById('pref-cooldown').value)">Apply</button>
+            </div>
+            <span style="font-size: 11px; color: var(--text-dim);" id="pref-cooldown-status">Minimum time window between consecutive signals on the same asset.</span>
+          </div>
+        </div>
+
+        <div class="panel-card" style="padding: 20px;">
+          <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 12px;">Broker Session Management</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+            Stored session credentials are encrypted with machine-bound Fernet keys.
+          </p>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn-broker-login" onclick="openLoginModal()">
+              Re-authenticate Broker
+            </button>
+            <button class="btn-secondary" onclick="clearBrokerSession()">
+              Clear Saved Session
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="chart_widget.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

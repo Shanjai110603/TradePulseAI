@@ -1,0 +1,17 @@
+[Unit]
+Description=TradePulse 24/7 Real-Time Quotex Signal Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/TradePulse
+ExecStart=/usr/bin/python3 main.py --headless
+Restart=always
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

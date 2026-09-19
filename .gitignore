@@ -1,35 +1,33 @@
-# Python
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-venv/
-.venv/
-backend/venv/
+
+# Caches
 .pytest_cache/
+.tmp/
+.vscode/
+
+# Binaries and build outputs
+build/
+dist/
+*.spec
+*.exe
+
+# Archives / Zips
+*.zip
+*.tar.gz
+*.rar
+
+# Database and local state
 *.db
 *.sqlite3
-
-# Node / Frontend
-node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/.tmp/
-.npm
 *.log
 
-# Environment variables
+# Environment and secrets
 .env
-.env.local
+*.env.local
 
-# Build artifacts
-scanner/build/
-scanner/dist/
-scanner/*.spec
-*.spec
-
-# IDE
-.vscode/
-.idea/
+# Operating System
 .DS_Store
+Thumbs.db
