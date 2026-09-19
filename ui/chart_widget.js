@@ -376,6 +376,24 @@ class InteractiveChartEngine {
       });
       if (this.candles.length > 300) this.candles.shift();
     }
+
+    // Immediately start the new forming candle for the active minute if not already present
+    const nowSec = Math.floor(Date.now() / 1000);
+    const nextBoundary = (Math.floor(nowSec / 60)) * 60;
+    if (this.candles.length > 0 && this.candles[this.candles.length - 1].timestamp < nextBoundary) {
+      const p = completedCandle.close;
+      this.candles.push({
+        timestamp: nextBoundary,
+        open: p,
+        high: p,
+        low: p,
+        close: p,
+        volume: 10,
+        is_forming: true
+      });
+      if (this.candles.length > 300) this.candles.shift();
+    }
+
     this.scheduleRender();
   }
 

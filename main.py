@@ -2154,8 +2154,8 @@ class TradePulseBridgeAPI:
         if not symbol:
             return []
         from core.models.candle import Candle
-        # 1. Retrieve contiguous session bars from rolling buffer
-        candles = self.engine.candle_store.get_candles(symbol, timeframe, contiguous_only=True)
+        # 1. Retrieve all chronological session bars from rolling buffer
+        candles = self.engine.candle_store.get_candles(symbol, timeframe, contiguous_only=False)
         if len(candles) < 40:
             # Trigger background broker history load if buffer is sparse
             try:

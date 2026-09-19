@@ -158,13 +158,19 @@ class CandleStore:
         if not bars_1m:
             return []
 
-        # Ensure bars_1m is strictly sorted
+        # Ensure bars_1m is strictly sorted and deduplicated
         bars_1m.sort(key=lambda x: x.timestamp)
+        deduped_1m: List[Candle] = []
+        for b in bars_1m:
+            if not deduped_1m or b.timestamp > deduped_1m[-1].timestamp:
+                deduped_1m.append(b)
+            elif b.timestamp == deduped_1m[-1].timestamp:
+                deduped_1m[-1] = b
+        bars_1m = deduped_1m
 
-        if contiguous_only:
-            # Enforce chronological continuity:
-            # If there is a session gap (> 300s / 5 missed 1-minute bars) in the buffer,
-            # take only the contiguous tail. Gaps <= 300s are bridged with fill bars.
+        if contiguous_only and len(bars_1m) > 1:
+            # Enforce chronological continuity and bridge minor session lulls (up to 300s).
+            # If a larger session gap is encountered, preserve all history if tail is too short (<15 bars).
             contiguous_bars: List[Candle] = []
             for i in range(len(bars_1m) - 1, -1, -1):
                 curr = bars_1m[i]
@@ -174,9 +180,8 @@ class CandleStore:
                 prev_next = contiguous_bars[-1]
                 diff = prev_next.timestamp - curr.timestamp
                 if diff <= 0:
-                    continue  # Skip duplicate/out of order
+                    continue
                 elif diff <= 300:
-                    # Seamless or minor gap (up to 4 missed 1-min bars): fill any missing bars
                     if diff > 60:
                         for fill_ts in range(prev_next.timestamp - 60, curr.timestamp, -60):
                             fill_bar = Candle(
@@ -190,8 +195,13 @@ class CandleStore:
                             contiguous_bars.append(fill_bar)
                     contiguous_bars.append(curr)
                 else:
-                    # Disconnect boundary (> 300s gap) found! Stop and use only the contiguous tail.
-                    break
+                    # Disconnect boundary (> 300s gap).
+                    # If we already have enough contiguous bars (>=15), we can focus on the recent tail.
+                    # Otherwise, retain all available historical bars for indicators and chart depth.
+                    if len(contiguous_bars) >= 15:
+                        break
+                    else:
+                        contiguous_bars.append(curr)
 
             contiguous_bars.reverse()
             bars_1m = contiguous_bars
@@ -238,10 +248,26 @@ class CandleStore:
             if symbol not in self._buffers:
                 self._buffers[symbol] = deque(maxlen=self.max_bars)
             self._buffers[symbol].clear()
+
+            import time
+            current_min = (int(time.time()) // 60) * 60
+
+            # If last historical candle is for the active current minute, seed accumulator from it
+            if deduped and deduped[-1].timestamp == current_min:
+                forming_seed = deduped.pop()
+                self._accumulators[symbol] = {
+                    "minute": current_min,
+                    "open": forming_seed.open,
+                    "high": forming_seed.high,
+                    "low": forming_seed.low,
+                    "close": forming_seed.close,
+                    "ticks": 1,
+                }
+            else:
+                self._accumulators.pop(symbol, None)
+
             for c in deduped[-self.max_bars:]:
                 self._buffers[symbol].append(c)
-            # Reset stale accumulator on fresh bootstrap
-            self._accumulators.pop(symbol, None)
 
         if "TEST" not in symbol.upper():
             try:
