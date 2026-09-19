@@ -3770,6 +3770,13 @@ window.onCircuitBreakerTriggered = function(metrics) {
 // ============================================================================
 // Telegram Bot & Signal Manager
 // ============================================================================
+const DEFAULT_TELEGRAM_TEMPLATES = {
+  signal: `🚀 <b>SIGNAL ALERT: {strategy}</b>\n────────────────────────\n📊 <b>Asset:</b> <code>{asset}</code>\n💰 <b>OTC Payout:</b> <b>{payout}%</b>\n{arrow} <b>Direction:</b> <b>{direction}</b>\n⏱ <b>Timeframe:</b> <b>{timeframe}</b>\n⌛ <b>Expiry Duration:</b> <b>{expiry} Mins</b>\n🕒 <b>Entry Time:</b> <b>Next Candle Open (00s) | {entry_time} IST</b>\n💵 <b>Entry Price:</b> <code>{entry_price}</code>\n━━━━━━━━━━━━━━━━━━━━\n{confluence_section}🎯 <b>Setup Quality Score:</b> <b>{confidence}% ({tier})</b>\n{stake_line}{ev_line}⏰ <b>Expiry Target:</b> <b>{expiry_time} IST</b>\n🔒 <i>TradePulse VIP Institutional Signal</i>`,
+  pre_signal: `⚡ <b>PRE-SIGNAL RADAR: PREPARE ENTRY</b>\n────────────────────────\n📊 <b>Asset:</b> <code>{asset}</code>\n🎯 <b>Direction:</b> <b>{dir_badge}</b>\n⏱ <b>Timeframe:</b> <b>{timeframe}</b> (Expiry: {expiry}m)\n💰 <b>Payout:</b> <b>{payout}%</b>\n⏳ <b>Candle Close In:</b> <b>~{remaining_seconds}s</b>\n🧠 <b>Forming Pattern:</b> {strategy}\n{stake_line}────────────────────────\n<i>Prepare pair & stake in Quotex. Official entry fires on candle close.</i>`,
+  outcome: `{header}\n────────────────────────\n📊 <b>Asset:</b> <code>{asset}</code>\n🎯 <b>Strategy:</b> <code>{strategy}</code>\n📌 <b>Direction:</b> <b>{direction}</b>\n🏁 <b>Result:</b> <b>{outcome_badge}</b>\n━━━━━━━━━━━━━━━━━━━━\n💵 <b>Entry Strike:</b> <code>{entry_price}</code>\n🏁 <b>Exit Price:</b>   <code>{exit_price}</code>\n{pnl_text}\n━━━━━━━━━━━━━━━━━━━━\n🔒 <i>TradePulse 24/7 Real-Time Outcome Verification</i>`,
+  circuit_breaker: `🛑 <b>TRADEPULSE CIRCUIT BREAKER ACTIVATED</b>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ <b>Signal Scanner Auto-Paused</b>\n• <b>Trigger Reason:</b> <b>{cb_reason}</b>\n• <b>Session Net PnL:</b> <b>{net_pnl}</b>\n• <b>Total Trades:</b> <b>{total_trades}</b>\n━━━━━━━━━━━━━━━━━━━━\n🔒 <i>Scanner halted to safeguard capital. Manage in TradePulse Terminal.</i>`
+};
+
 const TelegramManagerState = {
   activeTab: 'bot',
   bot_token: '',
@@ -3785,12 +3792,7 @@ const TelegramManagerState = {
     min_score: 80.0,
     min_payout: 75.0
   },
-  templates: {
-    signal: '',
-    pre_signal: '',
-    outcome: '',
-    circuit_breaker: ''
-  },
+  templates: { ...DEFAULT_TELEGRAM_TEMPLATES },
   activeTemplateKey: 'signal',
   bot_verified: false,
   bot_info: null
@@ -3878,8 +3880,12 @@ function initTelegramManagerState(data) {
   if (data.rules) {
     TelegramManagerState.rules = { ...TelegramManagerState.rules, ...data.rules };
   }
-  if (data.templates) {
-    TelegramManagerState.templates = { ...TelegramManagerState.templates, ...data.templates };
+  if (data.templates && typeof data.templates === 'object') {
+    for (const [k, v] of Object.entries(data.templates)) {
+      if (v && typeof v === 'string' && v.trim()) {
+        TelegramManagerState.templates[k] = v;
+      }
+    }
   }
   renderTelegramManager();
 
@@ -4430,6 +4436,7 @@ function parseTemplateToVisualState(key, text) {
   const content = text || '';
 
   if (key === 'signal') {
+    setCheck('tg-vis-sig-header-toggle', content.includes('SIGNAL ALERT') || content.includes('🚀') || content.includes('<b>'));
     setCheck('tg-vis-sig-asset', content.includes('{asset}'));
     setCheck('tg-vis-sig-payout', content.includes('{payout}'));
     setCheck('tg-vis-sig-direction', content.includes('{direction}'));
@@ -4441,7 +4448,8 @@ function parseTemplateToVisualState(key, text) {
     setCheck('tg-vis-sig-score', content.includes('{confidence}'));
     setCheck('tg-vis-sig-stake', content.includes('{stake_line}') || content.includes('{rec_stake}'));
     setCheck('tg-vis-sig-ev', content.includes('{ev_line}') || content.includes('{ev_edge}'));
-    setCheck('tg-vis-sig-footer-toggle', content.includes('<i>'));
+    setCheck('tg-vis-sig-note-toggle', content.includes('📢'));
+    setCheck('tg-vis-sig-footer-toggle', content.includes('<i>') || content.includes('TradePulse'));
   } else if (key === 'pre_signal') {
     setCheck('tg-vis-pre-asset', content.includes('{asset}'));
     setCheck('tg-vis-pre-direction', content.includes('{dir_badge}') || content.includes('{direction}'));
@@ -4449,13 +4457,13 @@ function parseTemplateToVisualState(key, text) {
     setCheck('tg-vis-pre-payout', content.includes('{payout}'));
     setCheck('tg-vis-pre-seconds', content.includes('{remaining_seconds}'));
     setCheck('tg-vis-pre-pattern', content.includes('{strategy}'));
-    setCheck('tg-vis-pre-stake', content.includes('{stake_line}'));
+    setCheck('tg-vis-pre-stake', content.includes('{stake_line}') || content.includes('{rec_stake}'));
   } else if (key === 'outcome') {
     setCheck('tg-vis-out-asset', content.includes('{asset}'));
     setCheck('tg-vis-out-strategy', content.includes('{strategy}'));
     setCheck('tg-vis-out-direction', content.includes('{direction}'));
     setCheck('tg-vis-out-badge', content.includes('{outcome_badge}'));
-    setCheck('tg-vis-out-prices', content.includes('{entry_price}'));
+    setCheck('tg-vis-out-prices', content.includes('{entry_price}') || content.includes('{exit_price}'));
     setCheck('tg-vis-out-profit', content.includes('{pnl_text}'));
   } else if (key === 'circuit_breaker') {
     setCheck('tg-vis-cb-reason', content.includes('{cb_reason}'));
@@ -4465,6 +4473,13 @@ function parseTemplateToVisualState(key, text) {
 }
 
 function onSelectTelegramTemplate(key) {
+  // Sync previous editor changes before switching
+  const prevKey = TelegramManagerState.activeTemplateKey;
+  const editor = document.getElementById('tg-template-editor');
+  if (prevKey && prevKey !== key && editor && currentTemplateEditorMode === 'code') {
+    TelegramManagerState.templates[prevKey] = editor.value;
+  }
+
   TelegramManagerState.activeTemplateKey = key;
   const selector = document.getElementById('tg-template-selector');
   if (selector) selector.value = key;
@@ -4480,9 +4495,9 @@ function onSelectTelegramTemplate(key) {
     `).join('');
   }
 
-  // 2. Load template text
-  const templateText = TelegramManagerState.templates[key] || '';
-  const editor = document.getElementById('tg-template-editor');
+  // 2. Load template text (with default fallback)
+  const templateText = TelegramManagerState.templates[key] || DEFAULT_TELEGRAM_TEMPLATES[key] || '';
+  TelegramManagerState.templates[key] = templateText;
   if (editor) {
     editor.value = templateText;
     const counter = document.getElementById('tg-template-char-count');
@@ -4646,21 +4661,49 @@ function sendTestPreviewToChannel() {
 window.sendTestPreviewToChannel = sendTestPreviewToChannel;
 
 function saveActiveTelegramTemplate() {
-  const key = TelegramManagerState.activeTemplateKey;
+  const key = TelegramManagerState.activeTemplateKey || 'signal';
   const editor = document.getElementById('tg-template-editor');
-  if (!editor) return;
 
-  const content = editor.value;
-  TelegramManagerState.templates[key] = content;
+  if (currentTemplateEditorMode === 'visual') {
+    onVisualDesignerChange();
+  } else if (editor) {
+    TelegramManagerState.templates[key] = editor.value;
+  }
 
-  persistTelegramManagerConfig({
-    templates: TelegramManagerState.templates
-  }, `Custom ${key.toUpperCase()} template saved successfully!`);
+  const content = TelegramManagerState.templates[key] || (editor ? editor.value : '');
+  if (!content || !content.trim()) {
+    showToast('Template content cannot be empty.', 'error');
+    return;
+  }
+
+  const trimmedContent = content.trim();
+  TelegramManagerState.templates[key] = trimmedContent;
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.save_telegram_template) {
+    window.pywebview.api.save_telegram_template(key, trimmedContent).then(res => {
+      if (res && res.success) {
+        if (res.config && res.config.templates) {
+          TelegramManagerState.templates = { ...TelegramManagerState.templates, ...res.config.templates };
+        } else if (res.template) {
+          TelegramManagerState.templates[key] = res.template;
+        }
+        showToast(`Custom ${key.toUpperCase()} template saved successfully! 💾`, 'success');
+      } else {
+        showToast(`Failed to save template: ${res?.error || 'Unknown error'}`, 'error');
+      }
+    }).catch(err => {
+      showToast(`Save error: ${err}`, 'error');
+    });
+  } else {
+    persistTelegramManagerConfig({
+      templates: TelegramManagerState.templates
+    }, `Custom ${key.toUpperCase()} template saved successfully! 💾`);
+  }
 }
 window.saveActiveTelegramTemplate = saveActiveTelegramTemplate;
 
 function resetActiveTelegramTemplate() {
-  const key = TelegramManagerState.activeTemplateKey;
+  const key = TelegramManagerState.activeTemplateKey || 'signal';
   if (!confirm(`Reset ${key.toUpperCase()} template back to official default?`)) return;
 
   if (window.pywebview && window.pywebview.api && window.pywebview.api.reset_telegram_template) {
@@ -4736,12 +4779,17 @@ function persistTelegramManagerConfig(patch, successMsg) {
   if (window.pywebview && window.pywebview.api && window.pywebview.api.update_telegram_manager_config) {
     window.pywebview.api.update_telegram_manager_config(patch).then(res => {
       if (res && res.success) {
+        if (res.config) {
+          initTelegramManagerState(res.config);
+        }
         if (successMsg) showToast(successMsg, 'success');
       } else {
-        showToast('Error saving Telegram configuration.', 'error');
+        showToast('Error saving Telegram configuration: ' + (res?.error || 'Unknown error'), 'error');
       }
     }).catch(err => {
       showToast(`Save error: ${err}`, 'error');
     });
+  } else {
+    showToast('Telegram configuration updated locally.', 'info');
   }
 }

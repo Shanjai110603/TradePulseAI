@@ -213,11 +213,23 @@ class TelegramManager:
 
             if "templates" in new_config and isinstance(new_config["templates"], dict):
                 for k, v in new_config["templates"].items():
-                    if k in DEFAULT_TEMPLATES and isinstance(v, str) and v.strip():
-                        self.templates[k] = v.strip()
+                    k_clean = str(k).strip().lower()
+                    if k_clean in DEFAULT_TEMPLATES and isinstance(v, str) and v.strip():
+                        self.templates[k_clean] = v.strip()
 
         self.save_to_disk()
         return self.get_config()
+
+    def set_template(self, template_key: str, template_text: str) -> bool:
+        """Sets and persists an individual template string."""
+        with self._lock:
+            key = str(template_key).strip().lower()
+            text = str(template_text or "").strip()
+            if key in DEFAULT_TEMPLATES and text:
+                self.templates[key] = text
+                self.save_to_disk()
+                return True
+            return False
 
     def add_channel(self, channel_id: str, title: str = "", enabled: bool = True):
         """Adds or updates a destination channel."""
@@ -251,7 +263,8 @@ class TelegramManager:
     def get_template(self, template_key: str) -> str:
         """Gets active template string by key."""
         with self._lock:
-            return self.templates.get(template_key, DEFAULT_TEMPLATES.get(template_key, ""))
+            key = str(template_key).strip().lower()
+            return self.templates.get(key, DEFAULT_TEMPLATES.get(key, ""))
 
     def reset_template_to_default(self, template_key: str) -> str:
         """Alias for reset_template."""
@@ -347,8 +360,9 @@ class TelegramManager:
                         self.include_inline_buttons = bool(data["include_inline_buttons"])
                     if isinstance(data.get("templates"), dict):
                         for k, v in data["templates"].items():
-                            if k in DEFAULT_TEMPLATES and isinstance(v, str) and v.strip():
-                                self.templates[k] = v.strip()
+                            k_clean = str(k).strip().lower()
+                            if k_clean in DEFAULT_TEMPLATES and isinstance(v, str) and v.strip():
+                                self.templates[k_clean] = v.strip()
                     logger.info(f"[TELEGRAM MANAGER] Config loaded from {self.config_file}")
             except Exception as e:
                 logger.warning(f"[TELEGRAM MANAGER] Failed to load config from {self.config_file}: {e}")
@@ -356,6 +370,7 @@ class TelegramManager:
     def save_to_disk(self):
         """Saves current configuration to telegram_config.json and synchronizes with .env."""
         try:
+            self.config_dir.mkdir(parents=True, exist_ok=True)
             payload = {
                 "bot_token": self.bot_token,
                 "bot_username": self.bot_username,

@@ -2341,20 +2341,41 @@ class TradePulseBridgeAPI:
 
     def update_telegram_manager_config(self, new_config: Dict[str, Any]):
         """Persists updated Telegram manager settings, channels, rules, and templates."""
-        updated = self.engine.telegram_manager.update_config(new_config)
-        # Update active bridge credentials in memory if bot_token changed
-        new_token = updated.get("bot_token")
-        if new_token:
-            self.engine.telegram.token = new_token
-            self.engine.telegram.api_base = f"https://api.telegram.org/bot{new_token}"
-        # Update subscribers set from enabled channels
-        active_channels = [c.get("id") for c in updated.get("channels", []) if c.get("id") and c.get("enabled", True)]
-        if active_channels:
-            self.engine.telegram.subscribers = set(active_channels)
-        # Hot-restart background client
-        if self.engine._loop and self.engine._loop.is_running():
-            asyncio.run_coroutine_threadsafe(self._restart_telegram(), self.engine._loop)
-        return {"success": True, "config": updated}
+        try:
+            updated = self.engine.telegram_manager.update_config(new_config)
+            # Update active bridge credentials in memory if bot_token changed
+            new_token = updated.get("bot_token")
+            if new_token:
+                self.engine.telegram.token = new_token
+                self.engine.telegram.api_base = f"https://api.telegram.org/bot{new_token}"
+            # Update subscribers set from enabled channels
+            active_channels = [c.get("id") for c in updated.get("channels", []) if c.get("id") and c.get("enabled", True)]
+            if active_channels:
+                self.engine.telegram.subscribers = set(active_channels)
+            # Hot-restart background client ONLY if connection credentials/channels changed
+            if "bot_token" in new_config or "channels" in new_config or "polling_enabled" in new_config:
+                if self.engine._loop and self.engine._loop.is_running():
+                    asyncio.run_coroutine_threadsafe(self._restart_telegram(), self.engine._loop)
+            return {"success": True, "config": updated}
+        except Exception as e:
+            logger.error(f"[TELEGRAM MANAGER CONFIG ERROR] {e}", exc_info=True)
+            return {"success": False, "error": str(e), "config": self.engine.telegram_manager.get_config()}
+
+    def save_telegram_template(self, template_key: str, template_text: str):
+        """Persists a specific Telegram template directly to disk."""
+        try:
+            ok = self.engine.telegram_manager.set_template(template_key, template_text)
+            if ok:
+                return {
+                    "success": True,
+                    "template_key": template_key,
+                    "template": self.engine.telegram_manager.get_template(template_key),
+                    "config": self.engine.telegram_manager.get_config()
+                }
+            return {"success": False, "error": f"Invalid template key or empty content for '{template_key}'"}
+        except Exception as e:
+            logger.error(f"[TELEGRAM TEMPLATE SAVE ERROR] {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
 
     def test_telegram_bot_token(self, token: Optional[str] = None):
         """Verifies Telegram bot token validity via getMe."""
