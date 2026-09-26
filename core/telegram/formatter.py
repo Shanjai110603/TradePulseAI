@@ -83,6 +83,10 @@ class TelegramFormatter:
             ]
         ]
 
+        tf_raw = signal.timeframe or "1M"
+        tf_display = "1 Min" if tf_raw.upper() in ["1M", "1MIN", "60"] else ("5 Mins" if tf_raw.upper() in ["5M", "5MIN", "300"] else ("15 Mins" if tf_raw.upper() in ["15M", "15MIN", "900"] else f"{tf_raw}"))
+        entry_time_short = entry_dt.strftime("%H:%M")
+
         if template:
             try:
                 from core.telegram.manager import TelegramManager
@@ -91,15 +95,17 @@ class TelegramFormatter:
                     "direction": signal.direction,
                     "dir_badge": dir_badge,
                     "arrow": arrow,
-                    "timeframe": signal.timeframe,
+                    "timeframe": signal.timeframe or "1M",
+                    "chart_timeframe": tf_display,
                     "expiry": signal.duration_minutes,
                     "payout": payout_num,
-                    "entry_time": entry_ist,
+                    "entry_time": entry_time_short,
+                    "entry_time_full": entry_ist,
                     "expiry_time": expiry_ist,
                     "entry_price": entry_formatted,
                     "confidence": score,
                     "tier": tier,
-                    "strategy": signal.strategy_name,
+                    "strategy": signal.strategy_name.upper(),
                     "confluence_section": confluence_section,
                     "stake_line": stake_line,
                     "ev_line": ev_line,
@@ -115,29 +121,14 @@ class TelegramFormatter:
                 logger.warning(f"[TELEGRAM FORMATTER] Custom template render failed: {e}")
 
         caption = (
-            f"{header}"
+            f"🚀 <b>SIGNAL ALERT: {signal.strategy_name.upper()}</b>\n"
             f"────────────────────────\n"
             f"📊 <b>Asset:</b> <code>{signal.asset_symbol}</code>\n"
             f"💰 <b>OTC Payout:</b> <b>{payout_display}</b>\n"
             f"{arrow} <b>Direction:</b> <b>{dir_badge}</b>\n"
-            f"⏱ <b>Timeframe:</b> <b>{signal.timeframe}</b>\n"
-            f"⌛ <b>Expiry Duration:</b> <b>{signal.duration_minutes} Mins</b>\n"
-            f"🕒 <b>Entry Time:</b> <b>Next Candle Open (00s) | {entry_ist} IST</b>\n"
-            f"💵 <b>Entry Price:</b> <code>{entry_formatted}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"{confluence_section}"
-            f"🧠 <b>CONFIRMED CONFLUENCE:</b>\n"
-            f"• <b>Solid Body Ratio:</b>  ✅ <b>{body_ratio:.1f}%</b> (> 60% solid)\n"
-            f"• <b>Opposing Wick:</b>     ✅ <b>{wick_ratio:.1f}%</b> (≤ 35% limit)\n"
-            f"• <b>Preceding Bar:</b>     ✅ Passed (Non-Doji)\n"
-            f"• <b>Payout Filter:</b>     ✅ Passed (≥ {payout_display})\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🎯 <b>Setup Quality Score:</b> <b>{score}% ({tier})</b>\n"
-            f"{stake_line}"
-            f"{ev_line}"
-            f"{win_rate_line}"
-            f"⏰ <b>Expiry Target:</b> <b>{expiry_ist} IST</b>\n"
-            f"🔒 <i>Safe Mode: 100% Real-Time Market Confluence</i>"
+            f"⏱ <b>Chart Timeframe:</b> <b>{tf_display}</b>\n"
+            f"⌛ <b>Expiry Time:</b> <b>{signal.duration_minutes} Mins</b>\n"
+            f"🕒 <b>Entry Time:</b> <b>Next {signal.timeframe or '1M'} Candle Open ({entry_time_short})</b>"
         )
         return caption, keyboard
 

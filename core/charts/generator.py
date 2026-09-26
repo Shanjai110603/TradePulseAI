@@ -110,24 +110,26 @@ class ChartGenerator:
             rect = Rectangle((i - width / 2.0, lower), width, height, facecolor=col, edgecolor=col, alpha=0.95)
             ax.add_patch(rect)
 
-        # Plot EMA 20 line
-        closes = [c.close for c in sorted_candles]
-        if len(closes) >= 20:
+        # Plot EMA 20 line mapped accurately by timestamp
+        if len(sorted_candles) >= 20:
             k = 2.0 / 21.0
+            closes = [c.close for c in sorted_candles]
             ema = sum(closes[:20]) / 20.0
-            ema_series = [ema]
-            for p in closes[20:]:
-                ema = (p * k) + (ema * (1.0 - k))
-                ema_series.append(ema)
+            ts_to_ema = {sorted_candles[19].timestamp: ema}
+            for idx in range(20, len(sorted_candles)):
+                ema = (closes[idx] * k) + (ema * (1.0 - k))
+                ts_to_ema[sorted_candles[idx].timestamp] = ema
 
-            offset = len(sorted_candles) - len(recent)
             x_vals = []
             y_vals = []
-            for i in range(len(recent)):
-                global_idx = offset + i
-                if 0 <= global_idx - 19 < len(ema_series):
+            for i, c in enumerate(recent):
+                if c.timestamp in ts_to_ema:
                     x_vals.append(i)
-                    y_vals.append(ema_series[global_idx - 19])
+                    y_vals.append(ts_to_ema[c.timestamp])
+                elif y_vals:
+                    # Smooth carry-over for synthetic fill bars
+                    x_vals.append(i)
+                    y_vals.append(y_vals[-1])
 
             if x_vals:
                 ax.plot(x_vals, y_vals, color=col_ema, linewidth=1.4, label="EMA 20", alpha=0.85)

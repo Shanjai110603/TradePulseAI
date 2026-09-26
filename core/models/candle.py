@@ -422,7 +422,7 @@ class CandleStore:
 
     @staticmethod
     def _synthesize_timeframe(bars_1m: List[Candle], period_seconds: int) -> List[Candle]:
-        """Aggregates 1M candles into higher timeframe bars (5M, 15M)."""
+        """Aggregates 1M candles into higher timeframe bars (3M, 5M, 15M, 30M, 1H)."""
         if not bars_1m:
             return []
 
@@ -445,3 +445,51 @@ class CandleStore:
                 volume=sum(c.volume for c in group)
             ))
         return higher_bars
+
+    def get_forming_candle(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Returns the currently forming (in-progress) 1-minute candle accumulator."""
+        with self._lock:
+            acc = self._accumulators.get(symbol)
+            if not acc:
+                return None
+            return {
+                "timestamp": acc["minute"],
+                "open": acc["open"],
+                "high": acc["high"],
+                "low": acc["low"],
+                "close": acc["close"],
+                "ticks": acc.get("ticks", 1),
+                "is_forming": True
+            }
+
+    def get_heikin_ashi_candles(self, symbol: str, timeframe: str = "1M", contiguous_only: bool = True) -> List[Candle]:
+        """
+        Converts standard OHLC candles into Heikin-Ashi smoothed candles.
+        Used across open-source trading platforms for noise reduction and trend clarity.
+        """
+        raw_candles = self.get_candles(symbol, timeframe, contiguous_only=contiguous_only)
+        if not raw_candles:
+            return []
+
+        ha_candles: List[Candle] = []
+        for i, c in enumerate(raw_candles):
+            ha_close = (c.open + c.high + c.low + c.close) / 4.0
+            if i == 0:
+                ha_open = (c.open + c.close) / 2.0
+            else:
+                prev_ha = ha_candles[-1]
+                ha_open = (prev_ha.open + prev_ha.close) / 2.0
+
+            ha_high = max(c.high, ha_open, ha_close)
+            ha_low = min(c.low, ha_open, ha_close)
+
+            ha_candles.append(Candle(
+                timestamp=c.timestamp,
+                open=round(ha_open, 5),
+                high=round(ha_high, 5),
+                low=round(ha_low, 5),
+                close=round(ha_close, 5),
+                volume=c.volume
+            ))
+        return ha_candles
+

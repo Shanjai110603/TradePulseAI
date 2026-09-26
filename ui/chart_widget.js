@@ -238,6 +238,8 @@ class InteractiveChartEngine {
     if (this.candles.length > 0) {
       this.livePrice = this.candles[this.candles.length - 1].close;
       this._updatePriceBadge(this.livePrice);
+    } else {
+      this.livePrice = null;
     }
 
     this.scheduleRender();
@@ -250,11 +252,13 @@ class InteractiveChartEngine {
   onLiveTick(symbol, price) {
     if (symbol !== this.symbol || typeof price !== 'number' || isNaN(price) || price <= 0) return;
 
-    // Reject extreme single-tick outliers (>3% jump from active price or candle close)
+    // Reject extreme single-tick outliers (>20% for crypto, >4% for FX from active price or candle close)
     const refPrice = this.livePrice || (this.candles && this.candles.length > 0 ? this.candles[this.candles.length - 1].close : null);
     if (refPrice && refPrice > 0) {
+      const isCrypto = /BTC|ETH|SOL|XRP/i.test(this.symbol || '');
+      const maxJump = isCrypto ? 0.20 : 0.04;
       const diffRatio = Math.abs(price - refPrice) / refPrice;
-      if (diffRatio > 0.03) {
+      if (diffRatio > maxJump) {
         return; // Outlier or corrupt frame: reject
       }
     }

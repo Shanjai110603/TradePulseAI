@@ -40,16 +40,6 @@ class HistoricalBacktestEngine:
         losses = 0
         draws = 0
         results_log = []
-
-        if candles_5m is None:
-            candles_5m = CandleStore._synthesize_timeframe(candles_1m, 300)
-        candles_3m = CandleStore._synthesize_timeframe(candles_1m, 180)
-        candles_15m = CandleStore._synthesize_timeframe(candles_1m, 900)
-
-        ts_3m = [c.timestamp for c in candles_3m]
-        ts_5m = [c.timestamp for c in candles_5m]
-        ts_15m = [c.timestamp for c in candles_15m]
-
         is_strat_5m = (strategy.timeframe or "1M").upper() == "5M"
 
         # Step through history (leaving room for trade expiry resolution)
@@ -62,13 +52,10 @@ class HistoricalBacktestEngine:
             if is_strat_5m and not is_5m_close:
                 continue
 
-            idx_3m = bisect.bisect_right(ts_3m, trigger_candle.timestamp)
-            idx_5m = bisect.bisect_right(ts_5m, trigger_candle.timestamp)
-            idx_15m = bisect.bisect_right(ts_15m, trigger_candle.timestamp)
-
-            c_3m_slice = candles_3m[:idx_3m] if idx_3m > 0 else []
-            c_5m_slice = candles_5m[:idx_5m] if idx_5m > 0 else []
-            c_15m_slice = candles_15m[:idx_15m] if idx_15m > 0 else []
+            # Synthesize higher timeframes strictly from history_slice (zero lookahead bias)
+            c_3m_slice = CandleStore._synthesize_timeframe(history_slice, 180)
+            c_5m_slice = CandleStore._synthesize_timeframe(history_slice, 300)
+            c_15m_slice = CandleStore._synthesize_timeframe(history_slice, 900)
 
             mtf_dict = {
                 "1M": history_slice,
@@ -123,6 +110,24 @@ class HistoricalBacktestEngine:
                         else:
                             draws += 1
 
+                    # Calculate MFE (Max Favorable Excursion) & MAE (Max Adverse Excursion)
+                    window_candles = candles_1m[i + 1:i + 1 + expiry_bars]
+                    if window_candles:
+                        highs = [c.high for c in window_candles]
+                        lows = [c.low for c in window_candles]
+                        max_window_price = max(highs)
+                        min_window_price = min(lows)
+                    else:
+                        max_window_price = exit_price
+                        min_window_price = exit_price
+
+                    if is_call:
+                        mfe = round(max(0.0, max_window_price - entry_price), 5)
+                        mae = round(max(0.0, entry_price - min_window_price), 5)
+                    else:
+                        mfe = round(max(0.0, entry_price - min_window_price), 5)
+                        mae = round(max(0.0, max_window_price - entry_price), 5)
+
                     results_log.append({
                         "bar_index": i,
                         "timestamp": trigger_candle.timestamp,
@@ -130,13 +135,50 @@ class HistoricalBacktestEngine:
                         "entry_price": entry_price,
                         "exit_price": exit_price,
                         "outcome": outcome,
+                        "mfe": mfe,
+                        "mae": mae,
                     })
                     break  # One signal per candle max
 
         win_rate = (wins / total_signals * 100.0) if total_signals > 0 else 0.0
         warning = None
-        if total_signals < 30:
-            warning = f"Low sample size ({total_signals} signals < 30). Results may lack statistical significance."
+        if total_signals < 20:
+            warning = f"Sample size ({total_signals} signals). Live forward testing advised."
+
+        # Quantitative Equity Simulation & Profit Factor
+        base_stake = 10.0
+        b_payout = payout_pct / 100.0
+        gross_profit = wins * (base_stake * b_payout)
+        gross_loss = losses * base_stake
+        profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0.0)
+        net_profit = round(gross_profit - gross_loss, 2)
+
+        # Drawdown calculation
+        peak = 0.0
+        current_eq = 0.0
+        max_dd = 0.0
+        equity_curve = [0.0]
+
+        for trade in results_log:
+            if trade["outcome"] == "WIN":
+                current_eq += base_stake * b_payout
+            elif trade["outcome"] == "LOSS":
+                current_eq -= base_stake
+            equity_curve.append(round(current_eq, 2))
+            if current_eq > peak:
+                peak = current_eq
+            dd = peak - current_eq
+            if dd > max_dd:
+                max_dd = dd
+
+        # Avg MFE / MAE
+        avg_mfe = round(sum(t.get("mfe", 0) for t in results_log) / total_signals, 5) if total_signals > 0 else 0.0
+        avg_mae = round(sum(t.get("mae", 0) for t in results_log) / total_signals, 5) if total_signals > 0 else 0.0
+
+        # Mathematical EV per $10 stake
+        p = win_rate / 100.0
+        q = 1.0 - p
+        ev_per_trade = round((p * b_payout * base_stake) - (q * base_stake), 2)
 
         return {
             "strategy_name": strategy.name,
@@ -147,6 +189,14 @@ class HistoricalBacktestEngine:
             "losses": losses,
             "draws": draws,
             "win_rate": round(win_rate, 1),
+            "profit_factor": profit_factor,
+            "net_profit": net_profit,
+            "max_drawdown": round(max_dd, 2),
+            "ev_per_trade": ev_per_trade,
+            "avg_mfe": avg_mfe,
+            "avg_mae": avg_mae,
             "payout_pct": payout_pct,
-            "signals": results_log[-20:]  # Last 20 triggers
+            "equity_curve": equity_curve[-30:],
+            "signals": results_log[-30:]  # Last 30 triggers
         }
+

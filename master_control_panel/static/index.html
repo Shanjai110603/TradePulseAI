@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradePulse Master Control Panel — Business & Licensing Suite</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ====================================================================
+       LOGIN OVERLAY (If unauthenticated)
+       ==================================================================== -->
+  <div class="login-modal-overlay" id="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="brand-icon">⚡</div>
+        <h2>Master Control Panel</h2>
+        <p>Developer & Business Administration Suite</p>
+      </div>
+      <form id="admin-login-form" onsubmit="handleAdminLogin(event)">
+        <div class="form-group">
+          <label>ADMIN USERNAME</label>
+          <input type="text" class="form-input" id="admin-user-input" value="admin" required>
+        </div>
+        <div class="form-group">
+          <label>PASSWORD</label>
+          <input type="password" class="form-input" id="admin-pass-input" placeholder="••••••••••••" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">
+          🔐 Access Master Panel
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MAIN APPLICATION LAYOUT
+       ==================================================================== -->
+  <div class="app-container" id="main-admin-app">
+    
+    <!-- Top Bar -->
+    <header class="top-header">
+      <div class="brand-section">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <span class="brand-title">TradePulse Master</span>
+          <span class="brand-badge">Developer & Business Hub</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-pill connected">
+          <span class="pulse-dot"></span>
+          <span>Master Server: <b>Online</b></span>
+        </div>
+        <button class="btn-primary" onclick="openCreateLicenseModal()">
+          ➕ Issue 1-Year License
+        </button>
+        <button class="btn-secondary" onclick="handleAdminLogout()">
+          🚪 Logout
+        </button>
+      </div>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <nav class="nav-menu">
+        <div class="nav-section-title">Business Command</div>
+
+        <div class="nav-item active" id="nav-licenses" onclick="switchAdminTab('licenses')">
+          <span class="nav-icon">🔑</span>
+          <span>Subscriptions & Licenses</span>
+          <span class="nav-badge" id="badge-total-licenses">0</span>
+        </div>
+
+        <div class="nav-item" id="nav-telemetry" onclick="switchAdminTab('telemetry')">
+          <span class="nav-icon">📡</span>
+          <span>Live Client Monitor</span>
+          <span class="nav-badge" id="badge-online-clients">0 Active</span>
+        </div>
+
+        <div class="nav-section-title">Security & Systems</div>
+
+        <div class="nav-item" id="nav-hardware" onclick="switchAdminTab('hardware')">
+          <span class="nav-icon">💻</span>
+          <span>Single-PC Bindings</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="business-info-card">
+          <div class="info-title">🛡️ Hardware Lock Enforcement</div>
+          <div class="info-desc">
+            Client personal apps are strictly limited to 1 bound machine per subscription. Multi-PC usage requires admin authorization.
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Viewport -->
+    <main class="main-viewport">
+
+      <!-- Quick Metrics Summary -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon" style="color: var(--cyan-bright);">💳</div>
+          <div>
+            <div class="stat-val" id="metric-total-licenses">0</div>
+            <div class="stat-lbl">Total Subscriptions</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="color: var(--emerald);">✅</div>
+          <div>
+            <div class="stat-val" id="metric-active-licenses">0</div>
+            <div class="stat-lbl">Active 1-Yr Licenses</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="color: #38bdf8;">🌐</div>
+          <div>
+            <div class="stat-val" id="metric-online-clients">0</div>
+            <div class="stat-lbl">Live Client Systems</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="color: var(--gold);">⚡</div>
+          <div>
+            <div class="stat-val" id="metric-scanning-clients">0</div>
+            <div class="stat-lbl">Scanners Running</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           TAB 1: SUBSCRIPTIONS & CLIENT LICENSES
+           ================================================================ -->
+      <section class="tab-pane active" id="pane-licenses">
+        <div class="view-header">
+          <div>
+            <h2>Client Subscriptions & 1-Year Licenses</h2>
+            <p>Issue, revoke, extend, and manage single-device hardware bindings for client apps</p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" class="form-input" id="license-search-input" placeholder="🔍 Search by name, key, or telegram..." style="width: 280px;" oninput="filterLicensesTable()">
+            <button class="btn-secondary" onclick="loadLicensesData()">🔄 Refresh</button>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Customer / User</th>
+                  <th>License Key</th>
+                  <th>Plan & Expiration</th>
+                  <th>Hardware Binding (HWID)</th>
+                  <th>Devices</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Business Actions</th>
+                </tr>
+              </thead>
+              <tbody id="licenses-tbody">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           TAB 2: LIVE CLIENT TELEMETRY & BOT MONITOR
+           ================================================================ -->
+      <section class="tab-pane" id="pane-telemetry">
+        <div class="view-header">
+          <div>
+            <h2>Live Client Telemetry & Bot Monitor</h2>
+            <p>Real-time visibility into client machine setups, linked Telegram bots, and active strategies</p>
+          </div>
+          <button class="btn-secondary" onclick="loadTelemetryData()">🔄 Refresh Feed</button>
+        </div>
+
+        <div class="panel-card">
+          <div class="table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Machine / OS</th>
+                  <th>Linked Telegram Bot</th>
+                  <th>Active Strategies in Use</th>
+                  <th>Quotex / Scanner</th>
+                  <th>Last Ping</th>
+                </tr>
+              </thead>
+              <tbody id="telemetry-tbody">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           TAB 3: HARDWARE BINDINGS OVERVIEW
+           ================================================================ -->
+      <section class="tab-pane" id="pane-hardware">
+        <div class="view-header">
+          <div>
+            <h2>Single-System HWID Lock Overview</h2>
+            <p>Strict security guard: ensure each license runs on exactly 1 system without unauthorized duplication</p>
+          </div>
+        </div>
+
+        <div class="panel-card" style="margin-bottom: 20px;">
+          <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 8px;">🔒 How Single-System Binding Works</h3>
+          <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+            When a client launches TradePulse Personal on their computer, their unique hardware fingerprint (Motherboard UUID + CPU + Machine GUID) is bound to their 1-year license key. If they copy the executable to a second computer, the app immediately blocks execution with an <b>Unauthorized System</b> lock screen.
+            <br><br>
+            If a client buys a new PC or requires multi-machine access, you can use the <b>Reset HWID</b> or <b>+ Multi-PC</b> buttons in the licenses table.
+          </p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ====================================================================
+       MODAL: ISSUE NEW 1-YEAR LICENSE
+       ==================================================================== -->
+  <div class="modal-overlay" id="create-license-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>➕ Issue New Client License</h3>
+        <button class="modal-close-btn" onclick="closeCreateLicenseModal()">✕</button>
+      </div>
+      <form onsubmit="handleCreateLicense(event)">
+        <div class="form-group">
+          <label>CUSTOMER FULL NAME</label>
+          <input type="text" class="form-input" id="new-cust-name" placeholder="e.g. John Doe" required>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>CUSTOMER EMAIL (OPTIONAL)</label>
+            <input type="email" class="form-input" id="new-cust-email" placeholder="john@example.com">
+          </div>
+          <div class="form-group">
+            <label>TELEGRAM HANDLE (OPTIONAL)</label>
+            <input type="text" class="form-input" id="new-cust-tg" placeholder="@johndoe">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>SUBSCRIPTION DURATION</label>
+            <select class="form-input" id="new-lic-duration">
+              <option value="365" selected>1 Year (365 Days)</option>
+              <option value="730">2 Years (730 Days)</option>
+              <option value="180">6 Months (180 Days)</option>
+              <option value="30">1 Month (30 Days Trial)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>AUTHORIZED SYSTEMS</label>
+            <select class="form-input" id="new-lic-devices">
+              <option value="1" selected>1 System (Single-PC License)</option>
+              <option value="2">2 Systems (Dual-PC License)</option>
+              <option value="3">3 Systems (Multi-PC)</option>
+              <option value="5">5 Systems (VIP Enterprise)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>INTERNAL BUSINESS NOTES</label>
+          <input type="text" class="form-input" id="new-lic-notes" placeholder="e.g. Annual VIP Client - Payment via Crypto">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 18px;">
+          <button type="submit" class="btn-primary" style="flex: 1;">
+            🔑 Generate & Issue License Key
+          </button>
+          <button type="button" class="btn-secondary" onclick="closeCreateLicenseModal()">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="admin-toast-container"></div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

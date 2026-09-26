@@ -1996,6 +1996,13 @@ function selectStrategy(id) {
   const ca = filters.candle_anatomy || {};
   const trend = filters.trend || {};
   const inds = filters.indicators || [];
+  const smc = filters.smc || {};
+
+  const cdEl = document.getElementById('strat-cooldown-select');
+  if (cdEl) cdEl.value = String(strat.cooldown_seconds || 120);
+
+  const mtg1El = document.getElementById('strat-mtg1-toggle');
+  if (mtg1El) mtg1El.checked = !!strat.martingale_mtg1;
 
   const solidEl = document.getElementById('rule-solid-body');
   if (solidEl) solidEl.checked = (ca.min_body_ratio !== undefined ? ca.min_body_ratio >= 0.50 : true);
@@ -2006,15 +2013,262 @@ function selectStrategy(id) {
   const wickEl = document.getElementById('rule-wick');
   if (wickEl) wickEl.checked = (ca.max_opposing_wick !== undefined ? ca.max_opposing_wick <= 0.35 : true);
 
+  const dojiEl = document.getElementById('rule-doji');
+  if (dojiEl) dojiEl.checked = ca.filter_preceding_doji !== false;
+
   const trendEl = document.getElementById('rule-trend');
   if (trendEl) trendEl.checked = trend.enabled ?? false;
 
   const rsiEl = document.getElementById('rule-rsi');
-  if (rsiEl) rsiEl.checked = Array.isArray(inds) && inds.some(i => i.indicator === 'RSI');
+  if (rsiEl) rsiEl.checked = Array.isArray(inds) && inds.some(i => (i.indicator || '').toUpperCase() === 'RSI');
+
+  const bbEl = document.getElementById('rule-bollinger');
+  if (bbEl) bbEl.checked = Array.isArray(inds) && inds.some(i => ['BOLLINGER', 'BB', 'DUAL_BOLLINGER_PROTRUSION'].includes((i.indicator || '').toUpperCase()));
+
+  const stochEl = document.getElementById('rule-stochastic');
+  if (stochEl) stochEl.checked = Array.isArray(inds) && inds.some(i => ['STOCHASTIC', 'STOCH'].includes((i.indicator || '').toUpperCase()));
+
+  const macdEl = document.getElementById('rule-macd');
+  if (macdEl) macdEl.checked = Array.isArray(inds) && inds.some(i => (i.indicator || '').toUpperCase() === 'MACD');
+
+  const stEl = document.getElementById('rule-supertrend');
+  if (stEl) stEl.checked = Array.isArray(inds) && inds.some(i => ['SUPERTREND', 'ST'].includes((i.indicator || '').toUpperCase()));
+
+  const sarEl = document.getElementById('rule-sar');
+  if (sarEl) sarEl.checked = Array.isArray(inds) && inds.some(i => ['PARABOLIC_SAR', 'SAR', 'PSAR'].includes((i.indicator || '').toUpperCase()));
+
+  const aoEl = document.getElementById('rule-ao');
+  if (aoEl) aoEl.checked = Array.isArray(inds) && inds.some(i => ['AWESOME_OSCILLATOR', 'AO'].includes((i.indicator || '').toUpperCase()));
+
+  const willEl = document.getElementById('rule-williams');
+  if (willEl) willEl.checked = Array.isArray(inds) && inds.some(i => ['WILLIAMS_R', 'WILLIAMS_%R', 'WR'].includes((i.indicator || '').toUpperCase()));
+
+  const alliEl = document.getElementById('rule-alligator');
+  if (alliEl) alliEl.checked = Array.isArray(inds) && inds.some(i => (i.indicator || '').toUpperCase() === 'ALLIGATOR');
+
+  const keltEl = document.getElementById('rule-keltner');
+  if (keltEl) keltEl.checked = Array.isArray(inds) && inds.some(i => ['KELTNER', 'DONCHIAN'].includes((i.indicator || '').toUpperCase()));
+
+  const vorEl = document.getElementById('rule-vortex');
+  if (vorEl) vorEl.checked = Array.isArray(inds) && inds.some(i => (i.indicator || '').toUpperCase() === 'VORTEX');
+
+  const fvgEl = document.getElementById('rule-smc-fvg');
+  if (fvgEl) fvgEl.checked = !!smc.fvg_enabled;
+
+  const sweepEl = document.getElementById('rule-smc-sweep');
+  if (sweepEl) sweepEl.checked = !!smc.liquidity_sweep_enabled;
+
+  const bosEl = document.getElementById('rule-smc-bos');
+  if (bosEl) bosEl.checked = !!smc.bos_enabled;
+
+  const obEl = document.getElementById('rule-smc-ob');
+  if (obEl) obEl.checked = !!smc.order_block_enabled;
+
+  const presetSelect = document.getElementById('strat-archetype-preset');
+  if (presetSelect) presetSelect.value = "";
 
   const delBtn = document.getElementById('btn-delete-strat');
   if (delBtn) delBtn.style.display = 'inline-block';
 }
+
+function applyArchetypePreset(presetKey) {
+  if (!presetKey) return;
+
+  const presets = {
+    dual_bollinger_protrusion: {
+      name: "Dual Bollinger Protrusion 1M",
+      tf: "1M", exp: 1, payout: 80, dir: "BOTH", cd: 120, mtg1: false,
+      solidBody: false, engulfing: false, wick: true, doji: true,
+      trend: false, rsi: false, bollinger: true, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    logus_trend: {
+      name: "Logu's Trend Momentum",
+      tf: "1M", exp: 1, payout: 80, dir: "BOTH", cd: 120, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    mtf_engulfing: {
+      name: "MTF Engulfing Momentum",
+      tf: "1M", exp: 2, payout: 80, dir: "BOTH", cd: 120, mtg1: false,
+      solidBody: true, engulfing: true, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    snr_wick: {
+      name: "S&R Pin Bar Rejection",
+      tf: "5M", exp: 5, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: false, engulfing: false, wick: false, doji: true,
+      trend: false, rsi: true, bollinger: true, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    ema_bounce: {
+      name: "EMA Dynamic Retest & Bounce",
+      tf: "5M", exp: 5, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: false, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: true, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    bollinger_mean: {
+      name: "Bollinger Mean Reversion",
+      tf: "1M", exp: 2, payout: 82, dir: "BOTH", cd: 150, mtg1: false,
+      solidBody: false, engulfing: false, wick: true, doji: true,
+      trend: false, rsi: true, bollinger: true, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    bollinger_squeeze: {
+      name: "Bollinger Squeeze Breakout",
+      tf: "1M", exp: 2, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: true, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    bollinger_rsi: {
+      name: "Bollinger + RSI Extreme Confluence",
+      tf: "5M", exp: 5, payout: 85, dir: "BOTH", cd: 180, mtg1: true,
+      solidBody: false, engulfing: false, wick: false, doji: true,
+      trend: false, rsi: true, bollinger: true, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    supertrend_trend: {
+      name: "Supertrend ATR Trend Follower",
+      tf: "1M", exp: 2, payout: 80, dir: "BOTH", cd: 120, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: true, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    sar_reversal: {
+      name: "Parabolic SAR Flip Sniper",
+      tf: "1M", exp: 2, payout: 80, dir: "BOTH", cd: 150, mtg1: false,
+      solidBody: false, engulfing: false, wick: true, doji: true,
+      trend: false, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: true, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    ao_momentum: {
+      name: "Awesome Oscillator Scalper",
+      tf: "1M", exp: 1, payout: 80, dir: "BOTH", cd: 120, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: true, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    williams_extreme: {
+      name: "Williams %R Extreme Sniper",
+      tf: "5M", exp: 5, payout: 82, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: false, engulfing: false, wick: true, doji: true,
+      trend: false, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: true, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    alligator_breakout: {
+      name: "Alligator Expansion Breakout",
+      tf: "5M", exp: 5, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: true, engulfing: true, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: true, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    keltner_squeeze: {
+      name: "Keltner Channel Breakout",
+      tf: "1M", exp: 2, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: true, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    vortex_flow: {
+      name: "Vortex Flow Alignment",
+      tf: "5M", exp: 5, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: true,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    smc_orderblock: {
+      name: "SMC Order Block & FVG",
+      tf: "5M", exp: 5, payout: 80, dir: "BOTH", cd: 240, mtg1: false,
+      solidBody: false, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: false,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: true, sweep: true, bos: true, ob: true
+    },
+    breakout_momentum: {
+      name: "Breakout Momentum S&R",
+      tf: "5M", exp: 5, payout: 80, dir: "BOTH", cd: 180, mtg1: false,
+      solidBody: true, engulfing: false, wick: true, doji: true,
+      trend: true, rsi: false, bollinger: false, stoch: false, macd: true,
+      supertrend: false, sar: false, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: false, sweep: false, bos: false, ob: false
+    },
+    ultra_confluence: {
+      name: "Ultra Confluence Pro Matrix",
+      tf: "1M", exp: 2, payout: 85, dir: "BOTH", cd: 180, mtg1: true,
+      solidBody: true, engulfing: true, wick: true, doji: true,
+      trend: true, rsi: true, bollinger: false, stoch: false, macd: false,
+      supertrend: true, sar: true, ao: false, williams: false, alligator: false, keltner: false, vortex: false,
+      fvg: true, sweep: false, bos: false, ob: false
+    }
+  };
+
+  const p = presets[presetKey];
+  if (!p) return;
+
+  const nameInput = document.getElementById('strat-name');
+  if (nameInput) nameInput.value = p.name;
+  const durInput = document.getElementById('strat-duration');
+  if (durInput) durInput.value = p.exp;
+  const minPInput = document.getElementById('strat-min-payout');
+  if (minPInput) minPInput.value = p.payout;
+  const cdSelect = document.getElementById('strat-cooldown-select');
+  if (cdSelect) cdSelect.value = String(p.cd);
+  const mtg1Toggle = document.getElementById('strat-mtg1-toggle');
+  if (mtg1Toggle) mtg1Toggle.checked = !!p.mtg1;
+
+  AppState.activeDirection = p.dir;
+  AppState.activeTimeframe = p.tf;
+  updatePillSelection('strat-direction-pills', p.dir);
+  updatePillSelection('strat-tf-pills', p.tf);
+
+  const setChecked = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!val;
+  };
+
+  setChecked('rule-solid-body', p.solidBody);
+  setChecked('rule-engulfing', p.engulfing);
+  setChecked('rule-wick', p.wick);
+  setChecked('rule-doji', p.doji);
+  setChecked('rule-trend', p.trend);
+  setChecked('rule-rsi', p.rsi);
+  setChecked('rule-bollinger', p.bollinger);
+  setChecked('rule-stochastic', p.stoch);
+  setChecked('rule-macd', p.macd);
+  setChecked('rule-supertrend', p.supertrend);
+  setChecked('rule-sar', p.sar);
+  setChecked('rule-ao', p.ao);
+  setChecked('rule-williams', p.williams);
+  setChecked('rule-alligator', p.alligator);
+  setChecked('rule-keltner', p.keltner);
+  setChecked('rule-vortex', p.vortex);
+  setChecked('rule-smc-fvg', p.fvg);
+  setChecked('rule-smc-sweep', p.sweep);
+  setChecked('rule-smc-bos', p.bos);
+  setChecked('rule-smc-ob', p.ob);
+
+  showToast(`Loaded archetype preset: ${p.name}`, 'info');
+}
+window.applyArchetypePreset = applyArchetypePreset;
 
 async function createNewStrategy() {
   const newId = 'strat_' + Date.now();
@@ -2028,6 +2282,8 @@ async function createNewStrategy() {
     timeframe: '1M',
     expiry_minutes: 2,
     min_payout: 85.0,
+    cooldown_seconds: 120,
+    martingale_mtg1: false,
     enabled: true,
     assets: ['ALL_MARKETS'],
     filters: {
@@ -2092,6 +2348,11 @@ function resetStrategyForm() {
   document.getElementById('strat-name').value = '';
   document.getElementById('strat-duration').value = '2';
   document.getElementById('strat-min-payout').value = '85';
+  const cdSelect = document.getElementById('strat-cooldown-select');
+  if (cdSelect) cdSelect.value = '120';
+  const mtg1Toggle = document.getElementById('strat-mtg1-toggle');
+  if (mtg1Toggle) mtg1Toggle.checked = false;
+
   AppState.activeDirection = 'BOTH';
   AppState.activeTimeframe = '1M';
   updatePillSelection('strat-direction-pills', 'BOTH');
@@ -2100,16 +2361,34 @@ function resetStrategyForm() {
   setAssetScopePreset('ALL_MARKETS');
   renderAssetPicker([]);
 
-  const solidEl = document.getElementById('rule-solid-body');
-  if (solidEl) solidEl.checked = true;
-  const engulfingEl = document.getElementById('rule-engulfing');
-  if (engulfingEl) engulfingEl.checked = false;
-  const wickEl = document.getElementById('rule-wick');
-  if (wickEl) wickEl.checked = true;
-  const trendEl = document.getElementById('rule-trend');
-  if (trendEl) trendEl.checked = false;
-  const rsiEl = document.getElementById('rule-rsi');
-  if (rsiEl) rsiEl.checked = false;
+  const setChecked = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!val;
+  };
+
+  setChecked('rule-solid-body', true);
+  setChecked('rule-engulfing', false);
+  setChecked('rule-wick', true);
+  setChecked('rule-doji', true);
+  setChecked('rule-trend', false);
+  setChecked('rule-rsi', false);
+  setChecked('rule-bollinger', false);
+  setChecked('rule-stochastic', false);
+  setChecked('rule-macd', false);
+  setChecked('rule-supertrend', false);
+  setChecked('rule-sar', false);
+  setChecked('rule-ao', false);
+  setChecked('rule-williams', false);
+  setChecked('rule-alligator', false);
+  setChecked('rule-keltner', false);
+  setChecked('rule-vortex', false);
+  setChecked('rule-smc-fvg', false);
+  setChecked('rule-smc-sweep', false);
+  setChecked('rule-smc-bos', false);
+  setChecked('rule-smc-ob', false);
+
+  const presetSelect = document.getElementById('strat-archetype-preset');
+  if (presetSelect) presetSelect.value = '';
 
   const titleEl = document.getElementById('strat-editor-title');
   if (titleEl) titleEl.textContent = 'Create New Strategy';
@@ -2144,12 +2423,31 @@ async function handleSaveStrategy(e) {
   const stratName = document.getElementById('strat-name').value.trim() || 'Custom Strategy';
   const duration = parseInt(document.getElementById('strat-duration').value, 10) || 2;
   const minPayout = parseFloat(document.getElementById('strat-min-payout').value) || 85;
+  const cooldownSec = parseInt(document.getElementById('strat-cooldown-select')?.value || '120', 10);
+  const mtg1 = document.getElementById('strat-mtg1-toggle')?.checked || false;
 
   const ruleSolid = document.getElementById('rule-solid-body')?.checked ?? true;
   const ruleEngulfing = document.getElementById('rule-engulfing')?.checked ?? false;
   const ruleWick = document.getElementById('rule-wick')?.checked ?? true;
+  const ruleDoji = document.getElementById('rule-doji')?.checked ?? true;
   const ruleTrend = document.getElementById('rule-trend')?.checked ?? false;
+
   const ruleRsi = document.getElementById('rule-rsi')?.checked ?? false;
+  const ruleBollinger = document.getElementById('rule-bollinger')?.checked ?? false;
+  const ruleStoch = document.getElementById('rule-stochastic')?.checked ?? false;
+  const ruleMacd = document.getElementById('rule-macd')?.checked ?? false;
+  const ruleSupertrend = document.getElementById('rule-supertrend')?.checked ?? false;
+  const ruleSar = document.getElementById('rule-sar')?.checked ?? false;
+  const ruleAo = document.getElementById('rule-ao')?.checked ?? false;
+  const ruleWilliams = document.getElementById('rule-williams')?.checked ?? false;
+  const ruleAlligator = document.getElementById('rule-alligator')?.checked ?? false;
+  const ruleKeltner = document.getElementById('rule-keltner')?.checked ?? false;
+  const ruleVortex = document.getElementById('rule-vortex')?.checked ?? false;
+
+  const ruleSmcFvg = document.getElementById('rule-smc-fvg')?.checked ?? false;
+  const ruleSmcSweep = document.getElementById('rule-smc-sweep')?.checked ?? false;
+  const ruleSmcBos = document.getElementById('rule-smc-bos')?.checked ?? false;
+  const ruleSmcOb = document.getElementById('rule-smc-ob')?.checked ?? false;
 
   const existingStrat = AppState.strategies.find(s => s.id === stratId);
   const baseFilters = (existingStrat && existingStrat.filters) ? JSON.parse(JSON.stringify(existingStrat.filters)) : {};
@@ -2171,6 +2469,20 @@ async function handleSaveStrategy(e) {
     }
   }
 
+  // Construct active indicator list
+  const activeInds = [];
+  if (ruleRsi) activeInds.push({ indicator: 'RSI', period: 14, condition: 'BETWEEN', min_val: 30, max_val: 70 });
+  if (ruleBollinger) activeInds.push({ indicator: 'BOLLINGER', period: 20, condition: 'BETWEEN', min_val: 0, max_val: 1 });
+  if (ruleStoch) activeInds.push({ indicator: 'STOCHASTIC', period: 14, condition: 'BETWEEN', min_val: 0, max_val: 100 });
+  if (ruleMacd) activeInds.push({ indicator: 'MACD', period: 12, condition: 'BETWEEN', min_val: -999999, max_val: 999999 });
+  if (ruleSupertrend) activeInds.push({ indicator: 'SUPERTREND', period: 10, condition: 'BULLISH' });
+  if (ruleSar) activeInds.push({ indicator: 'PARABOLIC_SAR', period: 14, condition: 'BULLISH' });
+  if (ruleAo) activeInds.push({ indicator: 'AWESOME_OSCILLATOR', period: 34, condition: 'BULLISH' });
+  if (ruleWilliams) activeInds.push({ indicator: 'WILLIAMS_R', period: 14, condition: 'BETWEEN', min_val: -100, max_val: 0 });
+  if (ruleAlligator) activeInds.push({ indicator: 'ALLIGATOR', period: 13, condition: 'BULLISH' });
+  if (ruleKeltner) activeInds.push({ indicator: 'KELTNER', period: 20, condition: 'BETWEEN', min_val: 0, max_val: 999999 });
+  if (ruleVortex) activeInds.push({ indicator: 'VORTEX', period: 14, condition: 'BULLISH' });
+
   const strat = {
     id: stratId,
     name: stratName,
@@ -2178,6 +2490,8 @@ async function handleSaveStrategy(e) {
     timeframe: AppState.activeTimeframe || '1M',
     expiry_minutes: duration,
     min_payout: minPayout,
+    cooldown_seconds: cooldownSec,
+    martingale_mtg1: mtg1,
     enabled: existingStrat ? existingStrat.enabled : true,
     assets: savedAssets,
     filters: {
@@ -2190,20 +2504,20 @@ async function handleSaveStrategy(e) {
       candle_anatomy: {
         min_body_ratio: ruleSolid ? 0.55 : 0.40,
         max_opposing_wick: ruleWick ? 0.25 : 0.45,
-        filter_preceding_doji: true,
+        filter_preceding_doji: ruleDoji,
         filter_spike_multiplier: 3.0
       },
-      indicators: ruleRsi ? [{ indicator: 'RSI', period: 14, condition: 'BETWEEN', min_val: 30, max_val: 70 }] : [],
+      indicators: activeInds,
       price_action: {
         require_engulfing: ruleEngulfing,
         require_sr_breakout: baseFilters.price_action?.require_sr_breakout || false,
         min_sr_clearance_pct: baseFilters.price_action?.min_sr_clearance_pct || 0.1
       },
-      smc: baseFilters.smc || {
-        fvg_enabled: false,
-        liquidity_sweep_enabled: false,
-        bos_enabled: false,
-        order_block_enabled: false
+      smc: {
+        fvg_enabled: ruleSmcFvg,
+        liquidity_sweep_enabled: ruleSmcSweep,
+        bos_enabled: ruleSmcBos,
+        order_block_enabled: ruleSmcOb
       }
     }
   };
@@ -3789,6 +4103,7 @@ const TelegramManagerState = {
     circuit_breaker: true,
     news: true,
     attach_charts: true,
+    sequential_lock: true,
     min_score: 80.0,
     min_payout: 75.0
   },
@@ -3929,6 +4244,8 @@ function renderTelegramManager() {
   if (ruleNews) ruleNews.checked = TelegramManagerState.rules.news !== false;
   const ruleCharts = document.getElementById('tg-rule-charts');
   if (ruleCharts) ruleCharts.checked = TelegramManagerState.rules.attach_charts !== false;
+  const ruleSeq = document.getElementById('tg-rule-sequential-lock');
+  if (ruleSeq) ruleSeq.checked = TelegramManagerState.rules.sequential_lock !== false;
 
   const minScore = document.getElementById('tg-rule-min-score');
   const scoreBadge = document.getElementById('tg-score-badge');
@@ -4190,6 +4507,7 @@ function saveTelegramEventRules() {
     circuit_breaker: document.getElementById('tg-rule-circuit-breaker')?.checked !== false,
     news: document.getElementById('tg-rule-news')?.checked !== false,
     attach_charts: document.getElementById('tg-rule-charts')?.checked !== false,
+    sequential_lock: document.getElementById('tg-rule-sequential-lock')?.checked !== false,
     min_score: parseFloat(document.getElementById('tg-rule-min-score')?.value || 80),
     min_payout: parseFloat(document.getElementById('tg-rule-min-payout')?.value || 75)
   };
@@ -4197,7 +4515,8 @@ function saveTelegramEventRules() {
   TelegramManagerState.rules = rules;
 
   persistTelegramManagerConfig({
-    rules: rules
+    rules: rules,
+    sequential_trade_lock: rules.sequential_lock
   }, 'Event dispatch rules and signal thresholds saved.');
 }
 window.saveTelegramEventRules = saveTelegramEventRules;

@@ -237,6 +237,30 @@ class AssetRegistry:
         with self._lock:
             return [item["symbol"] for item in self._registered_asset_list if not item.get("is_otc")]
 
+    def filter_real_currencies_only(self):
+        """
+        Configures the asset registry for TradePulse Personal:
+        Retains ONLY authentic real Forex market currency pairs (e.g. EUR/USD, GBP/USD, USD/JPY, etc.)
+        and strictly excludes all OTC, commodities, crypto, and index instruments.
+        """
+        with self._lock:
+            self._real_currencies_only = True
+            filtered_list = []
+            for item in self._registered_asset_list:
+                sym = item.get("symbol", "")
+                is_otc = item.get("is_otc", False) or "(OTC)" in sym or "_otc" in item.get("ws_asset", "").lower()
+                cat = item.get("category", "").lower()
+                if not is_otc and cat == "currencies" and "/" in sym:
+                    filtered_list.append(dict(item))
+            self._registered_asset_list = filtered_list
+
+            # Rebuild symbol mappings
+            self._symbol_to_ws = {item["symbol"]: item["ws_asset"] for item in self._registered_asset_list}
+            self._ws_to_symbol = {item["ws_asset"]: item["symbol"] for item in self._registered_asset_list}
+            self._precisions = {item["symbol"]: item.get("precision", 5) for item in self._registered_asset_list}
+            self._categories = {item["symbol"]: "currencies" for item in self._registered_asset_list}
+            logger.info(f"[ASSET REGISTRY] Personal Edition mode active: Filtered to {len(self._registered_asset_list)} real Forex currency pairs (NO OTC).")
+
     def register_dynamic_asset(
         self,
         ws_code: str,
@@ -251,6 +275,11 @@ class AssetRegistry:
         """
         if not ws_code:
             return ""
+
+        is_otc = "_otc" in ws_code.lower() or (display_name and "(OTC)" in display_name)
+        if getattr(self, "_real_currencies_only", False):
+            if is_otc or category != "currencies":
+                return ""
 
         # Determine canonical display symbol (prevent raw codes like EURUSD_otc from overriding)
         sym = None

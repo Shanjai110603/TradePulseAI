@@ -558,6 +558,32 @@
           <form id="strategy-form" onsubmit="handleSaveStrategy(event)">
             <input type="hidden" id="strat-id">
 
+            <!-- Quick Strategy Archetype Preset Loader -->
+            <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 14px;">
+              <label style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); display: block; margin-bottom: 6px;">⚡ LOAD STRATEGY ARCHETYPE PRESET</label>
+              <select class="form-input" id="strat-archetype-preset" onchange="applyArchetypePreset(this.value)" style="font-weight: 700; background: var(--bg-surface);">
+                <option value="">-- Choose Built-In Archetype Preset --</option>
+                <option value="dual_bollinger_protrusion">🎯 Dual Bollinger Protrusion Reversal (10,2 & 13,2)</option>
+                <option value="logus_trend">📈 Logu's Trend Momentum (MTF EMA 20/50)</option>
+                <option value="mtf_engulfing">⚡ MTF Engulfing Momentum (Solid Body + Directional Shift)</option>
+                <option value="snr_wick">🎯 S&R Pin Bar & Wick Rejection (Key Level Reversal)</option>
+                <option value="ema_bounce">🔄 EMA Dynamic Retest & Bounce (Stochastic Dip)</option>
+                <option value="bollinger_mean">🌊 Bollinger Mean Reversion (Band Touch & Reversal Wick)</option>
+                <option value="bollinger_squeeze">💥 Bollinger Squeeze & Breakout (Low Bandwidth Expansion)</option>
+                <option value="bollinger_rsi">🎯 Bollinger + RSI Extreme Confluence (Overbought/Oversold)</option>
+                <option value="supertrend_trend">🚀 Supertrend ATR Direction Follower (Pure Trend)</option>
+                <option value="sar_reversal">⚡ Parabolic SAR Acceleration Dot Flip (Trend Reversal)</option>
+                <option value="ao_momentum">📊 Awesome Oscillator Zero-Line Cross (Momentum Scalp)</option>
+                <option value="williams_extreme">🎯 Williams %R Extreme Sniper (-80 / -20 Boundary)</option>
+                <option value="alligator_breakout">🐊 Alligator Jaws/Teeth/Lips Expansion (Bill Williams)</option>
+                <option value="keltner_squeeze">🛡️ Keltner & Donchian Volatility Channel Breakout</option>
+                <option value="vortex_flow">🌀 Vortex Flow Directional Alignment (+VI > -VI)</option>
+                <option value="smc_orderblock">🏦 Smart Money Concepts (Order Block + FVG + Sweep)</option>
+                <option value="breakout_momentum">🚀 Volatility & S&R Breakout (ATR Momentum)</option>
+                <option value="ultra_confluence">👑 Ultra Confluence Pro Matrix (Triple Confirmation)</option>
+              </select>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Strategy Name</label>
               <input type="text" class="form-input" id="strat-name" placeholder="e.g. 1M OTC Rejection Pinbar" required>
@@ -592,6 +618,26 @@
               <div class="form-group">
                 <label class="form-label">Min Broker Payout %</label>
                 <input type="number" class="form-input" id="strat-min-payout" min="50" max="98" value="85" required>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 10px;">
+              <div class="form-group">
+                <label class="form-label">Cooldown (Seconds)</label>
+                <select class="form-input" id="strat-cooldown-select">
+                  <option value="60">60 Seconds (1 Min)</option>
+                  <option value="120" selected>120 Seconds (2 Mins)</option>
+                  <option value="180">180 Seconds (3 Mins)</option>
+                  <option value="240">240 Seconds (4 Mins)</option>
+                  <option value="300">300 Seconds (5 Mins)</option>
+                </select>
+              </div>
+              <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
+                <label class="form-label" style="margin-bottom: 6px;">Recovery Martingale</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                  <input type="checkbox" class="custom-checkbox" id="strat-mtg1-toggle">
+                  <span style="font-weight: 600;">1-Step MTG1 Follow</span>
+                </label>
               </div>
             </div>
 
@@ -636,28 +682,97 @@
 
             <!-- Rule Block Selector -->
             <div class="form-group" style="margin-top: 10px;">
-              <label class="form-label">Rule Confluence Logic</label>
-              <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; display: flex; flex-direction: column; gap: 10px;">
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+              <label class="form-label">Rule Confluence Logic & Technical Indicators</label>
+              <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin-bottom: 2px;">🕯️ PRICE ACTION & ANATOMY</div>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
                   <input type="checkbox" class="custom-checkbox" id="rule-solid-body" checked>
-                  <span>Candle Anatomy: Require Strong Solid Body (&gt;50% of range)</span>
+                  <span>Require Strong Solid Body (&gt;50% of range)</span>
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
                   <input type="checkbox" class="custom-checkbox" id="rule-engulfing">
-                  <span>Price Action: Require Engulfing Pattern</span>
+                  <span>Require Engulfing Pattern Confirmation</span>
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
                   <input type="checkbox" class="custom-checkbox" id="rule-wick" checked>
-                  <span>Rejection: Opposing wick &lt; 25% (Clean price drive)</span>
+                  <span>Opposing Wick Rejection &lt; 25% (Clean price drive)</span>
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
-                  <input type="checkbox" class="custom-checkbox" id="rule-trend">
-                  <span>Trend Confluence: EMA 9 slope aligned with direction</span>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                  <input type="checkbox" class="custom-checkbox" id="rule-doji" checked>
+                  <span>Reject Preceding Doji & Flatlines</span>
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
-                  <input type="checkbox" class="custom-checkbox" id="rule-rsi">
-                  <span>Momentum: RSI not in extreme overbought/oversold</span>
-                </label>
+
+                <div style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin-top: 8px; margin-bottom: 2px;">📊 TECHNICAL INDICATORS</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-trend">
+                    <span>EMA Trend Alignment (EMA 20/50)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-rsi">
+                    <span>RSI Overbought / Oversold</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-bollinger">
+                    <span>Bollinger Bands Rebound</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-stochastic">
+                    <span>Stochastic Oscillator Dip</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-macd">
+                    <span>MACD Momentum Expansion</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-supertrend">
+                    <span>Supertrend ATR Follower</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-sar">
+                    <span>Parabolic SAR Acceleration</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-ao">
+                    <span>Awesome Oscillator (AO)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-williams">
+                    <span>Williams %R Extreme</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-alligator">
+                    <span>Alligator Expansion</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-keltner">
+                    <span>Keltner / Donchian Channel</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-vortex">
+                    <span>Vortex Flow (+VI &gt; -VI)</span>
+                  </label>
+                </div>
+
+                <div style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin-top: 8px; margin-bottom: 2px;">🏦 SMART MONEY CONCEPTS (SMC)</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-smc-fvg">
+                    <span>Fair Value Gap (FVG)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-smc-sweep">
+                    <span>Liquidity Sweep Reversal</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-smc-bos">
+                    <span>Break of Structure (BOS)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="custom-checkbox" id="rule-smc-ob">
+                    <span>Order Block (OB) Mitigation</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -974,6 +1089,18 @@
                 </div>
               </div>
               <input type="checkbox" class="custom-checkbox" id="tg-rule-charts" checked>
+            </div>
+
+            <!-- Rule 7: Sequential Live Trade Lock & Dynamic Cooldown -->
+            <div class="tg-rule-card">
+              <div class="tg-rule-info">
+                <span class="tg-rule-icon">🔒</span>
+                <div class="tg-rule-text">
+                  <h4>Sequential Live Trade Lock (1 Active Trade)</h4>
+                  <p>Blocks new alerts until current trade expires. Unlocks immediately on WIN; enforces 2m cooldown on LOSS.</p>
+                </div>
+              </div>
+              <input type="checkbox" class="custom-checkbox" id="tg-rule-sequential-lock" checked>
             </div>
           </div>
 

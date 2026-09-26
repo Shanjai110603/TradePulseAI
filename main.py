@@ -131,7 +131,12 @@ class TradePulseEngine:
 
         # Subsystems
         self.telegram_manager = TelegramManager()
-        self.tracker = SignalTracker(self.candle_store, on_outcome_callback=self._on_trade_outcome)
+        self.tracker = SignalTracker(
+            self.candle_store,
+            on_outcome_callback=self._on_trade_outcome,
+            sequential_trade_lock=self.telegram_manager.sequential_trade_lock,
+            loss_cooldown_seconds=self.telegram_manager.loss_cooldown_seconds
+        )
         self.telegram = TelegramBridge(on_command_callback=self._on_telegram_command, manager=self.telegram_manager)
         self.webhook_server = WebhookServer(port=8765, on_signal_callback=self._on_external_webhook)
         self.news_calendar = EconomicCalendarEngine(data_dir=settings.resolved_data_dir)
@@ -320,6 +325,12 @@ class TradePulseEngine:
     async def _evaluate_pre_signal(self, symbol: str, current_price: float, remaining_seconds: int):
         """Evaluates forming bar at second 45-52 for early manual entry preparation."""
         try:
+            # Check sequential trade lock and cooldown before evaluating pre-alerts
+            can_fire, lock_reason = self.tracker.can_dispatch_signal()
+            if not can_fire:
+                logger.debug(f"[PRE-SIGNAL LOCKED] {symbol} skipped: {lock_reason}")
+                return
+
             candles_1m = self.candle_store.get_candles(symbol, "1M")
             if len(candles_1m) < 15:
                 return
@@ -454,6 +465,11 @@ class TradePulseEngine:
             logger.warning(f"[WEBHOOK] Invalid alert payload: {payload}")
             return
 
+        can_fire, lock_reason = self.tracker.can_dispatch_signal()
+        if not can_fire:
+            logger.info(f"[SEQUENTIAL LOCK] Webhook {symbol} skipped: {lock_reason}")
+            return
+
         direction = "CALL" if side in ("CALL", "BUY") else "PUT"
         current_price = asset_registry.get_latest_price(symbol) or 1.0
         payout = asset_registry.get_payout(symbol) or 85.0
@@ -468,7 +484,8 @@ class TradePulseEngine:
             confidence=95
         )
 
-        self.tracker.register_signal(sig)
+        if not self.tracker.register_signal(sig):
+            return
 
         sig_json = json.dumps(sig.to_dict())
         self.safe_emit_js(f"window.onSignalFired({sig_json});")
@@ -482,6 +499,12 @@ class TradePulseEngine:
 
     async def _evaluate_strategies_for_asset(self, symbol: str, trigger_candle: Candle):
         """Evaluates all active user-defined strategies against the completed candle."""
+        # 0. Sequential Live Trade Lock & Dynamic Post-Loss Cooldown
+        can_fire, lock_reason = self.tracker.can_dispatch_signal()
+        if not can_fire:
+            logger.debug(f"[SEQUENTIAL LOCK] {symbol} skipped: {lock_reason}")
+            return
+
         # 1. Trading Session / Operating Hours Filter
         session_ok, session_msg = self.scheduler.is_session_active()
         if not session_ok:
@@ -613,7 +636,7 @@ class TradePulseEngine:
                         cooldown_manager.record_signal(strat.id, symbol, eval_trigger.timestamp)
 
                         # Calculate quantitative Setup Quality Score
-                        score, tier, audit = ConfluenceEngine.calculate_setup_quality_score(eval_trigger, payout, details)
+                        score, tier, audit = ConfluenceEngine.calculate_setup_quality_score(eval_trigger, payout, details, technical_snapshot=eval_snapshot, direction=direction)
 
                         # Evaluate Quant Expected Value (EV) positive-edge filter
                         ev_res = self.quant_ev.evaluate_edge(
@@ -694,12 +717,16 @@ class TradePulseEngine:
                 await self.telegram.broadcast_signal(sig, chart_bytes)
             else:
                 for s in setups:
+                    if self.tracker.sequential_trade_lock and self.tracker.is_trade_active():
+                        logger.debug(f"[SEQUENTIAL LOCK] Skipping subsequent setup {s['sig'].strategy_name} on {symbol} because an active trade is in progress.")
+                        break
                     sig = s["sig"]
                     logger.info(
                         f"🚀 [SIGNAL TRIGGERED] {sig.strategy_name} on {symbol} "
                         f"({s['direction']} @ {sig.entry_price}) — Setup Quality: {s['score']}% ({s['tier']})"
                     )
-                    self.tracker.register_signal(sig)
+                    if not self.tracker.register_signal(sig):
+                        continue
                     chart_bytes = await ChartGenerator.render_chart_async(s["candles"], sig)
                     sig_json = json.dumps(sig.to_dict())
                     self.safe_emit_js(f"window.onSignalFired({sig_json});")
@@ -1766,8 +1793,8 @@ class TradePulseBridgeAPI:
             if last_price and last_price > 0:
                 pct_diff = abs(price_f - last_price) / last_price
                 # Tune per asset class: FX OTC pairs move far less than Crypto pairs
-                is_crypto = any(c in display_symbol.upper() for c in ["BTC", "ETH"])
-                threshold = 0.25 if is_crypto else 0.15
+                is_crypto = any(c in display_symbol.upper() for c in ["BTC", "ETH", "SOL", "XRP"])
+                threshold = 0.20 if is_crypto else 0.03
                 if pct_diff > threshold:
                     if not hasattr(self, '_tick_rejection_counts'):
                         self._tick_rejection_counts = {}
@@ -2343,6 +2370,10 @@ class TradePulseBridgeAPI:
         """Persists updated Telegram manager settings, channels, rules, and templates."""
         try:
             updated = self.engine.telegram_manager.update_config(new_config)
+            # Synchronize tracker lock settings with telegram manager rules
+            if hasattr(self.engine, 'tracker') and self.engine.tracker:
+                self.engine.tracker.sequential_trade_lock = self.engine.telegram_manager.sequential_trade_lock
+                self.engine.tracker.loss_cooldown_seconds = self.engine.telegram_manager.loss_cooldown_seconds
             # Update active bridge credentials in memory if bot_token changed
             new_token = updated.get("bot_token")
             if new_token:

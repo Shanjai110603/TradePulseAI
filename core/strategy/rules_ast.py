@@ -82,11 +82,14 @@ class PatternRuleEngine:
         technical_snapshot: Optional[Dict[str, Any]],
         direction_context: str
     ) -> Tuple[bool, str, Dict[str, Any]]:
-        if "operator" in item:
+        op = str(item.get("operator", "")).upper()
+        if op in ("AND", "OR", "NOT") and "conditions" in item:
             return cls.evaluate_node(item, candles, multi_timeframe_candles, technical_snapshot, direction_context)
 
         cond_type = item.get("type", "").lower()
         params = item.get("params", {})
+        if not params and not cond_type in ["candle_anatomy", "sr_clearance"]:
+            params = item
 
         if cond_type == "candle_anatomy":
             return cls.evaluate_candle_anatomy(candles, params, direction_context)
@@ -108,12 +111,155 @@ class PatternRuleEngine:
             return cls.evaluate_ema_trend_bounce(candles, technical_snapshot, params, direction_context)
         elif cond_type in ["mtf_momentum", "mtf_momentum_strategy"]:
             return cls.evaluate_mtf_momentum(candles, multi_timeframe_candles, technical_snapshot, params, direction_context)
-        elif cond_type == "indicator_threshold":
+        elif cond_type in ["bollinger_mean_reversion", "bb_reversal", "bollinger_bounce", "bollinger_reversion"]:
+            return cls.evaluate_bollinger_mean_reversion(candles, technical_snapshot, params, direction_context)
+        elif cond_type in ["bollinger_squeeze_breakout", "bb_squeeze", "bb_breakout"]:
+            return cls.evaluate_bollinger_squeeze_breakout(candles, technical_snapshot, params, direction_context)
+        elif cond_type in ["bollinger_rsi_confluence", "bb_rsi", "bollinger_rsi"]:
+            return cls.evaluate_bollinger_rsi_confluence(candles, technical_snapshot, params, direction_context)
+        elif cond_type in ["dual_bollinger_protrusion", "dual_bb_protrusion", "dual_bollinger_reversal", "dual_bb", "dual_bollinger"]:
+            return cls.evaluate_dual_bollinger_protrusion_reversal(candles, technical_snapshot, params, direction_context)
+        elif cond_type in [
+            "indicator_threshold", "indicator", "rsi", "macd", "ema", "sma", "bollinger", "bollinger_bands",
+            "stochastic", "vwap", "atr", "adx", "supertrend", "parabolic_sar", "sar", "awesome_oscillator", "ao",
+            "williams_r", "cci", "demarker", "aroon", "bulls_bears_power", "keltner", "donchian", "envelopes",
+            "vortex", "volume_oscillator", "momentum", "roc"
+        ]:
+            if "indicator" not in params:
+                params = dict(params)
+                params["indicator"] = cond_type.upper()
             return cls.evaluate_indicator_threshold(technical_snapshot, params, direction_context, candles=candles)
+        elif cond_type in ["formation", "candlestick_formation", "candle_pattern"]:
+            return cls.evaluate_candlestick_formation(candles, technical_snapshot, params, direction_context)
+        elif cond_type in ["smc_structure", "market_structure", "structure"]:
+            return cls.evaluate_smc_structure_node(candles, technical_snapshot, params, direction_context)
         elif cond_type == "sr_clearance":
             return cls.evaluate_sr_clearance(candles, technical_snapshot, params, direction_context)
 
         return True, f"Unrecognized condition {cond_type} skipped", {}
+
+    @classmethod
+    def evaluate_candlestick_formation(
+        cls,
+        candles: List[Candle],
+        technical_snapshot: Optional[Dict[str, Any]],
+        params: Dict[str, Any],
+        direction: str
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """Evaluates detected candlestick patterns against the required direction."""
+        forms = (technical_snapshot or {}).get("formations")
+        if not forms:
+            forms = TechnicalIndicatorEngine.calculate_candlestick_formations(candles)
+
+        pattern = str(params.get("pattern", "")).upper()
+        dir_upper = direction.upper()
+
+        if pattern in ["PINBAR", "HAMMER", "SHOOTING_STAR"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = forms.get("pinbar_bullish", False)
+                return passed, f"Bullish Pinbar/Hammer {'confirmed' if passed else 'not found'}", forms
+            else:
+                passed = forms.get("pinbar_bearish", False)
+                return passed, f"Bearish Shooting Star/Pinbar {'confirmed' if passed else 'not found'}", forms
+
+        elif pattern in ["ENGULFING", "ENGULF"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = forms.get("engulfing_bullish", False)
+                return passed, f"Bullish Engulfing {'confirmed' if passed else 'not found'}", forms
+            else:
+                passed = forms.get("engulfing_bearish", False)
+                return passed, f"Bearish Engulfing {'confirmed' if passed else 'not found'}", forms
+
+        elif pattern in ["STAR", "MORNING_STAR", "EVENING_STAR"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = forms.get("morning_star", False)
+                return passed, f"Morning Star reversal {'confirmed' if passed else 'not found'}", forms
+            else:
+                passed = forms.get("evening_star", False)
+                return passed, f"Evening Star reversal {'confirmed' if passed else 'not found'}", forms
+
+        elif pattern in ["SOLDIERS_CROWS", "THREE_SOLDIERS", "THREE_CROWS"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = forms.get("three_white_soldiers", False)
+                return passed, f"Three White Soldiers {'confirmed' if passed else 'not found'}", forms
+            else:
+                passed = forms.get("three_black_crows", False)
+                return passed, f"Three Black Crows {'confirmed' if passed else 'not found'}", forms
+
+        elif pattern in ["INSIDE_BAR", "HARAMI"]:
+            passed = forms.get("inside_bar", False)
+            return passed, f"Inside Bar (Harami) {'confirmed' if passed else 'not found'}", forms
+
+        elif pattern in ["TWEEZER"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = forms.get("tweezer_bottom", False)
+                return passed, f"Tweezer Bottom {'confirmed' if passed else 'not found'}", forms
+            else:
+                passed = forms.get("tweezer_top", False)
+                return passed, f"Tweezer Top {'confirmed' if passed else 'not found'}", forms
+
+        # Default fallback: check if any detected pattern matches
+        detected = forms.get("detected_patterns", [])
+        if pattern and pattern in detected:
+            return True, f"Pattern {pattern} confirmed in detected list", forms
+        
+        return len(detected) > 0, f"Detected patterns: {', '.join(detected) if detected else 'None'}", forms
+
+    @classmethod
+    def evaluate_smc_structure_node(
+        cls,
+        candles: List[Candle],
+        technical_snapshot: Optional[Dict[str, Any]],
+        params: Dict[str, Any],
+        direction: str
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """Evaluates Smart Money Concepts market structure triggers (BOS, CHOCH, FVG, Liquidity Sweeps)."""
+        smc = (technical_snapshot or {}).get("smc_structure")
+        if not smc:
+            smc = TechnicalIndicatorEngine.calculate_smc_structure(candles)
+
+        event = str(params.get("event", params.get("pattern", ""))).upper()
+        dir_upper = direction.upper()
+
+        if event in ["BOS", "BREAK_OF_STRUCTURE"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = smc.get("bos_bullish", False)
+                return passed, f"Bullish Break of Structure (BOS) {'confirmed' if passed else 'not triggered'}", smc
+            else:
+                passed = smc.get("bos_bearish", False)
+                return passed, f"Bearish Break of Structure (BOS) {'confirmed' if passed else 'not triggered'}", smc
+
+        elif event in ["CHOCH", "CHANGE_OF_CHARACTER"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = smc.get("choch_bullish", False)
+                return passed, f"Bullish CHOCH trend reversal {'confirmed' if passed else 'not triggered'}", smc
+            else:
+                passed = smc.get("choch_bearish", False)
+                return passed, f"Bearish CHOCH trend reversal {'confirmed' if passed else 'not triggered'}", smc
+
+        elif event in ["FVG", "FAIR_VALUE_GAP"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = smc.get("fvg_bullish", False)
+                return passed, f"Bullish Fair Value Gap {'confirmed' if passed else 'not triggered'}", smc
+            else:
+                passed = smc.get("fvg_bearish", False)
+                return passed, f"Bearish Fair Value Gap {'confirmed' if passed else 'not triggered'}", smc
+
+        elif event in ["SWEEP", "LIQUIDITY_SWEEP"]:
+            if dir_upper in ["CALL", "BUY", "UP"]:
+                passed = smc.get("liquidity_sweep_bullish", False)
+                return passed, f"Bullish Liquidity Sweep & Rejection {'confirmed' if passed else 'not triggered'}", smc
+            else:
+                passed = smc.get("liquidity_sweep_bearish", False)
+                return passed, f"Bearish Liquidity Sweep & Rejection {'confirmed' if passed else 'not triggered'}", smc
+
+        trend = smc.get("structure_trend", "NEUTRAL")
+        if dir_upper in ["CALL", "BUY", "UP"] and trend == "BULLISH":
+            return True, "Bullish Higher High / Higher Low structural trend", smc
+        elif dir_upper in ["PUT", "SELL", "DOWN"] and trend == "BEARISH":
+            return True, "Bearish Lower High / Lower Low structural trend", smc
+
+        return False, f"Structural trend ({trend}) does not align with {dir_upper}", smc
 
     # -----------------------------------------------------------------------
     # Primitive Condition Evaluators
@@ -582,11 +728,11 @@ class PatternRuleEngine:
                     if c.close > res:
                         return False, "Candle body broke and closed past Resistance line", {}
 
-        # 3. Candle Size Safety: Total candle range > 1.2 * ATR(14)
+        # 3. Candle Size Safety: Total candle range > 0.5 * ATR(14)
         atr_14 = (snapshot.get("atr") if snapshot else None) or (snapshot.get("atr_14") if snapshot else None) or TechnicalIndicatorEngine.calculate_atr(candles, 14)
         if atr_14 and atr_14 > 0:
-            if c.total_range <= (1.2 * atr_14):
-                return False, f"Candle range ({c.total_range:.5f}) <= 1.2*ATR ({1.2*atr_14:.5f})", {}
+            if c.total_range <= (0.5 * atr_14):
+                return False, f"Candle range ({c.total_range:.5f}) <= 0.5*ATR ({0.5*atr_14:.5f})", {}
 
         # 4. Filter out Doji candles (Body < 10% of total candle range)
         if c.body_ratio < 0.10:
@@ -939,7 +1085,7 @@ class PatternRuleEngine:
                 val = TechnicalIndicatorEngine.calculate_atr(candles, period or 14)
 
         elif ind_name == "ADX":
-            if period and period != 14 and candles and len(candles) >= (period * 2):
+            if period and period != 14 and candles and len(candles) >= ((period * 2) + 1):
                 val = TechnicalIndicatorEngine.calculate_adx(candles, period)
             elif snapshot:
                 val = snapshot.get("adx")
@@ -955,6 +1101,129 @@ class PatternRuleEngine:
             elif snapshot and req_period == 200:
                 val = snapshot.get("sma_200")
 
+        elif ind_name in ("SUPERTREND", "ST"):
+            sub = field if field in ("supertrend", "upper_band", "lower_band") else "supertrend"
+            st_dict = snapshot.get("supertrend") if snapshot else None
+            if isinstance(st_dict, dict):
+                val = st_dict.get(sub)
+            elif candles:
+                st_calc = TechnicalIndicatorEngine.calculate_supertrend(candles, period or 10, 3.0)
+                val = st_calc.get(sub) if st_calc else None
+
+        elif ind_name in ("PARABOLIC_SAR", "SAR", "PSAR"):
+            psar_dict = snapshot.get("parabolic_sar") if snapshot else None
+            if isinstance(psar_dict, dict):
+                val = psar_dict.get("sar")
+            elif candles:
+                psar_calc = TechnicalIndicatorEngine.calculate_parabolic_sar(candles)
+                val = psar_calc.get("sar") if psar_calc else None
+
+        elif ind_name in ("AWESOME_OSCILLATOR", "AO"):
+            sub = field if field in ("ao", "prev_ao") else "ao"
+            ao_dict = snapshot.get("awesome_oscillator") if snapshot else None
+            if isinstance(ao_dict, dict):
+                val = ao_dict.get(sub)
+            elif candles:
+                ao_calc = TechnicalIndicatorEngine.calculate_awesome_oscillator(candles)
+                val = ao_calc.get(sub) if ao_calc else None
+
+        elif ind_name in ("WILLIAMS_R", "WILLIAMS_%R", "WILLIAMS", "WR"):
+            if candles and len(candles) >= (period or 14):
+                val = TechnicalIndicatorEngine.calculate_williams_r(candles, period or 14)
+            elif snapshot:
+                val = snapshot.get("williams_r")
+
+        elif ind_name in ("CCI", "COMMODITY_CHANNEL_INDEX"):
+            if candles and len(candles) >= (period or 20):
+                val = TechnicalIndicatorEngine.calculate_cci(candles, period or 20)
+            elif snapshot:
+                val = snapshot.get("cci")
+
+        elif ind_name in ("DEMARKER", "DEM"):
+            if candles and len(candles) >= (period or 14):
+                val = TechnicalIndicatorEngine.calculate_demarker(candles, period or 14)
+            elif snapshot:
+                val = snapshot.get("demarker")
+
+        elif ind_name in ("MOMENTUM", "MOM"):
+            if candles and len(candles) >= (period or 10) + 1:
+                val = TechnicalIndicatorEngine.calculate_momentum(candles, period or 10)
+            elif snapshot:
+                val = snapshot.get("momentum")
+
+        elif ind_name in ("ROC", "RATE_OF_CHANGE"):
+            if candles and len(candles) >= (period or 10) + 1:
+                val = TechnicalIndicatorEngine.calculate_rate_of_change(candles, period or 10)
+            elif snapshot:
+                val = snapshot.get("roc")
+
+        elif ind_name in ("AROON", "AROON_OSCILLATOR"):
+            sub = field if field in ("aroon_up", "aroon_down", "oscillator") else "oscillator"
+            aroon_dict = snapshot.get("aroon") if snapshot else None
+            if isinstance(aroon_dict, dict):
+                val = aroon_dict.get(sub)
+            elif candles:
+                aroon_calc = TechnicalIndicatorEngine.calculate_aroon(candles, period or 14)
+                val = aroon_calc.get(sub) if aroon_calc else None
+
+        elif ind_name in ("BULLS_POWER", "BULLS"):
+            bp_dict = snapshot.get("bulls_bears_power") if snapshot else None
+            if isinstance(bp_dict, dict):
+                val = bp_dict.get("bulls_power")
+            elif candles:
+                bp_calc = TechnicalIndicatorEngine.calculate_bulls_bears_power(candles, period or 13)
+                val = bp_calc.get("bulls_power") if bp_calc else None
+
+        elif ind_name in ("BEARS_POWER", "BEARS"):
+            bp_dict = snapshot.get("bulls_bears_power") if snapshot else None
+            if isinstance(bp_dict, dict):
+                val = bp_dict.get("bears_power")
+            elif candles:
+                bp_calc = TechnicalIndicatorEngine.calculate_bulls_bears_power(candles, period or 13)
+                val = bp_calc.get("bears_power") if bp_calc else None
+
+        elif ind_name in ("KELTNER", "KELTNER_CHANNEL", "KC"):
+            sub = field if field in ("upper", "lower", "middle") else "middle"
+            kc_dict = snapshot.get("keltner") if snapshot else None
+            if isinstance(kc_dict, dict):
+                val = kc_dict.get(sub)
+            elif candles:
+                kc_calc = TechnicalIndicatorEngine.calculate_keltner_channel(candles, period or 20)
+                val = kc_calc.get(sub) if kc_calc else None
+
+        elif ind_name in ("DONCHIAN", "DONCHIAN_CHANNEL", "DC"):
+            sub = field if field in ("upper", "lower", "middle") else "middle"
+            dc_dict = snapshot.get("donchian") if snapshot else None
+            if isinstance(dc_dict, dict):
+                val = dc_dict.get(sub)
+            elif candles:
+                dc_calc = TechnicalIndicatorEngine.calculate_donchian_channel(candles, period or 20)
+                val = dc_calc.get(sub) if dc_calc else None
+
+        elif ind_name in ("ENVELOPES", "ENVELOPE", "ENV"):
+            sub = field if field in ("upper", "lower", "middle") else "middle"
+            env_dict = snapshot.get("envelopes") if snapshot else None
+            if isinstance(env_dict, dict):
+                val = env_dict.get(sub)
+            elif candles:
+                env_calc = TechnicalIndicatorEngine.calculate_envelopes(candles, period or 20)
+                val = env_calc.get(sub) if env_calc else None
+
+        elif ind_name in ("VORTEX", "VI"):
+            sub = field if field in ("plus_vi", "minus_vi") else "plus_vi"
+            vi_dict = snapshot.get("vortex") if snapshot else None
+            if isinstance(vi_dict, dict):
+                val = vi_dict.get(sub)
+            elif candles:
+                vi_calc = TechnicalIndicatorEngine.calculate_vortex(candles, period or 14)
+                val = vi_calc.get(sub) if vi_calc else None
+
+        elif ind_name in ("VOLUME_OSCILLATOR", "VO"):
+            if candles and len(candles) >= 10:
+                val = TechnicalIndicatorEngine.calculate_volume_oscillator(candles)
+            elif snapshot:
+                val = snapshot.get("volume_oscillator")
+
         else:
             # Fallback for generic snapshot lookup
             if snapshot:
@@ -965,8 +1234,52 @@ class PatternRuleEngine:
         if val is None:
             return False, f"Indicator {ind_name} is null or cannot be calculated", {}
 
-        # Handle condition checks
-        if condition in ("PRICE_ABOVE_CALL_BELOW_PUT", "PRICE_ALIGNMENT"):
+        # Handle direction / trend alignment condition checks
+        if condition in ("BULLISH", "CALL", "BUY"):
+            if ind_name in ("SUPERTREND", "ST"):
+                st_data = snapshot.get("supertrend") if snapshot else None
+                is_bull = (st_data.get("trend") == "BULLISH") if isinstance(st_data, dict) else (candles[-1].close > val if candles else False)
+                return (True, "Supertrend is BULLISH", {"val": val}) if is_bull else (False, "Supertrend is not BULLISH", {})
+            elif ind_name in ("PARABOLIC_SAR", "SAR", "PSAR"):
+                curr_price = candles[-1].close if candles else 0
+                is_bull = curr_price > val
+                return (True, "Parabolic SAR is BULLISH (below price)", {"val": val}) if is_bull else (False, "Parabolic SAR is BEARISH (above price)", {})
+            elif ind_name in ("AWESOME_OSCILLATOR", "AO"):
+                is_bull = val > 0
+                return (True, f"Awesome Oscillator ({val:.5f}) is BULLISH (> 0)", {"val": val}) if is_bull else (False, f"Awesome Oscillator ({val:.5f}) is not > 0", {})
+            elif ind_name in ("VORTEX", "VI"):
+                v_data = snapshot.get("vortex") if snapshot else None
+                is_bull = v_data.get("bullish_cross", False) if isinstance(v_data, dict) else (val > 1.0)
+                return (True, "Vortex +VI > -VI (BULLISH)", {"val": val}) if is_bull else (False, "Vortex is BEARISH", {})
+            elif ind_name in ("AROON", "AROON_OSCILLATOR"):
+                return (True, f"Aroon Oscillator ({val:.2f}) > 0", {"val": val}) if val > 0 else (False, f"Aroon Oscillator ({val:.2f}) <= 0", {})
+            elif val > 0:
+                return True, f"{ind_name} ({val}) is BULLISH", {"val": val}
+            return False, f"{ind_name} ({val}) is not BULLISH", {}
+
+        if condition in ("BEARISH", "PUT", "SELL"):
+            if ind_name in ("SUPERTREND", "ST"):
+                st_data = snapshot.get("supertrend") if snapshot else None
+                is_bear = (st_data.get("trend") == "BEARISH") if isinstance(st_data, dict) else (candles[-1].close < val if candles else False)
+                return (True, "Supertrend is BEARISH", {"val": val}) if is_bear else (False, "Supertrend is not BEARISH", {})
+            elif ind_name in ("PARABOLIC_SAR", "SAR", "PSAR"):
+                curr_price = candles[-1].close if candles else 0
+                is_bear = curr_price < val
+                return (True, "Parabolic SAR is BEARISH (above price)", {"val": val}) if is_bear else (False, "Parabolic SAR is BULLISH (below price)", {})
+            elif ind_name in ("AWESOME_OSCILLATOR", "AO"):
+                is_bear = val < 0
+                return (True, f"Awesome Oscillator ({val:.5f}) is BEARISH (< 0)", {"val": val}) if is_bear else (False, f"Awesome Oscillator ({val:.5f}) is not < 0", {})
+            elif ind_name in ("VORTEX", "VI"):
+                v_data = snapshot.get("vortex") if snapshot else None
+                is_bear = not v_data.get("bullish_cross", True) if isinstance(v_data, dict) else (val < 1.0)
+                return (True, "Vortex -VI > +VI (BEARISH)", {"val": val}) if is_bear else (False, "Vortex is BULLISH", {})
+            elif ind_name in ("AROON", "AROON_OSCILLATOR"):
+                return (True, f"Aroon Oscillator ({val:.2f}) < 0", {"val": val}) if val < 0 else (False, f"Aroon Oscillator ({val:.2f}) >= 0", {})
+            elif val < 0:
+                return True, f"{ind_name} ({val}) is BEARISH", {"val": val}
+            return False, f"{ind_name} ({val}) is not BEARISH", {}
+
+        if condition in ("PRICE_ABOVE_CALL_BELOW_PUT", "PRICE_ALIGNMENT", "ALIGNMENT", "TREND_ALIGN"):
             curr_price = candles[-1].close if candles else (snapshot.get("price") if snapshot else None)
             if curr_price is None:
                 return False, f"Cannot evaluate {condition}: current price unavailable", {}
@@ -980,23 +1293,45 @@ class PatternRuleEngine:
                     return True, f"Price ({curr_price:.5f}) is below {ind_name} ({val:.5f}) for PUT", {"val": val, "price": curr_price}
                 return False, f"Price ({curr_price:.5f}) is not below {ind_name} ({val:.5f}) for PUT", {"val": val, "price": curr_price}
 
-        threshold_above = min_v if min_v is not None else max_v
-        threshold_below = max_v if max_v is not None else min_v
+        # Oversold / Overbought convenience conditions
+        if condition == "OVERSOLD":
+            limit = min_v if min_v is not None else 30.0
+            if val <= limit:
+                return True, f"{ind_name} ({val:.2f}) is Oversold (<= {limit})", {"val": val}
+            return False, f"{ind_name} ({val:.2f}) is not Oversold (> {limit})", {}
 
-        if condition in ("ABOVE", "GREATER_THAN") and threshold_above is not None:
+        if condition == "OVERBOUGHT":
+            limit = max_v if max_v is not None else 70.0
+            if val >= limit:
+                return True, f"{ind_name} ({val:.2f}) is Overbought (>= {limit})", {"val": val}
+            return False, f"{ind_name} ({val:.2f}) is not Overbought (< {limit})", {}
+
+        comp_val = params.get("value", params.get("target_val", min_v if min_v is not None else max_v))
+        threshold_above = min_v if min_v is not None else (comp_val if comp_val is not None else max_v)
+        threshold_below = max_v if max_v is not None else (comp_val if comp_val is not None else min_v)
+
+        if condition in ("ABOVE", "GREATER_THAN", "GT", ">", "CROSS_ABOVE", "CROSS_UP") and threshold_above is not None:
             if val > threshold_above:
-                return True, f"{ind_name} ({val:.2f}) above {threshold_above}", {"val": val}
-            return False, f"{ind_name} ({val:.2f}) below required {threshold_above}", {}
-        elif condition in ("BELOW", "LESS_THAN") and threshold_below is not None:
+                return True, f"{ind_name} ({val:.4f}) > {threshold_above}", {"val": val}
+            return False, f"{ind_name} ({val:.4f}) <= required {threshold_above}", {}
+        elif condition in ("GTE", ">=") and threshold_above is not None:
+            if val >= threshold_above:
+                return True, f"{ind_name} ({val:.4f}) >= {threshold_above}", {"val": val}
+            return False, f"{ind_name} ({val:.4f}) < required {threshold_above}", {}
+        elif condition in ("BELOW", "LESS_THAN", "LT", "<", "CROSS_BELOW", "CROSS_DOWN") and threshold_below is not None:
             if val < threshold_below:
-                return True, f"{ind_name} ({val:.2f}) below {threshold_below}", {"val": val}
-            return False, f"{ind_name} ({val:.2f}) above required {threshold_below}", {}
+                return True, f"{ind_name} ({val:.4f}) < {threshold_below}", {"val": val}
+            return False, f"{ind_name} ({val:.4f}) >= required {threshold_below}", {}
+        elif condition in ("LTE", "<=") and threshold_below is not None:
+            if val <= threshold_below:
+                return True, f"{ind_name} ({val:.4f}) <= {threshold_below}", {"val": val}
+            return False, f"{ind_name} ({val:.4f}) > required {threshold_below}", {}
         elif condition == "BETWEEN":
             if min_v is not None and val < min_v:
-                return False, f"{ind_name} ({val:.2f}) below minimum {min_v}", {}
+                return False, f"{ind_name} ({val:.4f}) below minimum {min_v}", {}
             if max_v is not None and val > max_v:
-                return False, f"{ind_name} ({val:.2f}) above maximum {max_v}", {}
-            return True, f"{ind_name} ({val:.2f}) within [{min_v}, {max_v}]", {"val": val}
+                return False, f"{ind_name} ({val:.4f}) above maximum {max_v}", {}
+            return True, f"{ind_name} ({val:.4f}) within [{min_v}, {max_v}]", {"val": val}
 
         return True, "Indicator threshold check passed", {"val": val}
 
@@ -1028,3 +1363,297 @@ class PatternRuleEngine:
                     return False, f"Price too close to support ({dist_pct*100:.3f}% < {min_buffer_pct*100:.2f}%)", {}
 
         return True, "S/R clearance buffer satisfied", {}
+
+    @staticmethod
+    def evaluate_bollinger_mean_reversion(
+        candles: List[Candle],
+        snapshot: Optional[Dict[str, Any]],
+        params: Dict[str, Any],
+        direction: str
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        BOLLINGER MEAN REVERSION STRATEGY:
+        Price penetrates or touches the Outer Bollinger Band (2.0 StdDev)
+        and confirms a reversal rebound closing back inside the channel.
+        """
+        if len(candles) < 20:
+            return False, "Need >= 20 candles for Bollinger Mean Reversion", {}
+
+        c = candles[-1]
+        prev = candles[-2]
+        is_call = direction.upper() in ["CALL", "UP", "BUY"]
+
+        period = params.get("period", 20)
+        std_dev = params.get("std_dev", 2.0)
+        bb = (snapshot or {}).get("bollinger_bands") or TechnicalIndicatorEngine.calculate_bollinger_bands(candles, period, std_dev)
+        if not bb:
+            return False, "Failed to compute Bollinger Bands", {}
+
+        upper = bb.get("upper", 0.0)
+        lower = bb.get("lower", 0.0)
+        middle = bb.get("middle", 0.0)
+        percent_b = bb.get("percent_b", 0.5)
+
+        if is_call:
+            # Rebound from Lower Band:
+            # Trigger bar touched or pierced lower band (low <= lower), and closed bullish (green)
+            touched_lower = (c.low <= lower) or (prev.low <= lower) or (percent_b <= 0.15)
+            if not touched_lower:
+                return False, f"Price (Low={c.low:.5f}) did not touch Lower Bollinger Band ({lower:.5f})", {}
+            if not c.is_bullish:
+                return False, "Trigger candle must close GREEN (Bullish rebound) for CALL", {}
+            if c.lower_wick_ratio < 0.20 and c.body_ratio < 0.30:
+                return False, "Insufficient bottom rejection wick/momentum on lower band touch", {}
+        else:
+            # Rebound from Upper Band:
+            # Trigger bar touched or pierced upper band (high >= upper), and closed bearish (red)
+            touched_upper = (c.high >= upper) or (prev.high >= upper) or (percent_b >= 0.85)
+            if not touched_upper:
+                return False, f"Price (High={c.high:.5f}) did not touch Upper Bollinger Band ({upper:.5f})", {}
+            if not c.is_bearish:
+                return False, "Trigger candle must close RED (Bearish rebound) for PUT", {}
+            if c.upper_wick_ratio < 0.20 and c.body_ratio < 0.30:
+                return False, "Insufficient top rejection wick/momentum on upper band touch", {}
+
+        return True, "Bollinger Mean Reversion criteria confirmed", {
+            "percent_b": percent_b,
+            "upper": upper,
+            "lower": lower,
+            "middle": middle
+        }
+
+    @staticmethod
+    def evaluate_bollinger_squeeze_breakout(
+        candles: List[Candle],
+        snapshot: Optional[Dict[str, Any]],
+        params: Dict[str, Any],
+        direction: str
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        BOLLINGER SQUEEZE & VOLATILITY BREAKOUT:
+        Detects low-bandwidth consolidation compression followed by an explosive
+        expansion close outside the bands.
+        """
+        if len(candles) < 22:
+            return False, "Need >= 22 candles for Bollinger Squeeze Breakout", {}
+
+        c = candles[-1]
+        is_call = direction.upper() in ["CALL", "UP", "BUY"]
+
+        bb = (snapshot or {}).get("bollinger_bands") or TechnicalIndicatorEngine.calculate_bollinger_bands(candles, 20, 2.0)
+        if not bb:
+            return False, "Failed to compute Bollinger Bands", {}
+
+        upper = bb.get("upper", 0.0)
+        lower = bb.get("lower", 0.0)
+
+        # Breakout condition: Strong momentum close piercing the outer band with solid body >= 65%
+        if is_call:
+            if c.close < upper:
+                return False, f"Candle close ({c.close:.5f}) is not breaking above Upper Band ({upper:.5f})", {}
+            if not c.is_bullish or c.body_ratio < 0.60:
+                return False, "Breakout candle must be a solid bullish momentum bar (>=60% body)", {}
+        else:
+            if c.close > lower:
+                return False, f"Candle close ({c.close:.5f}) is not breaking below Lower Band ({lower:.5f})", {}
+            if not c.is_bearish or c.body_ratio < 0.60:
+                return False, "Breakout candle must be a solid bearish momentum bar (>=60% body)", {}
+
+        return True, "Bollinger Squeeze Breakout verified", {
+            "breakout_price": c.close,
+            "upper": upper,
+            "lower": lower
+        }
+
+    @staticmethod
+    def evaluate_bollinger_rsi_confluence(
+        candles: List[Candle],
+        snapshot: Optional[Dict[str, Any]],
+        params: Dict[str, Any],
+        direction: str
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        BOLLINGER BANDS + RSI DOUBLE CONFIRMATION TRIGGER:
+        Combines Outer Bollinger Band extreme touch with RSI Overbought/Oversold exhaustion.
+        """
+        if len(candles) < 20:
+            return False, "Need >= 20 candles for Bollinger + RSI Confluence", {}
+
+        c = candles[-1]
+        is_call = direction.upper() in ["CALL", "UP", "BUY"]
+
+        bb = (snapshot or {}).get("bollinger_bands") or TechnicalIndicatorEngine.calculate_bollinger_bands(candles, 20, 2.0)
+        rsi = (snapshot or {}).get("rsi") or TechnicalIndicatorEngine.calculate_rsi(candles, 14)
+        if not bb or rsi is None:
+            return False, "Failed to compute Bollinger or RSI", {}
+
+        upper = bb.get("upper", 0.0)
+        lower = bb.get("lower", 0.0)
+
+        if is_call:
+            if c.low > lower and bb.get("percent_b", 0.5) > 0.20:
+                return False, "Price did not test Lower Bollinger Band", {}
+            if rsi > 38.0:
+                return False, f"RSI ({rsi:.1f}) is not in oversold zone (<= 38)", {}
+            if not c.is_bullish:
+                return False, "Waiting for bullish green reversal confirmation candle", {}
+        else:
+            if c.high < upper and bb.get("percent_b", 0.5) < 0.80:
+                return False, "Price did not test Upper Bollinger Band", {}
+            if rsi < 62.0:
+                return False, f"RSI ({rsi:.1f}) is not in overbought zone (>= 62)", {}
+            if not c.is_bearish:
+                return False, "Waiting for bearish red reversal confirmation candle", {}
+
+        return True, "Bollinger + RSI Confluence verified", {
+            "rsi": rsi,
+            "percent_b": bb.get("percent_b")
+        }
+
+    @classmethod
+    def evaluate_dual_bollinger_protrusion_reversal(
+        cls,
+        candles: List[Candle],
+        snapshot: Optional[Dict[str, Any]],
+        params: Dict[str, Any],
+        direction: str
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        STRATEGY: DUAL BOLLINGER PROTRUSION REVERSAL (1M Live Market Forex)
+        -------------------------------------------------------------------
+        Tuned specifically for 1-minute candlesticks on real interbank currency pairs.
+        
+        Mathematical Foundation:
+        - BB1: Period = 10, Standard Deviation = 2.0
+        - BB2: Period = 13, Standard Deviation = 2.0
+        - Dynamic Outer Envelope:
+            upper_trigger = max(BB10_upper, BB13_upper)
+            lower_trigger = min(BB10_lower, BB13_lower)
+            
+        Entry Rules:
+        - CALL (Buy):
+            1. Candle must be Bearish (Close < Open).
+            2. Candle Close must breach below the lower envelope: Close < lower_trigger.
+            3. Body Protrusion: (lower_trigger - Close) >= 20%..25% of absolute candle body.
+               (Wicks alone crossing the lower band are strictly rejected).
+        - PUT (Sell):
+            1. Candle must be Bullish (Close > Open).
+            2. Candle Close must breach above the upper envelope: Close > upper_trigger.
+            3. Body Protrusion: (Close - upper_trigger) >= 20%..25% of absolute candle body.
+               (Wicks alone crossing the upper band are strictly rejected).
+               
+        Market Structure Confluence Filter:
+        - Range / Box Consolidation (ADX < 25): Immediate valid mean-reversion signal.
+        - Trending Wave (ADX >= 25): Requires the extreme wick to test a confirmed horizontal Support / Resistance line.
+        """
+        # --- 1. Extract Strategy Hyperparameters ---
+        p1 = int(params.get("period_1", params.get("period", 10)))        # Primary BB period (default 10)
+        p2 = int(params.get("period_2", 13))                              # Secondary BB period (default 13)
+        dev = float(params.get("deviation", params.get("std_dev", 2.0)))  # Standard deviation multiplier (default 2.0)
+        min_protrusion = float(params.get("min_body_protrusion", params.get("min_protrusion", 0.20))) # 20% minimum body protrusion
+
+        # --- 2. History & Indicator Calculation Verification ---
+        min_required = max(p1, p2) + 2
+        if len(candles) < min_required:
+            return False, f"Need at least {min_required} candles for Dual Bollinger Bands", {}
+
+        # Compute both Bollinger Band envelopes over the candle series
+        bb1 = TechnicalIndicatorEngine.calculate_bollinger_bands(candles, period=p1, std_dev_multiplier=dev)
+        bb2 = TechnicalIndicatorEngine.calculate_bollinger_bands(candles, period=p2, std_dev_multiplier=dev)
+
+        if not bb1 or not bb2:
+            return False, "Failed calculating dual Bollinger Bands", {}
+
+        # Determine the most conservative outer boundary triggers across both envelope periods
+        upper_trigger = max(bb1["upper"], bb2["upper"])
+        lower_trigger = min(bb1["lower"], bb2["lower"])
+
+        # --- 3. Trigger Candle Anatomy & Protrusion Checks ---
+        c = candles[-1] # The latest forming / triggering 1-minute candle
+        body_size = abs(c.close - c.open)
+        if body_size <= 0:
+            # Reject Doji or flat candles where open equals close
+            return False, "Candle body is zero (indecision Doji)", {}
+
+        is_call = direction.upper() in ["CALL", "UP", "BUY"]
+
+        if is_call:
+            # CALL Reversal: Expecting price to bounce upwards after an overextended downward breach
+            # Rule 1: Candle MUST be bearish (red)
+            if c.close >= c.open:
+                return False, "CALL reversal requires a bearish candle breaching down through the lower bands", {}
+            
+            # Rule 2: Close price must have penetrated below the outer lower trigger
+            if c.close >= lower_trigger:
+                return False, f"Candle close ({c.close:.5f}) is not below lower outer band ({lower_trigger:.5f})", {}
+
+            # Rule 3: Minimum 20%-25% of the real candle body must protrude below the lower band
+            body_outside = lower_trigger - c.close
+            protrusion_pct = body_outside / body_size
+            if protrusion_pct < min_protrusion:
+                return False, f"Body protrusion ({protrusion_pct*100:.1f}%) < required {min_protrusion*100:.0f}% below dual lower bands", {}
+        else:
+            # PUT Reversal: Expecting price to reject downwards after an overextended upward breach
+            # Rule 1: Candle MUST be bullish (green)
+            if c.close <= c.open:
+                return False, "PUT reversal requires a bullish candle breaching up through the upper bands", {}
+            
+            # Rule 2: Close price must have penetrated above the outer upper trigger
+            if c.close <= upper_trigger:
+                return False, f"Candle close ({c.close:.5f}) is not above upper outer band ({upper_trigger:.5f})", {}
+
+            # Rule 3: Minimum 20%-25% of the real candle body must protrude above the upper band
+            body_outside = c.close - upper_trigger
+            protrusion_pct = body_outside / body_size
+            if protrusion_pct < min_protrusion:
+                return False, f"Body protrusion ({protrusion_pct*100:.1f}%) < required {min_protrusion*100:.0f}% above dual upper bands", {}
+
+        # --- 4. Market Structure Classification (ADX Regime Filter) ---
+        # Obtain 14-period Average Directional Index (ADX) to determine trend strength
+        adx_val = (snapshot.get("adx") if snapshot else None)
+        if adx_val is None:
+            adx_val = TechnicalIndicatorEngine.calculate_adx(candles, 14)
+        adx_score = adx_val if adx_val is not None else 20.0 # Default safely to consolidation if history is fresh
+        is_consolidation = (adx_score < 25.0)
+
+        # --- 5. Support / Resistance Confluence in Trending Environments ---
+        # When ADX >= 25 (curving/trending market), breakouts against the trend require S/R horizontal confirmation
+        if not is_consolidation and params.get("require_box_or_sr", True):
+            tol = 0.0015  # 0.15% price zone tolerance for level intersection
+            if is_call:
+                # For CALL reversal in trend, check if candle low touches horizontal Support
+                sups = (snapshot.get("support_levels") if snapshot else None)
+                if not sups:
+                    sup_list, _ = TechnicalIndicatorEngine.find_support_resistance_levels(candles)
+                    sups = sup_list
+                near_sup = False
+                for sup in (sups or []):
+                    if abs(c.low - sup) / max(1e-6, sup) <= tol or c.low <= sup <= c.high:
+                        near_sup = True
+                        break
+                if not near_sup:
+                    return False, f"Trending curve detected (ADX {adx_score:.1f} >= 25) but candle low did not intersect horizontal Support level", {}
+            else:
+                # For PUT reversal in trend, check if candle high touches horizontal Resistance
+                ress = (snapshot.get("resistance_levels") if snapshot else None)
+                if not ress:
+                    _, res_list = TechnicalIndicatorEngine.find_support_resistance_levels(candles)
+                    ress = res_list
+                near_res = False
+                for res in (ress or []):
+                    if abs(c.high - res) / max(1e-6, res) <= tol or c.low <= res <= c.high:
+                        near_res = True
+                        break
+                if not near_res:
+                    return False, f"Trending curve detected (ADX {adx_score:.1f} >= 25) but candle high did not intersect horizontal Resistance level", {}
+
+        # --- 6. Successful Signal Payload ---
+        return True, f"Dual BB({p1},{p2}) Protrusion Reversal ({protrusion_pct*100:.1f}% outside, {'Consolidation' if is_consolidation else 'Trend+SR'})", {
+            "bb1": bb1,
+            "bb2": bb2,
+            "upper_trigger": upper_trigger,
+            "lower_trigger": lower_trigger,
+            "body_protrusion_pct": round(protrusion_pct * 100, 2),
+            "is_consolidation": is_consolidation
+        }
+

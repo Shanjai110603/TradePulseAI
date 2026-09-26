@@ -26,12 +26,16 @@ class TelegramBridge:
         chat_ids: Optional[List[str]] = None,
         admin_chat_ids: Optional[Set[str]] = None,
         on_command_callback: Optional[Callable[[str, str, Dict], None]] = None,
-        manager: Optional[Any] = None
+        manager: Optional[Any] = None,
+        max_users: Optional[int] = None
     ):
         self.manager = manager
+        self.max_users = max_users
         self.token = token or settings.TELEGRAM_BOT_TOKEN
         self.api_base = f"https://api.telegram.org/bot{self.token}" if self.token else ""
         self.subscribers: Set[str] = set(chat_ids or settings.chat_id_list)
+        if self.max_users and len(self.subscribers) > self.max_users:
+            self.subscribers = set(list(self.subscribers)[:self.max_users])
         self.admin_chat_ids: Set[str] = set(admin_chat_ids) if admin_chat_ids is not None else set(settings.admin_chat_id_list)
         self.on_command = on_command_callback
 
@@ -41,12 +45,19 @@ class TelegramBridge:
         self._http: Optional[httpx.AsyncClient] = None
 
     def get_target_chats(self) -> List[str]:
-        """Returns list of active target chat IDs from manager or subscribers."""
+        """
+        Resolves active recipient chat/channel IDs respecting the subscriber quota.
+        
+        Enforces:
+        - If `max_users` is specified (e.g., 5 users for Personal Edition),
+          the list of broadcast destinations is sliced to strictly prevent exceeding the quota.
+        """
         if self.manager:
             active = self.manager.get_active_channel_ids()
             if active:
-                return active
-        return list(self.subscribers)
+                return active[:self.max_users] if self.max_users else active
+        targets = list(self.subscribers)
+        return targets[:self.max_users] if self.max_users else targets
 
     def verify_bot_token(self, token: Optional[str] = None) -> Dict[str, Any]:
         """Tests bot token against Telegram getMe API."""
@@ -162,8 +173,17 @@ class TelegramBridge:
 
         cmd_lower = text.lower().strip()
         if cmd_lower == "/subscribe":
+            if self.max_users and len(self.subscribers) >= self.max_users and chat_id not in self.subscribers:
+                asyncio.create_task(self.send_message(
+                    chat_id,
+                    f"⚠️ <b>TradePulse Personal Edition</b>\nSubscription limit reached (Maximum {self.max_users} authorized users).\nContact your administrator."
+                ))
+                logger.warning(f"[TELEGRAM] Subscription rejected for {chat_id}: Personal limit of {self.max_users} users reached.")
+                return
+
             self.subscribers.add(chat_id)
-            asyncio.create_task(self.send_message(chat_id, "✅ <b>Subscribed to real-time TradePulse VIP signals!</b>"))
+            slot_info = f" ({len(self.subscribers)}/{self.max_users} slots used)" if self.max_users else ""
+            asyncio.create_task(self.send_message(chat_id, f"✅ <b>Subscribed to real-time TradePulse Personal signals!</b>{slot_info}"))
             logger.info(f"[TELEGRAM] Chat {chat_id} subscribed to signals. Total: {len(self.subscribers)}")
             return
         elif cmd_lower == "/unsubscribe":
@@ -171,6 +191,21 @@ class TelegramBridge:
             asyncio.create_task(self.send_message(chat_id, "⏸ <b>Unsubscribed from TradePulse signals.</b>"))
             logger.info(f"[TELEGRAM] Chat {chat_id} unsubscribed. Total: {len(self.subscribers)}")
             return
+
+        # Restrict command execution to authorized personal users if max_users is enabled
+        if self.max_users:
+            is_authorized = (
+                chat_id in self.subscribers or
+                self.is_admin(chat_id) or
+                (self.manager and chat_id in self.manager.get_active_channel_ids())
+            )
+            if not is_authorized and len(self.subscribers) >= self.max_users:
+                asyncio.create_task(self.send_message(
+                    chat_id,
+                    f"⚠️ <b>TradePulse Personal Edition</b>\nAccess is restricted to a maximum of {self.max_users} authorized personal users.\nYour ID: <code>{chat_id}</code> is not authorized."
+                ))
+                logger.warning(f"[TELEGRAM] Unauthorized command from {chat_id} rejected (5-user personal cap active).")
+                return
 
         if self.on_command:
             try:

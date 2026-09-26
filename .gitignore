@@ -1,4 +1,4 @@
-﻿# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,8 +11,9 @@ __pycache__/
 # Binaries and build outputs
 build/
 dist/
-*.spec
 *.exe
+!TradePulse.spec
+!TradePulsePersonal.spec
 
 # Archives / Zips
 *.zip

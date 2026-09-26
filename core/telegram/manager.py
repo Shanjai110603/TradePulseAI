@@ -21,18 +21,10 @@ DEFAULT_TEMPLATES = {
         "────────────────────────\n"
         "📊 <b>Asset:</b> <code>{asset}</code>\n"
         "💰 <b>OTC Payout:</b> <b>{payout}%</b>\n"
-        "{arrow} <b>Direction:</b> <b>{direction}</b>\n"
-        "⏱ <b>Timeframe:</b> <b>{timeframe}</b>\n"
-        "⌛ <b>Expiry Duration:</b> <b>{expiry} Mins</b>\n"
-        "🕒 <b>Entry Time:</b> <b>Next Candle Open (00s) | {entry_time} IST</b>\n"
-        "💵 <b>Entry Price:</b> <code>{entry_price}</code>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "{confluence_section}"
-        "🎯 <b>Setup Quality Score:</b> <b>{confidence}% ({tier})</b>\n"
-        "{stake_line}"
-        "{ev_line}"
-        "⏰ <b>Expiry Target:</b> <b>{expiry_time} IST</b>\n"
-        "🔒 <i>TradePulse VIP Institutional Signal</i>"
+        "{arrow} <b>Direction:</b> <b>{dir_badge}</b>\n"
+        "⏱ <b>Chart Timeframe:</b> <b>{chart_timeframe}</b>\n"
+        "⌛ <b>Expiry Time:</b> <b>{expiry} Mins</b>\n"
+        "🕒 <b>Entry Time:</b> <b>Next {timeframe} Candle Open ({entry_time})</b>"
     ),
     "pre_signal": (
         "⚡ <b>PRE-SIGNAL RADAR: PREPARE ENTRY</b>\n"
@@ -88,7 +80,8 @@ class TelegramManager:
                 self.config_dir = Path.home() / ".tradepulse"
 
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        self.config_file = self.config_dir / "telegram_config.json"
+        is_personal = os.environ.get("TRADEPULSE_PERSONAL") == "1"
+        self.config_file = self.config_dir / ("telegram_config_personal.json" if is_personal else "telegram_config.json")
         self._lock = threading.Lock()
 
         # Bot Settings
@@ -111,6 +104,8 @@ class TelegramManager:
         self.min_payout_pct: float = 75.0
         self.attach_chart_photo: bool = True
         self.include_inline_buttons: bool = True
+        self.sequential_trade_lock: bool = True
+        self.loss_cooldown_seconds: int = 120
 
         # Customizable Templates
         self.templates: Dict[str, str] = dict(DEFAULT_TEMPLATES)
@@ -137,6 +132,8 @@ class TelegramManager:
                 "min_payout_pct": self.min_payout_pct,
                 "attach_chart_photo": self.attach_chart_photo,
                 "include_inline_buttons": self.include_inline_buttons,
+                "sequential_trade_lock": self.sequential_trade_lock,
+                "loss_cooldown_seconds": self.loss_cooldown_seconds,
                 "templates": dict(self.templates),
                 "rules": {
                     "signals": self.send_signals,
@@ -145,6 +142,7 @@ class TelegramManager:
                     "circuit_breaker": self.send_circuit_breaker,
                     "news": self.send_news_blackouts,
                     "attach_charts": self.attach_chart_photo,
+                    "sequential_lock": self.sequential_trade_lock,
                     "min_score": self.min_signal_score,
                     "min_payout": self.min_payout_pct
                 }
@@ -190,6 +188,10 @@ class TelegramManager:
                 self.attach_chart_photo = bool(new_config["attach_chart_photo"])
             if "include_inline_buttons" in new_config and new_config["include_inline_buttons"] is not None:
                 self.include_inline_buttons = bool(new_config["include_inline_buttons"])
+            if "sequential_trade_lock" in new_config and new_config["sequential_trade_lock"] is not None:
+                self.sequential_trade_lock = bool(new_config["sequential_trade_lock"])
+            if "loss_cooldown_seconds" in new_config and new_config["loss_cooldown_seconds"] is not None:
+                self.loss_cooldown_seconds = max(10, int(new_config["loss_cooldown_seconds"]))
 
             # Support nested "rules" dict
             if "rules" in new_config and isinstance(new_config["rules"], dict):
@@ -206,6 +208,8 @@ class TelegramManager:
                     self.send_news_blackouts = bool(r["news"])
                 if "attach_charts" in r and r["attach_charts"] is not None:
                     self.attach_chart_photo = bool(r["attach_charts"])
+                if "sequential_lock" in r and r["sequential_lock"] is not None:
+                    self.sequential_trade_lock = bool(r["sequential_lock"])
                 if "min_score" in r and r["min_score"] is not None:
                     self.min_signal_score = max(50.0, min(100.0, float(r["min_score"])))
                 if "min_payout" in r and r["min_payout"] is not None:
@@ -318,13 +322,15 @@ class TelegramManager:
         return re.sub(r"\{([a-zA-Z0-9_]+)\}", replace_token, template)
 
     def load_from_disk(self):
-        """Loads configuration from telegram_config.json if present, plus environment fallbacks."""
-        from core.config import settings
-        if settings.TELEGRAM_BOT_TOKEN and not self.bot_token:
-            self.bot_token = settings.TELEGRAM_BOT_TOKEN.strip()
-        if settings.TELEGRAM_CHAT_IDS and not self.channels:
-            raw_ids = [c.strip() for c in settings.TELEGRAM_CHAT_IDS.split(",") if c.strip()]
-            self.channels = [{"id": cid, "name": f"Channel {i+1}", "enabled": True} for i, cid in enumerate(raw_ids)]
+        """Loads configuration from telegram_config.json if present, plus environment fallbacks for standard edition."""
+        is_personal = os.environ.get("TRADEPULSE_PERSONAL") == "1"
+        if not is_personal:
+            from core.config import settings
+            if settings.TELEGRAM_BOT_TOKEN and not self.bot_token:
+                self.bot_token = settings.TELEGRAM_BOT_TOKEN.strip()
+            if settings.TELEGRAM_CHAT_IDS and not self.channels:
+                raw_ids = [c.strip() for c in settings.TELEGRAM_CHAT_IDS.split(",") if c.strip()]
+                self.channels = [{"id": cid, "name": f"Channel {i+1}", "enabled": True} for i, cid in enumerate(raw_ids)]
 
         if self.config_file.exists():
             try:
@@ -358,6 +364,10 @@ class TelegramManager:
                         self.attach_chart_photo = bool(data["attach_chart_photo"])
                     if "include_inline_buttons" in data:
                         self.include_inline_buttons = bool(data["include_inline_buttons"])
+                    if "sequential_trade_lock" in data:
+                        self.sequential_trade_lock = bool(data["sequential_trade_lock"])
+                    if "loss_cooldown_seconds" in data:
+                        self.loss_cooldown_seconds = int(data["loss_cooldown_seconds"])
                     if isinstance(data.get("templates"), dict):
                         for k, v in data["templates"].items():
                             k_clean = str(k).strip().lower()
@@ -386,6 +396,8 @@ class TelegramManager:
                 "min_payout_pct": self.min_payout_pct,
                 "attach_chart_photo": self.attach_chart_photo,
                 "include_inline_buttons": self.include_inline_buttons,
+                "sequential_trade_lock": self.sequential_trade_lock,
+                "loss_cooldown_seconds": self.loss_cooldown_seconds,
                 "templates": self.templates
             }
             self.config_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")

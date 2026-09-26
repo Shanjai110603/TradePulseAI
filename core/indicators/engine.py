@@ -130,7 +130,30 @@ class TechnicalIndicatorEngine:
         period: int = 20,
         std_dev_multiplier: float = 2.0
     ) -> Optional[Dict[str, float]]:
-        """Bollinger Bands (Upper, Middle, Lower, %B)."""
+        """
+        Calculate Bollinger Bands (Upper, Middle/SMA, Lower, %B, Bandwidth).
+        --------------------------------------------------------------------
+        Mathematical Formulation:
+          1. Middle Band = SMA(Close, period)
+          2. Standard Deviation = sqrt( sum((Close_i - Middle)^2) / period )
+          3. Upper Band = Middle + (std_dev_multiplier * Standard Deviation)
+          4. Lower Band = Middle - (std_dev_multiplier * Standard Deviation)
+          5. %B (Percent B) = (Current Close - Lower) / (Upper - Lower)
+             - %B > 1.0 : Price is above the Upper Band (Overbought / Outlier)
+             - %B < 0.0 : Price is below the Lower Band (Oversold / Outlier)
+             - %B = 0.5 : Price is exactly at the Middle SMA
+          6. Bandwidth = (Upper - Lower) / Middle
+             - Measures relative volatility expansion vs squeeze consolidation.
+
+        Args:
+            candles: Chronological sequence of Candle objects.
+            period: Lookback window for mean and variance (e.g., 10, 13, 20).
+            std_dev_multiplier: Volatility expansion multiplier (typically 2.0).
+
+        Returns:
+            Dictionary containing upper, middle, lower, percent_b, and bandwidth,
+            or None if candle count is less than required period.
+        """
         if len(candles) < period:
             return None
 
@@ -142,6 +165,8 @@ class TechnicalIndicatorEngine:
         upper = mean + (std_dev_multiplier * std_dev)
         lower = mean - (std_dev_multiplier * std_dev)
         current = closes[-1]
+        
+        # Calculate %B oscillator normalized from 0.0 to 1.0 (can exceed range during breakouts)
         percent_b = (current - lower) / (upper - lower) if (upper - lower) > 0 else 0.5
 
         return {
@@ -322,7 +347,9 @@ class TechnicalIndicatorEngine:
         n = len(candles)
 
         if n < (lookback * 2) + 1:
-            return [c.low for c in candles[-3:]], [c.high for c in candles[-3:]]
+            # Use historical prior candles (excluding trigger candle) to prevent self-collision
+            priors = candles[:-1] if len(candles) > 1 else candles
+            return [c.low for c in priors[-3:]], [c.high for c in priors[-3:]]
 
         for i in range(lookback, n - lookback):
             current = candles[i]
@@ -348,13 +375,17 @@ class TechnicalIndicatorEngine:
     def is_market_flatlined(candles: List[Candle], lookback: int = 3, min_range_pct: float = 0.00015) -> bool:
         """
         Detects if market has flatlined or entered frozen consolidation.
-        Returns True if total price movement across the lookback bars is below min_range_pct
-        or if candles form identical doji lines (common in low-liquidity OTC flatlines).
+        Ignores synthetic zero-volume fill bars so tick lulls do not lock out strategies.
         """
-        if not candles or len(candles) < lookback:
+        if not candles:
             return False
 
-        recent = candles[-lookback:]
+        # Only evaluate genuine trading bars with volume
+        genuine_bars = [c for c in candles if getattr(c, 'volume', 100.0) > 0.0]
+        if len(genuine_bars) < lookback:
+            return False
+
+        recent = genuine_bars[-lookback:]
         highs = [c.high for c in recent]
         lows = [c.low for c in recent]
         max_h = max(highs)
@@ -374,9 +405,444 @@ class TechnicalIndicatorEngine:
 
         return False
 
+    # -------------------------------------------------------------------------
+    # Comprehensive Forex & Platform Indicator Catalog
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def calculate_wma(candles: List[Candle], period: int = 14) -> Optional[float]:
+        """Weighted Moving Average (WMA)."""
+        if len(candles) < period:
+            return None
+        closes = [c.close for c in candles[-period:]]
+        weights = list(range(1, period + 1))
+        sum_weights = (period * (period + 1)) / 2
+        return sum(c * w for c, w in zip(closes, weights)) / sum_weights
+
+    @staticmethod
+    def calculate_alligator(candles: List[Candle], jaw_p: int = 13, teeth_p: int = 8, lips_p: int = 5) -> Optional[Dict[str, float]]:
+        """Bill Williams Alligator (Jaw, Teeth, Lips SMMA of Median Price)."""
+        if len(candles) < jaw_p:
+            return None
+        medians = [(c.high + c.low) / 2.0 for c in candles]
+        
+        def _smma(series, p):
+            val = sum(series[:p]) / p
+            for x in series[p:]:
+                val = (val * (p - 1) + x) / p
+            return val
+
+        return {
+            "jaw": round(_smma(medians, jaw_p), 5),      # Blue line (13-period SMMA)
+            "teeth": round(_smma(medians, teeth_p), 5),  # Red line (8-period SMMA)
+            "lips": round(_smma(medians, lips_p), 5)     # Green line (5-period SMMA)
+        }
+
+    @staticmethod
+    def calculate_envelopes(candles: List[Candle], period: int = 20, deviation_pct: float = 0.1) -> Optional[Dict[str, float]]:
+        """Moving Average Envelopes."""
+        if len(candles) < period:
+            return None
+        sma = sum(c.close for c in candles[-period:]) / period
+        dev = sma * (deviation_pct / 100.0)
+        return {
+            "upper": round(sma + dev, 5),
+            "middle": round(sma, 5),
+            "lower": round(sma - dev, 5)
+        }
+
+    @staticmethod
+    def calculate_fractal(candles: List[Candle]) -> Dict[str, Any]:
+        """Bill Williams 5-Bar Geometric Fractals."""
+        if len(candles) < 5:
+            return {"is_bullish_fractal": False, "is_bearish_fractal": False, "fractal_high": None, "fractal_low": None}
+        c = candles[-3]
+        is_up = (c.high > candles[-5].high and c.high > candles[-4].high and c.high > candles[-2].high and c.high > candles[-1].high)
+        is_down = (c.low < candles[-5].low and c.low < candles[-4].low and c.low < candles[-2].low and c.low < candles[-1].low)
+        return {
+            "is_bullish_fractal": is_down,  # Swing Low = Bullish reversal fractal
+            "is_bearish_fractal": is_up,    # Swing High = Bearish reversal fractal
+            "fractal_high": round(c.high, 5) if is_up else None,
+            "fractal_low": round(c.low, 5) if is_down else None
+        }
+
+    @staticmethod
+    def calculate_ichimoku(candles: List[Candle], tenkan_p: int = 9, kijun_p: int = 26, senkou_b_p: int = 52) -> Optional[Dict[str, float]]:
+        """Ichimoku Kinko Hyo (Tenkan-sen, Kijun-sen, Senkou Span A & B)."""
+        if len(candles) < senkou_b_p:
+            return None
+        
+        def _mid_price(sub):
+            return (max(c.high for c in sub) + min(c.low for c in sub)) / 2.0
+
+        tenkan = _mid_price(candles[-tenkan_p:])
+        kijun = _mid_price(candles[-kijun_p:])
+        senkou_a = (tenkan + kijun) / 2.0
+        senkou_b = _mid_price(candles[-senkou_b_p:])
+
+        return {
+            "tenkan_sen": round(tenkan, 5),
+            "kijun_sen": round(kijun, 5),
+            "senkou_span_a": round(senkou_a, 5),
+            "senkou_span_b": round(senkou_b, 5),
+            "cloud_bullish": senkou_a > senkou_b
+        }
+
+    @staticmethod
+    def calculate_keltner_channel(candles: List[Candle], ema_p: int = 20, atr_p: int = 10, multiplier: float = 2.0) -> Optional[Dict[str, float]]:
+        """Keltner Channel (EMA center with Wilder-smoothed ATR envelope)."""
+        if len(candles) < max(ema_p, atr_p) + 1:
+            return None
+        closes = [c.close for c in candles]
+        k = 2.0 / (ema_p + 1.0)
+        ema = sum(closes[:ema_p]) / ema_p
+        for p in closes[ema_p:]:
+            ema = (p * k) + (ema * (1.0 - k))
+
+        # Use Wilder's smoothed ATR instead of simple average
+        true_ranges = [max(curr.high - curr.low, abs(curr.high - prev.close), abs(curr.low - prev.close))
+                       for curr, prev in zip(candles[1:], candles[:-1])]
+        if len(true_ranges) < atr_p:
+            atr = candles[-1].high - candles[-1].low
+        else:
+            atr = sum(true_ranges[:atr_p]) / atr_p
+            for tr in true_ranges[atr_p:]:
+                atr = ((atr * (atr_p - 1)) + tr) / atr_p
+
+        return {
+            "upper": round(ema + (multiplier * atr), 5),
+            "middle": round(ema, 5),
+            "lower": round(ema - (multiplier * atr), 5)
+        }
+
+    @staticmethod
+    def calculate_donchian_channel(candles: List[Candle], period: int = 20) -> Optional[Dict[str, float]]:
+        """Donchian Channel (Highest High & Lowest Low)."""
+        if len(candles) < period:
+            return None
+        sub = candles[-period:]
+        upper = max(c.high for c in sub)
+        lower = min(c.low for c in sub)
+        return {
+            "upper": round(upper, 5),
+            "middle": round((upper + lower) / 2.0, 5),
+            "lower": round(lower, 5)
+        }
+
+    @staticmethod
+    def calculate_supertrend(candles: List[Candle], period: int = 10, multiplier: float = 3.0) -> Optional[Dict[str, Any]]:
+        """
+        Supertrend with proper band ratcheting and state flip tracking.
+        Lower band can only rise (never decrease) during uptrend.
+        Upper band can only fall (never increase) during downtrend.
+        Trend flips when close crosses the active band.
+        """
+        if len(candles) < period + 2:
+            return None
+
+        # Build Wilder-smoothed ATR series
+        true_ranges = [max(curr.high - curr.low, abs(curr.high - prev.close), abs(curr.low - prev.close))
+                       for curr, prev in zip(candles[1:], candles[:-1])]
+        if len(true_ranges) < period:
+            return None
+        atr_val = sum(true_ranges[:period]) / period
+        atr_series = [0.0] * period
+        atr_series.append(atr_val)
+        for tr in true_ranges[period:]:
+            atr_val = ((atr_val * (period - 1)) + tr) / period
+            atr_series.append(atr_val)
+
+        # Iterate with state tracking (starting from index period in the candles[1:] aligned data)
+        # candles[0] has no TR, so candles[i+1] aligns with true_ranges[i] and atr_series[i]
+        start_idx = period  # first bar where ATR is valid; corresponds to candles[start_idx + 1]
+        is_uptrend = True
+        prev_final_upper = float('inf')
+        prev_final_lower = 0.0
+
+        for j in range(start_idx, len(true_ranges)):
+            c_idx = j + 1  # index into candles[]
+            c = candles[c_idx]
+            atr_now = atr_series[j]
+            hl2 = (c.high + c.low) / 2.0
+
+            basic_upper = hl2 + (multiplier * atr_now)
+            basic_lower = hl2 - (multiplier * atr_now)
+
+            # Ratchet: lower band can only rise, upper band can only fall
+            final_lower = max(basic_lower, prev_final_lower) if candles[c_idx - 1].close > prev_final_lower else basic_lower
+            final_upper = min(basic_upper, prev_final_upper) if candles[c_idx - 1].close < prev_final_upper else basic_upper
+
+            # State flip
+            if is_uptrend:
+                if c.close < final_lower:
+                    is_uptrend = False
+            else:
+                if c.close > final_upper:
+                    is_uptrend = True
+
+            prev_final_lower = final_lower
+            prev_final_upper = final_upper
+
+        st_val = prev_final_lower if is_uptrend else prev_final_upper
+        prev_c = candles[-2]
+        prev_was_uptrend_approx = prev_c.close > prev_final_lower  # approximate for flip detection
+        trend_just_flipped = (is_uptrend != prev_was_uptrend_approx)
+
+        return {
+            "supertrend": round(st_val, 5),
+            "trend": "BULLISH" if is_uptrend else "BEARISH",
+            "upper_band": round(prev_final_upper, 5),
+            "lower_band": round(prev_final_lower, 5),
+            "trend_flipped": trend_just_flipped
+        }
+
+    @staticmethod
+    def calculate_parabolic_sar(candles: List[Candle], step: float = 0.02, max_step: float = 0.2) -> Optional[Dict[str, Any]]:
+        """
+        Parabolic SAR with Wilder's clamping rule:
+        In uptrend, SAR must not exceed lowest low of current or previous bar.
+        In downtrend, SAR must not fall below highest high of current or previous bar.
+        AF only increments when EP is updated (new extreme), not every bar.
+        """
+        if len(candles) < 5:
+            return None
+
+        is_bull = candles[1].close > candles[0].close
+        sar = candles[0].low if is_bull else candles[0].high
+        ep = candles[0].high if is_bull else candles[0].low
+        af = step
+        prev_trend = is_bull
+
+        for i in range(1, len(candles)):
+            curr = candles[i]
+            prev = candles[i - 1]
+
+            # Calculate new SAR
+            new_sar = sar + af * (ep - sar)
+
+            # Wilder's clamping: SAR must not penetrate prior 2-bar range
+            if is_bull:
+                # In uptrend, SAR cannot be above the low of current or previous bar
+                new_sar = min(new_sar, prev.low)
+                if i >= 2:
+                    new_sar = min(new_sar, candles[i - 2].low)
+            else:
+                # In downtrend, SAR cannot be below the high of current or previous bar
+                new_sar = max(new_sar, prev.high)
+                if i >= 2:
+                    new_sar = max(new_sar, candles[i - 2].high)
+
+            sar = new_sar
+
+            # Check for trend reversal
+            if is_bull:
+                if curr.low < sar:
+                    # Flip to bearish
+                    is_bull = False
+                    sar = ep  # Reset SAR to extreme point of prior trend
+                    ep = curr.low
+                    af = step
+                else:
+                    # Update EP only when new high is made
+                    if curr.high > ep:
+                        ep = curr.high
+                        af = min(max_step, af + step)
+            else:
+                if curr.high > sar:
+                    # Flip to bullish
+                    is_bull = True
+                    sar = ep  # Reset SAR to extreme point of prior trend
+                    ep = curr.high
+                    af = step
+                else:
+                    # Update EP only when new low is made
+                    if curr.low < ep:
+                        ep = curr.low
+                        af = min(max_step, af + step)
+
+        trend_flipped = (is_bull != prev_trend)
+        return {
+            "sar": round(sar, 5),
+            "trend": "BULLISH" if is_bull else "BEARISH",
+            "is_bullish": is_bull,
+            "trend_flipped": trend_flipped
+        }
+
+    @staticmethod
+    def calculate_aroon(candles: List[Candle], period: int = 14) -> Optional[Dict[str, float]]:
+        """Aroon Indicator (Aroon Up, Aroon Down, Aroon Oscillator)."""
+        if len(candles) < period + 1:
+            return None
+        sub = candles[-period:]
+        highs = [c.high for c in sub]
+        lows = [c.low for c in sub]
+        high_idx = period - 1 - highs.index(max(highs))
+        low_idx = period - 1 - lows.index(min(lows))
+
+        aroon_up = ((period - high_idx) / period) * 100.0
+        aroon_down = ((period - low_idx) / period) * 100.0
+        return {
+            "aroon_up": round(aroon_up, 2),
+            "aroon_down": round(aroon_down, 2),
+            "oscillator": round(aroon_up - aroon_down, 2)
+        }
+
+    @staticmethod
+    def calculate_awesome_oscillator(candles: List[Candle], fast_p: int = 5, slow_p: int = 34) -> Optional[Dict[str, Any]]:
+        """Bill Williams Awesome Oscillator (AO)."""
+        if len(candles) < slow_p:
+            return None
+        medians = [(c.high + c.low) / 2.0 for c in candles]
+        fast_sma = sum(medians[-fast_p:]) / fast_p
+        slow_sma = sum(medians[-slow_p:]) / slow_p
+        ao = fast_sma - slow_sma
+
+        prev_fast = sum(medians[-fast_p - 1:-1]) / fast_p
+        prev_slow = sum(medians[-slow_p - 1:-1]) / slow_p
+        prev_ao = prev_fast - prev_slow
+
+        return {
+            "ao": round(ao, 6),
+            "prev_ao": round(prev_ao, 6),
+            "color": "GREEN" if ao > prev_ao else "RED",
+            "is_increasing": ao > prev_ao
+        }
+
+    @staticmethod
+    def calculate_bulls_bears_power(candles: List[Candle], period: int = 13) -> Optional[Dict[str, float]]:
+        """Elder-Ray Index (Bulls Power & Bears Power)."""
+        if len(candles) < period:
+            return None
+        closes = [c.close for c in candles]
+        k = 2.0 / (period + 1.0)
+        ema = sum(closes[:period]) / period
+        for p in closes[period:]:
+            ema = (p * k) + (ema * (1.0 - k))
+        
+        last = candles[-1]
+        return {
+            "bulls_power": round(last.high - ema, 5),
+            "bears_power": round(last.low - ema, 5),
+            "ema": round(ema, 5)
+        }
+
+    @staticmethod
+    def calculate_cci(candles: List[Candle], period: int = 20) -> Optional[float]:
+        """Commodity Channel Index (CCI)."""
+        if len(candles) < period:
+            return None
+        typical_prices = [(c.high + c.low + c.close) / 3.0 for c in candles[-period:]]
+        mean_tp = sum(typical_prices) / period
+        mean_deviation = sum(abs(x - mean_tp) for x in typical_prices) / period
+        if mean_deviation == 0:
+            return 0.0
+        cci = (typical_prices[-1] - mean_tp) / (0.015 * mean_deviation)
+        return round(cci, 2)
+
+    @staticmethod
+    def calculate_demarker(candles: List[Candle], period: int = 14) -> Optional[float]:
+        """DeMarker Oscillator (DeM)."""
+        if len(candles) < period + 1:
+            return None
+        de_max = []
+        de_min = []
+        for i in range(1, len(candles)):
+            curr = candles[i]
+            prev = candles[i - 1]
+            de_max.append(max(0.0, curr.high - prev.high))
+            de_min.append(max(0.0, prev.low - curr.low))
+        
+        avg_max = sum(de_max[-period:]) / period
+        avg_min = sum(de_min[-period:]) / period
+        total = avg_max + avg_min
+        return round(avg_max / total, 4) if total > 0 else 0.5
+
+    @staticmethod
+    def calculate_momentum(candles: List[Candle], period: int = 10) -> Optional[float]:
+        """Momentum Oscillator."""
+        if len(candles) < period + 1:
+            return None
+        return round(candles[-1].close - candles[-period - 1].close, 5)
+
+    @staticmethod
+    def calculate_rate_of_change(candles: List[Candle], period: int = 10) -> Optional[float]:
+        """Rate of Change (ROC %)."""
+        if len(candles) < period + 1:
+            return None
+        prev_close = candles[-period - 1].close
+        if prev_close == 0:
+            return 0.0
+        roc = ((candles[-1].close - prev_close) / prev_close) * 100.0
+        return round(roc, 2)
+
+    @staticmethod
+    def calculate_williams_r(candles: List[Candle], period: int = 14) -> Optional[float]:
+        """Williams %R Oscillator (-100 to 0)."""
+        if len(candles) < period:
+            return None
+        sub = candles[-period:]
+        highest_high = max(c.high for c in sub)
+        lowest_low = min(c.low for c in sub)
+        rng = highest_high - lowest_low
+        if rng == 0:
+            return -50.0
+        wr = ((highest_high - sub[-1].close) / rng) * -100.0
+        return round(wr, 2)
+
+    @staticmethod
+    def calculate_vortex(candles: List[Candle], period: int = 14) -> Optional[Dict[str, float]]:
+        """Vortex Indicator (+VI, -VI)."""
+        if len(candles) < period + 1:
+            return None
+        vm_plus = []
+        vm_minus = []
+        tr_list = []
+        for i in range(1, len(candles)):
+            curr = candles[i]
+            prev = candles[i - 1]
+            vm_plus.append(abs(curr.high - prev.low))
+            vm_minus.append(abs(curr.low - prev.high))
+            tr = max(curr.high - curr.low, abs(curr.high - prev.close), abs(curr.low - prev.close))
+            tr_list.append(tr)
+
+        sum_tr = sum(tr_list[-period:])
+        if sum_tr == 0:
+            return {"plus_vi": 1.0, "minus_vi": 1.0}
+        
+        plus_vi = sum(vm_plus[-period:]) / sum_tr
+        minus_vi = sum(vm_minus[-period:]) / sum_tr
+        return {
+            "plus_vi": round(plus_vi, 4),
+            "minus_vi": round(minus_vi, 4),
+            "bullish_cross": plus_vi > minus_vi
+        }
+
+    @staticmethod
+    def calculate_volume_oscillator(candles: List[Candle], short_p: int = 5, long_p: int = 10) -> Optional[float]:
+        """Volume Oscillator (% difference between short and long Volume EMAs using true EMA)."""
+        if len(candles) < long_p:
+            return None
+        vols = [c.volume for c in candles]
+
+        # Compute true EMA for short period
+        k_short = 2.0 / (short_p + 1.0)
+        short_ema = sum(vols[:short_p]) / short_p
+        for v in vols[short_p:]:
+            short_ema = (v * k_short) + (short_ema * (1.0 - k_short))
+
+        # Compute true EMA for long period
+        k_long = 2.0 / (long_p + 1.0)
+        long_ema = sum(vols[:long_p]) / long_p
+        for v in vols[long_p:]:
+            long_ema = (v * k_long) + (long_ema * (1.0 - k_long))
+
+        if long_ema == 0:
+            return 0.0
+        vo = ((short_ema - long_ema) / long_ema) * 100.0
+        return round(vo, 2)
+
     @classmethod
     def calculate_technical_snapshot(cls, candles: List[Candle]) -> Dict[str, Any]:
-        """Calculates a complete multi-indicator snapshot in a single pass."""
+        """Calculates a complete multi-indicator snapshot across all Forex indicators in a single pass."""
         if not candles:
             return {}
 
@@ -420,12 +886,242 @@ class TechnicalIndicatorEngine:
             "stochastic": cls.calculate_stochastic(candles, 14, 3),
             "streak_color": streak_color,
             "streak_count": streak_count,
-            "vwap": cls.calculate_vwap(candles),  # Full available session buffer
-            "vwap_30": cls.calculate_vwap(candles[-30:]),  # Explicit rolling 30-bar VWAP
+            "vwap": cls.calculate_vwap(candles),
+            "vwap_30": cls.calculate_vwap(candles[-30:]),
             "volume_ratio": round(vol_ratio, 2),
             "support_levels": support,
             "resistance_levels": resistance,
             "nearest_support": support[-1] if support else None,
             "nearest_resistance": resistance[-1] if resistance else None,
             "is_flatlined": cls.is_market_flatlined(candles),
+            
+            # Additional Forex Indicators from Quotex/TradingView
+            "alligator": cls.calculate_alligator(candles),
+            "envelopes": cls.calculate_envelopes(candles),
+            "fractal": cls.calculate_fractal(candles),
+            "ichimoku": cls.calculate_ichimoku(candles),
+            "keltner": cls.calculate_keltner_channel(candles),
+            "donchian": cls.calculate_donchian_channel(candles),
+            "supertrend": cls.calculate_supertrend(candles),
+            "parabolic_sar": cls.calculate_parabolic_sar(candles),
+            "aroon": cls.calculate_aroon(candles),
+            "awesome_oscillator": cls.calculate_awesome_oscillator(candles),
+            "bulls_bears_power": cls.calculate_bulls_bears_power(candles),
+            "cci": cls.calculate_cci(candles),
+            "demarker": cls.calculate_demarker(candles),
+            "momentum": cls.calculate_momentum(candles),
+            "roc": cls.calculate_rate_of_change(candles),
+            "williams_r": cls.calculate_williams_r(candles),
+            "vortex": cls.calculate_vortex(candles),
+            "volume_oscillator": cls.calculate_volume_oscillator(candles),
+            "formations": cls.calculate_candlestick_formations(candles),
+            "smc_structure": cls.calculate_smc_structure(candles),
         }
+
+    # -------------------------------------------------------------------------
+    # Candlestick Formations & Price Action Pattern Recognition Engine
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def calculate_candlestick_formations(candles: List[Candle]) -> Dict[str, Any]:
+        """
+        Recognizes key single-bar, two-bar, and three-bar candlestick formations
+        (Pinbar/Hammer, Engulfing, Morning/Evening Star, Three Soldiers/Crows, Inside Bar, Tweezer).
+        """
+        if not candles or len(candles) < 2:
+            return {
+                "pinbar_bullish": False, "pinbar_bearish": False,
+                "engulfing_bullish": False, "engulfing_bearish": False,
+                "morning_star": False, "evening_star": False,
+                "three_white_soldiers": False, "three_black_crows": False,
+                "inside_bar": False, "tweezer_top": False, "tweezer_bottom": False,
+                "doji": False, "detected_patterns": []
+            }
+
+        detected = []
+        c = candles[-1]
+        prev = candles[-2]
+        
+        c_range = max(1e-6, c.high - c.low)
+        c_body = abs(c.close - c.open)
+        c_upper_wick = c.high - max(c.open, c.close)
+        c_lower_wick = min(c.open, c.close) - c.low
+
+        prev_range = max(1e-6, prev.high - prev.low)
+        prev_body = abs(prev.close - prev.open)
+
+        # 1. Pinbar / Hammer / Shooting Star
+        pinbar_bull = (c_lower_wick >= (0.55 * c_range)) and (c_body <= (0.35 * c_range)) and (c_upper_wick <= (0.25 * c_range))
+        pinbar_bear = (c_upper_wick >= (0.55 * c_range)) and (c_body <= (0.35 * c_range)) and (c_lower_wick <= (0.25 * c_range))
+        if pinbar_bull: detected.append("BULLISH_PINBAR")
+        if pinbar_bear: detected.append("BEARISH_PINBAR")
+
+        # 2. Bullish & Bearish Engulfing
+        engulfing_bull = (
+            prev.is_bearish and c.is_bullish and
+            c.close >= prev.open and c.open <= prev.close and
+            (c_body >= 0.55 * c_range)
+        )
+        engulfing_bear = (
+            prev.is_bullish and c.is_bearish and
+            c.close <= prev.open and c.open >= prev.close and
+            (c_body >= 0.55 * c_range)
+        )
+        if engulfing_bull: detected.append("BULLISH_ENGULFING")
+        if engulfing_bear: detected.append("BEARISH_ENGULFING")
+
+        # 3. Inside Bar (Harami)
+        inside_bar = (c.high <= prev.high) and (c.low >= prev.low)
+        if inside_bar: detected.append("INSIDE_BAR")
+
+        # 4. Tweezer Tops / Bottoms
+        tweezer_top = (abs(c.high - prev.high) <= (c_range * 0.05)) and prev.is_bullish and c.is_bearish and (c_upper_wick >= 0.3 * c_range)
+        tweezer_bot = (abs(c.low - prev.low) <= (c_range * 0.05)) and prev.is_bearish and c.is_bullish and (c_lower_wick >= 0.3 * c_range)
+        if tweezer_top: detected.append("TWEEZER_TOP")
+        if tweezer_bot: detected.append("TWEEZER_BOTTOM")
+
+        # 5. Doji
+        doji = (c_body / c_range) < 0.10
+        if doji: detected.append("DOJI")
+
+        # 6. Three-Bar Formations (Morning Star, Evening Star, Three Soldiers, Three Crows)
+        morning_star = False
+        evening_star = False
+        three_soldiers = False
+        three_crows = False
+
+        if len(candles) >= 3:
+            p2 = candles[-3]
+            p2_range = max(1e-6, p2.high - p2.low)
+            p2_body = abs(p2.close - p2.open)
+
+            # Morning Star (Bearish bar -> small body/doji -> Bullish bar closing past mid of bar 1)
+            if p2.is_bearish and (p2_body >= 0.5 * p2_range):
+                if (prev_body <= 0.35 * prev_range) and c.is_bullish and (c.close >= (p2.open + p2.close) / 2.0):
+                    morning_star = True
+                    detected.append("MORNING_STAR")
+
+            # Evening Star (Bullish bar -> small body/doji -> Bearish bar closing past mid of bar 1)
+            if p2.is_bullish and (p2_body >= 0.5 * p2_range):
+                if (prev_body <= 0.35 * prev_range) and c.is_bearish and (c.close <= (p2.open + p2.close) / 2.0):
+                    evening_star = True
+                    detected.append("EVENING_STAR")
+
+            # Three White Soldiers
+            if p2.is_bullish and prev.is_bullish and c.is_bullish:
+                if (c.close > prev.close > p2.close) and (c_body > 0.5 * c_range) and (prev_body > 0.5 * prev_range):
+                    three_soldiers = True
+                    detected.append("THREE_WHITE_SOLDIERS")
+
+            # Three Black Crows
+            if p2.is_bearish and prev.is_bearish and c.is_bearish:
+                if (c.close < prev.close < p2.close) and (c_body > 0.5 * c_range) and (prev_body > 0.5 * prev_range):
+                    three_crows = True
+                    detected.append("THREE_BLACK_CROWS")
+
+        return {
+            "pinbar_bullish": pinbar_bull,
+            "pinbar_bearish": pinbar_bear,
+            "engulfing_bullish": engulfing_bull,
+            "engulfing_bearish": engulfing_bear,
+            "morning_star": morning_star,
+            "evening_star": evening_star,
+            "three_white_soldiers": three_soldiers,
+            "three_black_crows": three_crows,
+            "inside_bar": inside_bar,
+            "tweezer_top": tweezer_top,
+            "tweezer_bottom": tweezer_bot,
+            "doji": doji,
+            "detected_patterns": detected
+        }
+
+    @staticmethod
+    def calculate_smc_structure(candles: List[Candle], swing_lookback: int = 3) -> Dict[str, Any]:
+        """
+        Smart Money Concepts (SMC) market structure engine:
+        Calculates Break of Structure (BOS), Change of Character (CHOCH),
+        Fair Value Gaps (FVG), Liquidity Sweeps, and Swing Highs/Lows.
+        """
+        if len(candles) < (swing_lookback * 2) + 2:
+            return {
+                "bos_bullish": False, "bos_bearish": False,
+                "choch_bullish": False, "choch_bearish": False,
+                "fvg_bullish": False, "fvg_bearish": False,
+                "liquidity_sweep_bullish": False, "liquidity_sweep_bearish": False,
+                "last_swing_high": None, "last_swing_low": None,
+                "structure_trend": "NEUTRAL"
+            }
+
+        n = len(candles)
+        swing_highs = []
+        swing_lows = []
+
+        # Find recent confirmed swing points (excluding last few unconfirmed bars)
+        for i in range(swing_lookback, n - swing_lookback - 1):
+            curr = candles[i]
+            if all(candles[j].high < curr.high for j in range(i - swing_lookback, i + swing_lookback + 1) if j != i):
+                swing_highs.append((i, curr.high))
+            if all(candles[j].low > curr.low for j in range(i - swing_lookback, i + swing_lookback + 1) if j != i):
+                swing_lows.append((i, curr.low))
+
+        last_sh = swing_highs[-1][1] if swing_highs else None
+        last_sl = swing_lows[-1][1] if swing_lows else None
+
+        c = candles[-1]
+        prev = candles[-2]
+
+        # Break of Structure (BOS): Body close strictly breaks prior swing level in trend direction
+        bos_bullish = (last_sh is not None) and (c.close > last_sh) and (prev.close <= last_sh)
+        bos_bearish = (last_sl is not None) and (c.close < last_sl) and (prev.close >= last_sl)
+
+        # Change of Character (CHOCH): First structural break counter to prevailing swing series
+        choch_bullish = False
+        choch_bearish = False
+        if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+            prev_sh = swing_highs[-2][1]
+            prev_sl = swing_lows[-2][1]
+            is_downtrend = (last_sh < prev_sh) and (last_sl < prev_sl)
+            is_uptrend = (last_sh > prev_sh) and (last_sl > prev_sl)
+            
+            if is_downtrend and (c.close > last_sh):
+                choch_bullish = True
+            if is_uptrend and (c.close < last_sl):
+                choch_bearish = True
+
+        # Fair Value Gap (FVG): Imbalance between bar[i-2] and bar[i]
+        fvg_bullish = False
+        fvg_bearish = False
+        if len(candles) >= 3:
+            p2 = candles[-3]
+            # Bullish FVG: Bar 1 High < Bar 3 Low
+            if c.low > p2.high:
+                fvg_bullish = True
+            # Bearish FVG: Bar 1 Low > Bar 3 High
+            if c.high < p2.low:
+                fvg_bearish = True
+
+        # Liquidity Sweep: Wick pierced past swing level but candle body closed back inside
+        liq_sweep_bull = (last_sl is not None) and (c.low < last_sl) and (c.close > last_sl) and (c.is_bullish or c.close > c.open)
+        liq_sweep_bear = (last_sh is not None) and (c.high > last_sh) and (c.close < last_sh) and (c.is_bearish or c.close < c.open)
+
+        struct_trend = "NEUTRAL"
+        if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+            if swing_highs[-1][1] > swing_highs[-2][1] and swing_lows[-1][1] > swing_lows[-2][1]:
+                struct_trend = "BULLISH"
+            elif swing_highs[-1][1] < swing_highs[-2][1] and swing_lows[-1][1] < swing_lows[-2][1]:
+                struct_trend = "BEARISH"
+
+        return {
+            "bos_bullish": bos_bullish,
+            "bos_bearish": bos_bearish,
+            "choch_bullish": choch_bullish,
+            "choch_bearish": choch_bearish,
+            "fvg_bullish": fvg_bullish,
+            "fvg_bearish": fvg_bearish,
+            "liquidity_sweep_bullish": liq_sweep_bull,
+            "liquidity_sweep_bearish": liq_sweep_bear,
+            "last_swing_high": round(last_sh, 5) if last_sh else None,
+            "last_swing_low": round(last_sl, 5) if last_sl else None,
+            "structure_trend": struct_trend
+        }
+
+

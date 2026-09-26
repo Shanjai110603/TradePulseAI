@@ -29,33 +29,50 @@ class StrategyCompiler:
             or filters.smc.order_block_enabled
         )
 
-        # Dedicated strategy archetypes apply to built-in presets unless custom indicators or SMC are configured
-        if not has_custom_indicators and not has_custom_smc:
-            if strat_id_lower == "strat_logus_trend":
-                return {
-                    "operator": "AND",
-                    "conditions": [{"type": "logus_trend", "params": {}}]
-                }
-            elif strat_id_lower == "strat_mtf_engulfing_1m":
-                return {
-                    "operator": "AND",
-                    "conditions": [{"type": "mtf_engulfing_1m", "params": {"min_body_ratio": filters.candle_anatomy.min_body_ratio or 0.65}}]
-                }
-            elif strat_id_lower == "strat_snr_wick_reversal":
-                return {
-                    "operator": "AND",
-                    "conditions": [{"type": "snr_wick_reversal", "params": {"min_wick_ratio": filters.candle_anatomy.max_opposing_wick or 0.45}}]
-                }
-            elif strat_id_lower == "strat_ema_trend_bounce":
-                return {
-                    "operator": "AND",
-                    "conditions": [{"type": "ema_trend_bounce", "params": {}}]
-                }
-            elif strat_id_lower == "strat_mtf_momentum":
-                return {
-                    "operator": "AND",
-                    "conditions": [{"type": "mtf_momentum", "params": {}}]
-                }
+        # Dedicated strategy archetypes apply to built-in presets
+        if strat_id_lower == "strat_logus_trend":
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "logus_trend", "params": {}}]
+            }
+        elif strat_id_lower == "strat_mtf_engulfing_1m":
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "mtf_engulfing_1m", "params": {"min_body_ratio": filters.candle_anatomy.min_body_ratio or 0.65}}]
+            }
+        elif strat_id_lower == "strat_snr_wick_reversal":
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "snr_wick_reversal", "params": {"min_wick_ratio": filters.candle_anatomy.max_opposing_wick or 0.45}}]
+            }
+        elif strat_id_lower == "strat_ema_trend_bounce":
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "ema_trend_bounce", "params": {}}]
+            }
+        elif strat_id_lower == "strat_mtf_momentum":
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "mtf_momentum", "params": {}}]
+            }
+        elif strat_id_lower in ("strat_dual_bollinger_protrusion_1m", "strat_dual_bb_protrusion"):
+            # Compile dedicated AST execution node for the Dual Bollinger Band Protrusion Reversal Strategy:
+            # - Evaluates 10 & 13 period Bollinger Bands with 2.0 standard deviation
+            # - Enforces minimum 20% candle body protrusion beyond outer envelope
+            # - Enforces market regime check (immediate in consolidation vs S/R confluence in trends)
+            return {
+                "operator": "AND",
+                "conditions": [{
+                    "type": "dual_bollinger_protrusion",
+                    "params": {
+                        "period_1": 10,
+                        "period_2": 13,
+                        "deviation": 2.0,
+                        "min_body_protrusion": 0.20,
+                        "require_box_or_sr": True
+                    }
+                }]
+            }
 
         root_conditions = []
         filters = strategy.filters
