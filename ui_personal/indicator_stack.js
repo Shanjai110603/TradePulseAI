@@ -676,6 +676,12 @@ function focusIndicatorCard(instanceId) {
 }
 
 function triggerStrategyRecalculate() {
+  if (window.strategyChartEngine) {
+    window.strategyChartEngine.render();
+  }
+  if (window.chartEngine) {
+    window.chartEngine.render();
+  }
   if (window.recalculateStrategyVisualizer) {
     window.recalculateStrategyVisualizer();
   }
@@ -698,13 +704,38 @@ function compileIndicatorFilters() {
 function loadIndicatorFilters(indicatorsList) {
   strategyIndicatorInstances = [];
   if (Array.isArray(indicatorsList) && indicatorsList.length > 0) {
-    indicatorsList.forEach(ind => {
+    indicatorsList.forEach((ind, idx) => {
       const type = (ind.indicator || '').toUpperCase();
       const meta = INDICATOR_REGISTRY[type];
       if (meta) {
         const mergedParams = Object.assign({}, meta.defaultParams, ind.params || {});
-        if (ind.color) mergedParams.color = ind.color;
+        // Read period
+        if (ind.period !== undefined && ind.period !== null) {
+          mergedParams.period = Number(ind.period);
+        } else if (ind.params?.period !== undefined) {
+          mergedParams.period = Number(ind.params.period);
+        }
+        // Read deviation
+        if (ind.deviation !== undefined && ind.deviation !== null) {
+          mergedParams.deviation = Number(ind.deviation);
+        } else if (ind.params?.deviation !== undefined) {
+          mergedParams.deviation = Number(ind.params.deviation);
+        } else if (type === 'BOLLINGER') {
+          mergedParams.deviation = idx === 0 ? 2.0 : 2.5;
+        }
+
+        // Color handling
+        if (ind.color) {
+          mergedParams.color = ind.color;
+        } else if (ind.params?.color) {
+          mergedParams.color = ind.params.color;
+        } else if (type === 'BOLLINGER') {
+          mergedParams.color = idx === 0 ? '#00f0ff' : '#ec4899';
+        }
+
         if (ind.show_cloud !== undefined) mergedParams.show_cloud = ind.show_cloud;
+        else if (ind.params?.show_cloud !== undefined) mergedParams.show_cloud = ind.params.show_cloud;
+
         addIndicatorInstance(type, mergedParams, false);
       }
     });
@@ -715,6 +746,7 @@ function loadIndicatorFilters(indicatorsList) {
   }
   renderIndicatorCards();
   syncChartIndicatorPills();
+  triggerStrategyRecalculate();
 }
 
 // Expose globals for window access

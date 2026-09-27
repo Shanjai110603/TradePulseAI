@@ -761,19 +761,60 @@ function changeStrategyPreviewPair(pair) {
 }
 window.changeStrategyPreviewPair = changeStrategyPreviewPair;
 
+function generateOrganicPreviewCandles(pair) {
+  const isJpy = (pair || '').includes('JPY');
+  let currentPrice = isJpy ? 155.40 : 1.0850;
+  const minPip = isJpy ? 0.012 : 0.00012;
+  const now = Math.floor(Date.now() / 1000);
+  const tfSec = activeStrategyPreviewTf === '5M' ? 300 : (activeStrategyPreviewTf === '3M' ? 180 : 60);
+  const list = [];
+
+  for (let i = 80; i >= 0; i--) {
+    const ts = now - (i * tfSec);
+    const delta = (Math.random() - 0.49) * minPip * 12;
+    const open = currentPrice;
+    const close = open + delta;
+    const spread = minPip * (2 + Math.random() * 5);
+    const high = Math.max(open, close) + spread * (0.3 + Math.random() * 0.7);
+    const low = Math.min(open, close) - spread * (0.3 + Math.random() * 0.7);
+    const volume = Math.floor(120 + Math.random() * 250);
+    list.push({ timestamp: ts, open, high, low, close, volume });
+    currentPrice = close;
+  }
+  return list;
+}
+
 function fetchCandlesForStrategyPreview(pair) {
+  const targetPair = (!pair || ['ALL_REAL', 'ALL_MARKETS', 'ALL_OTC', 'CUSTOM'].includes(pair)) ? 'EUR/USD' : pair;
+  activeStrategyPreviewPair = targetPair;
+  const sel = document.getElementById('strat-preview-pair-select');
+  if (sel && sel.value !== targetPair) sel.value = targetPair;
+
   if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_candles_for_chart) {
+    if (strategyChartEngine && (!strategyChartEngine.candles || strategyChartEngine.candles.length === 0)) {
+      strategyChartEngine.setCandles(generateOrganicPreviewCandles(targetPair));
+      recalculateStrategyVisualizer();
+    }
     return;
   }
-  window.pywebview.api.get_candles_for_chart(pair, activeStrategyPreviewTf).then(candles => {
-    if (candles && candles.length > 0 && strategyChartEngine) {
-      strategyChartEngine.setCandles(candles);
-      strategyChartEngine.symbol = pair;
+
+  window.pywebview.api.get_candles_for_chart(targetPair, activeStrategyPreviewTf).then(candles => {
+    if (strategyChartEngine) {
+      if (candles && candles.length > 0) {
+        strategyChartEngine.setCandles(candles);
+      } else if (!strategyChartEngine.candles || strategyChartEngine.candles.length === 0) {
+        strategyChartEngine.setCandles(generateOrganicPreviewCandles(targetPair));
+      }
+      strategyChartEngine.symbol = targetPair;
       strategyChartEngine.timeframe = activeStrategyPreviewTf;
       recalculateStrategyVisualizer();
     }
   }).catch(err => {
     console.error('Error fetching candles for strategy visualizer:', err);
+    if (strategyChartEngine && (!strategyChartEngine.candles || strategyChartEngine.candles.length === 0)) {
+      strategyChartEngine.setCandles(generateOrganicPreviewCandles(targetPair));
+      recalculateStrategyVisualizer();
+    }
   });
 }
 window.fetchCandlesForStrategyPreview = fetchCandlesForStrategyPreview;
@@ -1292,11 +1333,13 @@ function selectStrategyForEditing(strategyId) {
   if (delBtn) delBtn.style.display = 'inline-block';
 
   // Set preview pair if strategy specifies assets
-  if (strat.assets && strat.assets.length > 0 && strat.assets[0] !== 'ALL_REAL') {
-    activeStrategyPreviewPair = strat.assets[0];
-    const pairSel = document.getElementById('strat-preview-pair-select');
-    if (pairSel) pairSel.value = activeStrategyPreviewPair;
+  let previewSym = 'EUR/USD';
+  if (strat.assets && strat.assets.length > 0 && !['ALL_REAL', 'ALL_MARKETS', 'ALL_OTC', 'CUSTOM'].includes(strat.assets[0])) {
+    previewSym = strat.assets[0];
   }
+  activeStrategyPreviewPair = previewSym;
+  const pairSel = document.getElementById('strat-preview-pair-select');
+  if (pairSel) pairSel.value = activeStrategyPreviewPair;
 
   // Update Visual Studio
   if (!strategyChartEngine) {
@@ -1576,11 +1619,9 @@ function applyArchetypePreset(presetKey) {
 
   // Configure specific parameters & drawers per archetype
   if (presetKey === 'dual_bollinger_protrusion') {
-    if (document.getElementById('ind-bb-p1')) document.getElementById('ind-bb-p1').value = "10";
-    if (document.getElementById('ind-bb-p2')) document.getElementById('ind-bb-p2').value = "13";
-    if (document.getElementById('ind-bb-dev')) document.getElementById('ind-bb-dev').value = "2.0";
-    if (document.getElementById('ind-bb-protrusion')) document.getElementById('ind-bb-protrusion').value = "30";
-    toggleIndicatorDrawer('bollinger', true);
+    if (window.addDualBollingerPreset) {
+      window.addDualBollingerPreset();
+    }
     if (document.getElementById('strat-confluence-toggle')) document.getElementById('strat-confluence-toggle').checked = false;
     setPersonalAssetScope('ALL_REAL');
   } else if (presetKey === 'ultra_confluence') {

@@ -37,8 +37,8 @@ DUAL_BOLLINGER_PROTRUSION_STRATEGY = {
         "trend": {"enabled": False, "mtf_timeframe": "5M", "ema_period": 20, "require_alignment": False},
         "candle_anatomy": {"min_body_ratio": 0.20, "max_opposing_wick": 0.40, "filter_preceding_doji": True, "filter_spike_multiplier": 3.0},
         "indicators": [
-            {"indicator": "BOLLINGER", "period": 10, "condition": "BETWEEN", "min_val": 0, "max_val": 1},
-            {"indicator": "BOLLINGER", "period": 13, "condition": "BETWEEN", "min_val": 0, "max_val": 1}
+            {"indicator": "BOLLINGER", "period": 10, "condition": "ACTIVE", "min_val": 0, "max_val": 1, "params": {"period": 10, "deviation": 2.0, "color": "#00f0ff", "show_cloud": True, "min_body_protrusion": 20}},
+            {"indicator": "BOLLINGER", "period": 13, "condition": "ACTIVE", "min_val": 0, "max_val": 1, "params": {"period": 13, "deviation": 2.5, "color": "#ec4899", "show_cloud": True, "min_body_protrusion": 20}}
         ],
         "price_action": {"require_engulfing": False, "require_sr_breakout": False, "min_sr_clearance_pct": 0.05},
         "smc": {"fvg_enabled": False, "liquidity_sweep_enabled": False, "bos_enabled": False, "order_block_enabled": False}
