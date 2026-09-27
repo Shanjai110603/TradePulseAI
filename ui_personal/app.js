@@ -256,7 +256,9 @@ function switchView(viewName) {
     const isBroker = (viewName === 'broker');
     window.pywebview.api.set_broker_visible(isBroker);
     if (isBroker) {
-      setTimeout(syncBrokerStation, 100);
+      syncBrokerStation();
+      setTimeout(syncBrokerStation, 60);
+      setTimeout(syncBrokerStation, 200);
     }
   }
 }
@@ -267,15 +269,26 @@ function syncBrokerStation() {
   if (!dock || PersonalState.activeView !== 'broker') return;
   const rect = dock.getBoundingClientRect();
   if (rect.width > 20 && rect.height > 20 && window.pywebview && window.pywebview.api && window.pywebview.api.sync_broker_position) {
+    // Respect sidebar (240px) and top header (56px) bounds
+    const safeLeft = Math.max(240, Math.round(rect.left));
+    const safeTop = Math.max(56, Math.round(rect.top));
+    const safeWidth = Math.max(300, Math.round(rect.width));
+    const safeHeight = Math.max(200, Math.round(rect.height));
     window.pywebview.api.sync_broker_position(
-      Math.round(rect.left),
-      Math.round(rect.top),
-      Math.round(rect.width),
-      Math.round(rect.height),
+      safeLeft,
+      safeTop,
+      safeWidth,
+      safeHeight,
       true
     );
   }
 }
+window.syncBrokerStation = syncBrokerStation;
+window.addEventListener('resize', () => {
+  if (PersonalState.activeView === 'broker') {
+    syncBrokerStation();
+  }
+});
 
 // ============================================================================
 // Master Gated Bot Scanner Controller
@@ -919,309 +932,10 @@ function compileCurrentStrategyForm() {
   const maxWick = parseFloat(document.getElementById('strat-max-wick')?.value || 0.40);
   const filterDoji = document.getElementById('strat-doji-filter')?.checked || false;
 
-  const indicators = [];
+  // Dynamic Multi-Instance Indicator Stack
+  const indicators = window.compileIndicatorFilters ? window.compileIndicatorFilters() : [];
 
-  // 1. Bollinger Bands
-  if (document.getElementById('strat-bollinger-filter')?.checked) {
-    indicators.push({
-      indicator: 'BOLLINGER',
-      params: {
-        period_1: parseInt(document.getElementById('ind-bb-p1')?.value, 10) || 10,
-        period_2: parseInt(document.getElementById('ind-bb-p2')?.value, 10) || 13,
-        deviation: parseFloat(document.getElementById('ind-bb-dev')?.value) || 2.0,
-        min_body_protrusion: parseFloat(document.getElementById('ind-bb-protrusion')?.value) || 20
-      }
-    });
-  }
 
-  // 2. Supertrend
-  if (document.getElementById('strat-supertrend-filter')?.checked) {
-    indicators.push({
-      indicator: 'SUPERTREND',
-      params: {
-        atr_period: parseInt(document.getElementById('ind-st-period')?.value, 10) || 10,
-        multiplier: parseFloat(document.getElementById('ind-st-mult')?.value) || 3.0
-      }
-    });
-  }
-
-  // 3. Parabolic SAR
-  if (document.getElementById('strat-sar-filter')?.checked) {
-    indicators.push({
-      indicator: 'PARABOLIC_SAR',
-      params: {
-        step: parseFloat(document.getElementById('ind-sar-step')?.value) || 0.02,
-        max_step: parseFloat(document.getElementById('ind-sar-max')?.value) || 0.2
-      }
-    });
-  }
-
-  // 4. Moving Average
-  if (document.getElementById('strat-ma-filter')?.checked) {
-    indicators.push({
-      indicator: 'MOVING_AVERAGE',
-      params: {
-        period: parseInt(document.getElementById('ind-ma-period')?.value, 10) || 14,
-        type: document.getElementById('ind-ma-type')?.value || 'SMA'
-      }
-    });
-  }
-
-  // 5. Keltner Channel
-  if (document.getElementById('strat-keltner-filter')?.checked) {
-    indicators.push({
-      indicator: 'KELTNER',
-      params: {
-        ema_period: parseInt(document.getElementById('ind-keltner-period')?.value, 10) || 20,
-        atr_period: parseInt(document.getElementById('ind-keltner-atr')?.value, 10) || 10,
-        multiplier: parseFloat(document.getElementById('ind-keltner-mult')?.value) || 1.0
-      }
-    });
-  }
-
-  // 6. Donchian Channel
-  if (document.getElementById('strat-donchian-filter')?.checked) {
-    indicators.push({
-      indicator: 'DONCHIAN',
-      params: {
-        period: parseInt(document.getElementById('ind-donchian-period')?.value, 10) || 20
-      }
-    });
-  }
-
-  // 7. Envelopes
-  if (document.getElementById('strat-envelopes-filter')?.checked) {
-    indicators.push({
-      indicator: 'ENVELOPES',
-      params: {
-        period: parseInt(document.getElementById('ind-env-period')?.value, 10) || 14,
-        deviation_pct: parseFloat(document.getElementById('ind-env-dev')?.value) || 0.1
-      }
-    });
-  }
-
-  // 8. Alligator
-  if (document.getElementById('strat-alligator-filter')?.checked) {
-    indicators.push({
-      indicator: 'ALLIGATOR',
-      params: {
-        jaw_period: parseInt(document.getElementById('ind-allig-jaw')?.value, 10) || 13,
-        teeth_period: parseInt(document.getElementById('ind-allig-teeth')?.value, 10) || 8,
-        lips_period: parseInt(document.getElementById('ind-allig-lips')?.value, 10) || 5
-      }
-    });
-  }
-
-  // 9. Ichimoku Cloud
-  if (document.getElementById('strat-ichimoku-filter')?.checked) {
-    indicators.push({
-      indicator: 'ICHIMOKU',
-      params: {
-        tenkan_period: parseInt(document.getElementById('ind-ichi-tenkan')?.value, 10) || 9,
-        kijun_period: parseInt(document.getElementById('ind-ichi-kijun')?.value, 10) || 26,
-        senkou_b_period: parseInt(document.getElementById('ind-ichi-senkou')?.value, 10) || 52
-      }
-    });
-  }
-
-  // 10. Fractal
-  if (document.getElementById('strat-fractal-filter')?.checked) {
-    indicators.push({
-      indicator: 'FRACTAL',
-      params: {
-        period: parseInt(document.getElementById('ind-frac-period')?.value, 10) || 2
-      }
-    });
-  }
-
-  // 11. Zig Zag
-  if (document.getElementById('strat-zigzag-filter')?.checked) {
-    indicators.push({
-      indicator: 'ZIGZAG',
-      params: {
-        depth: parseInt(document.getElementById('ind-zz-depth')?.value, 10) || 12,
-        deviation: parseFloat(document.getElementById('ind-zz-dev')?.value) || 5,
-        backstep: parseInt(document.getElementById('ind-zz-backstep')?.value, 10) || 3
-      }
-    });
-  }
-
-  // 12. RSI
-  if (document.getElementById('strat-rsi-filter')?.checked) {
-    indicators.push({
-      indicator: 'RSI',
-      params: {
-        period: parseInt(document.getElementById('ind-rsi-period')?.value, 10) || 14,
-        overbought: parseInt(document.getElementById('ind-rsi-ob')?.value, 10) || 70,
-        oversold: parseInt(document.getElementById('ind-rsi-os')?.value, 10) || 30
-      }
-    });
-  }
-
-  // 13. Stochastic
-  if (document.getElementById('strat-stochastic-filter')?.checked) {
-    indicators.push({
-      indicator: 'STOCHASTIC',
-      params: {
-        k_period: parseInt(document.getElementById('ind-stoch-k')?.value, 10) || 14,
-        d_period: parseInt(document.getElementById('ind-stoch-d')?.value, 10) || 3,
-        overbought: parseInt(document.getElementById('ind-stoch-ob')?.value, 10) || 80,
-        oversold: parseInt(document.getElementById('ind-stoch-os')?.value, 10) || 20
-      }
-    });
-  }
-
-  // 14. MACD
-  if (document.getElementById('strat-macd-filter')?.checked) {
-    indicators.push({
-      indicator: 'MACD',
-      params: {
-        fast_period: parseInt(document.getElementById('ind-macd-fast')?.value, 10) || 12,
-        slow_period: parseInt(document.getElementById('ind-macd-slow')?.value, 10) || 26,
-        signal_period: parseInt(document.getElementById('ind-macd-signal')?.value, 10) || 9
-      }
-    });
-  }
-
-  // 15. Awesome Oscillator
-  if (document.getElementById('strat-ao-filter')?.checked) {
-    indicators.push({
-      indicator: 'AWESOME_OSCILLATOR',
-      params: {
-        fast_period: parseInt(document.getElementById('ind-ao-fast')?.value, 10) || 5,
-        slow_period: parseInt(document.getElementById('ind-ao-slow')?.value, 10) || 34
-      }
-    });
-  }
-
-  // 16. Williams %R
-  if (document.getElementById('strat-williams-filter')?.checked) {
-    indicators.push({
-      indicator: 'WILLIAMS_R',
-      params: {
-        period: parseInt(document.getElementById('ind-wr-period')?.value, 10) || 14,
-        overbought: parseInt(document.getElementById('ind-wr-ob')?.value, 10) || -20,
-        oversold: parseInt(document.getElementById('ind-wr-os')?.value, 10) || -80
-      }
-    });
-  }
-
-  // 17. CCI
-  if (document.getElementById('strat-cci-filter')?.checked) {
-    indicators.push({
-      indicator: 'CCI',
-      params: {
-        period: parseInt(document.getElementById('ind-cci-period')?.value, 10) || 20,
-        overbought: parseInt(document.getElementById('ind-cci-ob')?.value, 10) || 100,
-        oversold: parseInt(document.getElementById('ind-cci-os')?.value, 10) || -100
-      }
-    });
-  }
-
-  // 18. DeMarker
-  if (document.getElementById('strat-demarker-filter')?.checked) {
-    indicators.push({
-      indicator: 'DEMARKER',
-      params: {
-        period: parseInt(document.getElementById('ind-dem-period')?.value, 10) || 14,
-        overbought: parseFloat(document.getElementById('ind-dem-ob')?.value) || 0.7,
-        oversold: parseFloat(document.getElementById('ind-dem-os')?.value) || 0.3
-      }
-    });
-  }
-
-  // 19. Bulls & Bears Power (Elder Ray)
-  if (document.getElementById('strat-elder-filter')?.checked) {
-    indicators.push({
-      indicator: 'ELDER_RAY',
-      params: {
-        period: parseInt(document.getElementById('ind-elder-period')?.value, 10) || 13
-      }
-    });
-  }
-
-  // 20. ADX
-  if (document.getElementById('strat-adx-filter')?.checked) {
-    indicators.push({
-      indicator: 'ADX',
-      params: {
-        period: parseInt(document.getElementById('ind-adx-period')?.value, 10) || 14
-      }
-    });
-  }
-
-  // 21. Aroon
-  if (document.getElementById('strat-aroon-filter')?.checked) {
-    indicators.push({
-      indicator: 'AROON',
-      params: {
-        period: parseInt(document.getElementById('ind-aroon-period')?.value, 10) || 14
-      }
-    });
-  }
-
-  // 22. ATR
-  if (document.getElementById('strat-atr-filter')?.checked) {
-    indicators.push({
-      indicator: 'ATR',
-      params: {
-        period: parseInt(document.getElementById('ind-atr-period')?.value, 10) || 14
-      }
-    });
-  }
-
-  // 23. Momentum
-  if (document.getElementById('strat-momentum-filter')?.checked) {
-    indicators.push({
-      indicator: 'MOMENTUM',
-      params: {
-        period: parseInt(document.getElementById('ind-mom-period')?.value, 10) || 10
-      }
-    });
-  }
-
-  // 24. ROC
-  if (document.getElementById('strat-roc-filter')?.checked) {
-    indicators.push({
-      indicator: 'ROC',
-      params: {
-        period: parseInt(document.getElementById('ind-roc-period')?.value, 10) || 9
-      }
-    });
-  }
-
-  // 25. Vortex
-  if (document.getElementById('strat-vortex-filter')?.checked) {
-    indicators.push({
-      indicator: 'VORTEX',
-      params: {
-        period: parseInt(document.getElementById('ind-vortex-period')?.value, 10) || 14
-      }
-    });
-  }
-
-  // 26. Schaff Trend Cycle
-  if (document.getElementById('strat-stc-filter')?.checked) {
-    indicators.push({
-      indicator: 'SCHAFF_TREND_CYCLE',
-      params: {
-        fast_period: parseInt(document.getElementById('ind-stc-fast')?.value, 10) || 23,
-        slow_period: parseInt(document.getElementById('ind-stc-slow')?.value, 10) || 50,
-        cycle_period: parseInt(document.getElementById('ind-stc-cycle')?.value, 10) || 10
-      }
-    });
-  }
-
-  // 27. Volume Oscillator
-  if (document.getElementById('strat-volosc-filter')?.checked) {
-    indicators.push({
-      indicator: 'VOLUME_OSCILLATOR',
-      params: {
-        short_period: parseInt(document.getElementById('ind-vo-short')?.value, 10) || 5,
-        long_period: parseInt(document.getElementById('ind-vo-long')?.value, 10) || 10
-      }
-    });
-  }
 
   const confToggle = document.getElementById('strat-confluence-toggle')?.checked || false;
   const confMin = parseInt(document.getElementById('strat-confluence-min')?.value, 10) || 2;
@@ -1553,188 +1267,10 @@ function selectStrategyForEditing(strategyId) {
   document.getElementById('strat-engulfing-filter').checked = !!pa.require_engulfing;
   document.getElementById('strat-sr-breakout-filter').checked = !!pa.require_sr_breakout;
 
-  // Technical Indicators & Drawers
-  const syncInd = (key, names, cbId, paramMap) => {
-    const found = inds.find(i => names.includes((i.indicator || '').toUpperCase()));
-    const active = !!found;
-    const cb = document.getElementById(cbId);
-    if (cb) cb.checked = active;
-    toggleIndicatorDrawer(key, active);
-    if (found && found.params && paramMap) {
-      for (const [elId, paramKey, defaultVal] of paramMap) {
-        const el = document.getElementById(elId);
-        if (el) el.value = found.params[paramKey] ?? defaultVal;
-      }
-    }
-  };
-
-  // 1. Bollinger
-  syncInd('bollinger', ['BOLLINGER'], 'strat-bollinger-filter', [
-    ['ind-bb-p1', 'period_1', 10],
-    ['ind-bb-p2', 'period_2', 13],
-    ['ind-bb-dev', 'deviation', 2.0],
-    ['ind-bb-protrusion', 'min_body_protrusion', 20]
-  ]);
-
-  // 2. Supertrend
-  syncInd('supertrend', ['SUPERTREND', 'ST'], 'strat-supertrend-filter', [
-    ['ind-st-period', 'atr_period', 10],
-    ['ind-st-mult', 'multiplier', 3.0]
-  ]);
-
-  // 3. Parabolic SAR
-  syncInd('sar', ['PARABOLIC_SAR', 'SAR', 'PSAR'], 'strat-sar-filter', [
-    ['ind-sar-step', 'step', 0.02],
-    ['ind-sar-max', 'max_step', 0.2]
-  ]);
-
-  // 4. Moving Average
-  syncInd('ma', ['MOVING_AVERAGE', 'MA', 'SMA_EMA'], 'strat-ma-filter', [
-    ['ind-ma-period', 'period', 14],
-    ['ind-ma-type', 'type', 'SMA']
-  ]);
-
-  // 5. Keltner Channel
-  syncInd('keltner', ['KELTNER', 'DONCHIAN_KELTNER'], 'strat-keltner-filter', [
-    ['ind-keltner-period', 'ema_period', 20],
-    ['ind-keltner-atr', 'atr_period', 10],
-    ['ind-keltner-mult', 'multiplier', 1.0]
-  ]);
-
-  // 6. Donchian Channel
-  syncInd('donchian', ['DONCHIAN'], 'strat-donchian-filter', [
-    ['ind-donchian-period', 'period', 20]
-  ]);
-
-  // 7. Envelopes
-  syncInd('envelopes', ['ENVELOPES'], 'strat-envelopes-filter', [
-    ['ind-env-period', 'period', 14],
-    ['ind-env-dev', 'deviation_pct', 0.1]
-  ]);
-
-  // 8. Alligator
-  syncInd('alligator', ['ALLIGATOR'], 'strat-alligator-filter', [
-    ['ind-allig-jaw', 'jaw_period', 13],
-    ['ind-allig-teeth', 'teeth_period', 8],
-    ['ind-allig-lips', 'lips_period', 5]
-  ]);
-
-  // 9. Ichimoku Cloud
-  syncInd('ichimoku', ['ICHIMOKU'], 'strat-ichimoku-filter', [
-    ['ind-ichi-tenkan', 'tenkan_period', 9],
-    ['ind-ichi-kijun', 'kijun_period', 26],
-    ['ind-ichi-senkou', 'senkou_b_period', 52]
-  ]);
-
-  // 10. Fractal
-  syncInd('fractal', ['FRACTAL'], 'strat-fractal-filter', [
-    ['ind-frac-period', 'period', 2]
-  ]);
-
-  // 11. Zig Zag
-  syncInd('zigzag', ['ZIGZAG', 'ZIG_ZAG'], 'strat-zigzag-filter', [
-    ['ind-zz-depth', 'depth', 12],
-    ['ind-zz-dev', 'deviation', 5],
-    ['ind-zz-backstep', 'backstep', 3]
-  ]);
-
-  // 12. RSI
-  syncInd('rsi', ['RSI'], 'strat-rsi-filter', [
-    ['ind-rsi-period', 'period', 14],
-    ['ind-rsi-ob', 'overbought', 70],
-    ['ind-rsi-os', 'oversold', 30]
-  ]);
-
-  // 13. Stochastic
-  syncInd('stoch', ['STOCHASTIC'], 'strat-stochastic-filter', [
-    ['ind-stoch-k', 'k_period', 14],
-    ['ind-stoch-d', 'd_period', 3],
-    ['ind-stoch-ob', 'overbought', 80],
-    ['ind-stoch-os', 'oversold', 20]
-  ]);
-
-  // 14. MACD
-  syncInd('macd', ['MACD'], 'strat-macd-filter', [
-    ['ind-macd-fast', 'fast_period', 12],
-    ['ind-macd-slow', 'slow_period', 26],
-    ['ind-macd-signal', 'signal_period', 9]
-  ]);
-
-  // 15. Awesome Oscillator
-  syncInd('ao', ['AWESOME_OSCILLATOR', 'AO'], 'strat-ao-filter', [
-    ['ind-ao-fast', 'fast_period', 5],
-    ['ind-ao-slow', 'slow_period', 34]
-  ]);
-
-  // 16. Williams %R
-  syncInd('williams', ['WILLIAMS_R', 'WILLIAMS_%R', 'WR'], 'strat-williams-filter', [
-    ['ind-wr-period', 'period', 14],
-    ['ind-wr-ob', 'overbought', -20],
-    ['ind-wr-os', 'oversold', -80]
-  ]);
-
-  // 17. CCI
-  syncInd('cci', ['CCI'], 'strat-cci-filter', [
-    ['ind-cci-period', 'period', 20],
-    ['ind-cci-ob', 'overbought', 100],
-    ['ind-cci-os', 'oversold', -100]
-  ]);
-
-  // 18. DeMarker
-  syncInd('demarker', ['DEMARKER', 'DEM'], 'strat-demarker-filter', [
-    ['ind-dem-period', 'period', 14],
-    ['ind-dem-ob', 'overbought', 0.7],
-    ['ind-dem-os', 'oversold', 0.3]
-  ]);
-
-  // 19. Bulls & Bears Power (Elder Ray)
-  syncInd('elder', ['BULLS_POWER', 'BEARS_POWER', 'ELDER', 'ELDER_RAY'], 'strat-elder-filter', [
-    ['ind-elder-period', 'period', 13]
-  ]);
-
-  // 20. ADX
-  syncInd('adx', ['ADX'], 'strat-adx-filter', [
-    ['ind-adx-period', 'period', 14]
-  ]);
-
-  // 21. Aroon
-  syncInd('aroon', ['AROON'], 'strat-aroon-filter', [
-    ['ind-aroon-period', 'period', 14]
-  ]);
-
-  // 22. ATR
-  syncInd('atr', ['ATR'], 'strat-atr-filter', [
-    ['ind-atr-period', 'period', 14]
-  ]);
-
-  // 23. Momentum
-  syncInd('momentum', ['MOMENTUM'], 'strat-momentum-filter', [
-    ['ind-mom-period', 'period', 10]
-  ]);
-
-  // 24. ROC
-  syncInd('roc', ['ROC'], 'strat-roc-filter', [
-    ['ind-roc-period', 'period', 9]
-  ]);
-
-  // 25. Vortex
-  syncInd('vortex', ['VORTEX'], 'strat-vortex-filter', [
-    ['ind-vortex-period', 'period', 14]
-  ]);
-
-  // 26. Schaff Trend Cycle
-  syncInd('stc', ['SCHAFF', 'STC', 'SCHAFF_TREND_CYCLE'], 'strat-stc-filter', [
-    ['ind-stc-fast', 'fast_period', 23],
-    ['ind-stc-slow', 'slow_period', 50],
-    ['ind-stc-cycle', 'cycle_period', 10]
-  ]);
-
-  // 27. Volume Oscillator
-  syncInd('volosc', ['VOLUME_OSCILLATOR', 'VO'], 'strat-volosc-filter', [
-    ['ind-vo-short', 'short_period', 5],
-    ['ind-vo-long', 'long_period', 10]
-  ]);
-
+  // Dynamic Multi-Instance Indicators Stack Loader
+  if (window.loadIndicatorFilters) {
+    window.loadIndicatorFilters(inds);
+  }
 
   // Confluence Matrix
   if (document.getElementById('strat-confluence-toggle')) {
@@ -2103,41 +1639,10 @@ function createNewStrategy() {
   document.getElementById('strat-engulfing-filter').checked = false;
   document.getElementById('strat-sr-breakout-filter').checked = false;
 
-  const allIndicatorKeys = [
-    { key: 'bollinger', cb: 'strat-bollinger-filter', defaultActive: true },
-    { key: 'supertrend', cb: 'strat-supertrend-filter' },
-    { key: 'sar', cb: 'strat-sar-filter' },
-    { key: 'ma', cb: 'strat-ma-filter' },
-    { key: 'keltner', cb: 'strat-keltner-filter' },
-    { key: 'donchian', cb: 'strat-donchian-filter' },
-    { key: 'envelopes', cb: 'strat-envelopes-filter' },
-    { key: 'alligator', cb: 'strat-alligator-filter' },
-    { key: 'ichimoku', cb: 'strat-ichimoku-filter' },
-    { key: 'fractal', cb: 'strat-fractal-filter' },
-    { key: 'zigzag', cb: 'strat-zigzag-filter' },
-    { key: 'rsi', cb: 'strat-rsi-filter' },
-    { key: 'stoch', cb: 'strat-stochastic-filter' },
-    { key: 'macd', cb: 'strat-macd-filter' },
-    { key: 'ao', cb: 'strat-ao-filter' },
-    { key: 'williams', cb: 'strat-williams-filter' },
-    { key: 'cci', cb: 'strat-cci-filter' },
-    { key: 'demarker', cb: 'strat-demarker-filter' },
-    { key: 'elder', cb: 'strat-elder-filter' },
-    { key: 'adx', cb: 'strat-adx-filter' },
-    { key: 'aroon', cb: 'strat-aroon-filter' },
-    { key: 'atr', cb: 'strat-atr-filter' },
-    { key: 'momentum', cb: 'strat-momentum-filter' },
-    { key: 'roc', cb: 'strat-roc-filter' },
-    { key: 'vortex', cb: 'strat-vortex-filter' },
-    { key: 'stc', cb: 'strat-stc-filter' },
-    { key: 'volosc', cb: 'strat-volosc-filter' }
-  ];
-
-  allIndicatorKeys.forEach(item => {
-    const cb = document.getElementById(item.cb);
-    if (cb) cb.checked = !!item.defaultActive;
-    toggleIndicatorDrawer(item.key, !!item.defaultActive);
-  });
+  // Reset Dynamic Multi-Instance Indicators Stack
+  if (window.loadIndicatorFilters) {
+    window.loadIndicatorFilters([]);
+  }
 
 
   if (document.getElementById('strat-confluence-toggle')) {
@@ -2190,120 +1695,8 @@ function savePersonalStrategy(e) {
   const engulfingEnabled = document.getElementById('strat-engulfing-filter')?.checked || false;
   const srBreakoutEnabled = document.getElementById('strat-sr-breakout-filter')?.checked || false;
 
-  const rsiEnabled = document.getElementById('strat-rsi-filter')?.checked || false;
-  const bollingerEnabled = document.getElementById('strat-bollinger-filter')?.checked || false;
-  const stochEnabled = document.getElementById('strat-stochastic-filter')?.checked || false;
-  const macdEnabled = document.getElementById('strat-macd-filter')?.checked || false;
-  const supertrendEnabled = document.getElementById('strat-supertrend-filter')?.checked || false;
-  const sarEnabled = document.getElementById('strat-sar-filter')?.checked || false;
-  const aoEnabled = document.getElementById('strat-ao-filter')?.checked || false;
-  const williamsEnabled = document.getElementById('strat-williams-filter')?.checked || false;
-  const cciEnabled = document.getElementById('strat-cci-filter')?.checked || false;
-  const demarkerEnabled = document.getElementById('strat-demarker-filter')?.checked || false;
-  const elderEnabled = document.getElementById('strat-elder-filter')?.checked || false;
-  const alligatorEnabled = document.getElementById('strat-alligator-filter')?.checked || false;
-  const keltnerEnabled = document.getElementById('strat-keltner-filter')?.checked || false;
-  const vortexEnabled = document.getElementById('strat-vortex-filter')?.checked || false;
-
-  const indicatorsList = [];
-  if (rsiEnabled) {
-    const period = parseInt(document.getElementById('ind-rsi-period')?.value || '14', 10);
-    const ob = parseFloat(document.getElementById('ind-rsi-ob')?.value || '70');
-    const os = parseFloat(document.getElementById('ind-rsi-os')?.value || '30');
-    indicatorsList.push({
-      indicator: 'RSI',
-      period: period,
-      condition: 'BETWEEN',
-      min_val: os,
-      max_val: ob,
-      params: { period, overbought: ob, oversold: os }
-    });
-  }
-  if (bollingerEnabled) {
-    const p1 = parseInt(document.getElementById('ind-bb-p1')?.value || '10', 10);
-    const p2 = parseInt(document.getElementById('ind-bb-p2')?.value || '13', 10);
-    const dev = parseFloat(document.getElementById('ind-bb-dev')?.value || '2.0');
-    const protrusion = parseFloat(document.getElementById('ind-bb-protrusion')?.value || '20');
-    indicatorsList.push({
-      indicator: 'BOLLINGER',
-      period: p1,
-      condition: 'BETWEEN',
-      min_val: 0,
-      max_val: 1,
-      params: { period_1: p1, period_2: p2, deviation: dev, min_body_protrusion: protrusion }
-    });
-  }
-  if (stochEnabled) {
-    const k = parseInt(document.getElementById('ind-stoch-k')?.value || '14', 10);
-    const d = parseInt(document.getElementById('ind-stoch-d')?.value || '3', 10);
-    const ob = parseFloat(document.getElementById('ind-stoch-ob')?.value || '80');
-    const os = parseFloat(document.getElementById('ind-stoch-os')?.value || '20');
-    indicatorsList.push({
-      indicator: 'STOCHASTIC',
-      period: k,
-      condition: 'BETWEEN',
-      min_val: os,
-      max_val: ob,
-      params: { k_period: k, d_period: d, overbought: ob, oversold: os }
-    });
-  }
-  if (macdEnabled) {
-    const fast = parseInt(document.getElementById('ind-macd-fast')?.value || '12', 10);
-    const slow = parseInt(document.getElementById('ind-macd-slow')?.value || '26', 10);
-    const sig = parseInt(document.getElementById('ind-macd-signal')?.value || '9', 10);
-    indicatorsList.push({
-      indicator: 'MACD',
-      period: fast,
-      condition: 'BETWEEN',
-      min_val: -999999,
-      max_val: 999999,
-      params: { fast_period: fast, slow_period: slow, signal_period: sig }
-    });
-  }
-  if (supertrendEnabled) {
-    const atr = parseInt(document.getElementById('ind-st-period')?.value || '10', 10);
-    const mult = parseFloat(document.getElementById('ind-st-mult')?.value || '3.0');
-    indicatorsList.push({
-      indicator: 'SUPERTREND',
-      period: atr,
-      condition: 'BULLISH',
-      params: { atr_period: atr, multiplier: mult }
-    });
-  }
-  if (sarEnabled) {
-    const step = parseFloat(document.getElementById('ind-sar-step')?.value || '0.02');
-    const maxA = parseFloat(document.getElementById('ind-sar-max')?.value || '0.2');
-    indicatorsList.push({
-      indicator: 'PARABOLIC_SAR',
-      period: 14,
-      condition: 'BULLISH',
-      params: { step: step, max_step: maxA }
-    });
-  }
-  if (aoEnabled) {
-    indicatorsList.push({ indicator: 'AWESOME_OSCILLATOR', period: 34, condition: 'BULLISH' });
-  }
-  if (williamsEnabled) {
-    indicatorsList.push({ indicator: 'WILLIAMS_R', period: 14, condition: 'BETWEEN', min_val: -100, max_val: 0 });
-  }
-  if (cciEnabled) {
-    indicatorsList.push({ indicator: 'CCI', period: 20, condition: 'GT', value: 0 });
-  }
-  if (demarkerEnabled) {
-    indicatorsList.push({ indicator: 'DEMARKER', period: 14, condition: 'BETWEEN', min_val: 0, max_val: 1 });
-  }
-  if (elderEnabled) {
-    indicatorsList.push({ indicator: 'BULLS_POWER', period: 13, condition: 'GT', value: 0 });
-  }
-  if (alligatorEnabled) {
-    indicatorsList.push({ indicator: 'ALLIGATOR', period: 13, condition: 'BULLISH' });
-  }
-  if (keltnerEnabled) {
-    indicatorsList.push({ indicator: 'KELTNER', period: 20, condition: 'BETWEEN', min_val: 0, max_val: 999999 });
-  }
-  if (vortexEnabled) {
-    indicatorsList.push({ indicator: 'VORTEX', period: 14, condition: 'BULLISH' });
-  }
+  // Dynamic Multi-Instance Indicator Stack Compilation
+  const indicatorsList = window.compileIndicatorFilters ? window.compileIndicatorFilters() : [];
 
   const confluenceEnabled = document.getElementById('strat-confluence-toggle')?.checked || false;
   const confluenceMin = parseInt(document.getElementById('strat-confluence-min')?.value || '2', 10);

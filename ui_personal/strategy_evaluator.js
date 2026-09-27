@@ -1014,13 +1014,20 @@
       const findInd = (name) => inds.find(i => (i.indicator || '').toUpperCase() === name);
       const findIndMulti = (names) => inds.find(i => names.includes((i.indicator || '').toUpperCase()));
 
-      // Bollinger Bands (supports dual-band mode)
-      const bbInd = findInd('BOLLINGER');
-      const bbP1 = bbInd?.params?.period_1 || bbInd?.params?.period || 20;
-      const bbP2 = bbInd?.params?.period_2 || bbP1;
-      const bbMult = bbInd?.params?.deviation || 2.0;
-      const bb1 = bbInd ? this.computeBollinger(candles, bbP1, bbMult) : null;
-      const bb2 = (bbInd && bbP2 !== bbP1) ? this.computeBollinger(candles, bbP2, bbMult) : null;
+      // Multi-Instance Bollinger Bands (supports arbitrary instances with independent deviations)
+      const bbInstances = inds.filter(ind => (ind.indicator || '').toUpperCase() === 'BOLLINGER');
+      const bbList = bbInstances.length > 0 ? bbInstances.map(b => ({
+        bands: this.computeBollinger(candles, b.params?.period_1 || b.params?.period || 20, b.params?.deviation || 2.0)
+      })) : [];
+
+      // Multi-Instance Moving Averages (EMA / SMA)
+      const maInstances = inds.filter(ind => ['EMA', 'SMA', 'MOVING_AVERAGE'].includes((ind.indicator || '').toUpperCase()));
+      const maList = maInstances.map(m => {
+        const isEma = (m.params?.ma_type || 'EMA').toUpperCase() === 'EMA';
+        return {
+          vals: isEma ? this.computeEMA(candles, m.params?.period || 20) : this.computeSMA(candles, m.params?.period || 20)
+        };
+      });
 
       // RSI
       const rsiInd = findInd('RSI');
@@ -1192,18 +1199,26 @@
           let factorsMet = 0;
           let factorsTotal = 0;
 
-          // ── Bollinger Band (dual-band support) ──
-          if (bb1 && bb1.upper[i] !== null) {
-            factorsTotal++;
-            if (bb2 && bb2.upper[i] !== null) {
-              // Dual-band mode: price must protrude BOTH bands
-              if (isCall && c.low <= bb1.lower[i] && c.low <= bb2.lower[i]) factorsMet++;
-              else if (!isCall && c.high >= bb1.upper[i] && c.high >= bb2.upper[i]) factorsMet++;
-            } else {
-              // Single-band mode
-              if (isCall && c.low <= bb1.lower[i]) factorsMet++;
-              else if (!isCall && c.high >= bb1.upper[i]) factorsMet++;
-            }
+          // ── Multi-Instance Bollinger Bands ──
+          if (bbList.length > 0) {
+            bbList.forEach(bbObj => {
+              if (bbObj.bands && bbObj.bands.upper[i] !== null) {
+                factorsTotal++;
+                if (isCall && c.low <= bbObj.bands.lower[i]) factorsMet++;
+                else if (!isCall && c.high >= bbObj.bands.upper[i]) factorsMet++;
+              }
+            });
+          }
+
+          // ── Multi-Instance Moving Averages ──
+          if (maList.length > 0) {
+            maList.forEach(mObj => {
+              if (mObj.vals && mObj.vals[i] !== null) {
+                factorsTotal++;
+                if (isCall && c.close >= mObj.vals[i]) factorsMet++;
+                else if (!isCall && c.close <= mObj.vals[i]) factorsMet++;
+              }
+            });
           }
 
           // ── RSI ──
@@ -1503,167 +1518,207 @@
         passed: bodyRatio >= minBody
       });
 
-      // Rule: Bollinger Band
-      const bbInd = findInd('BOLLINGER');
-      if (bbInd) {
-        const bbP = bbInd.params?.period_1 || bbInd.params?.period || 20;
-        const dev = bbInd.params?.deviation || 2.0;
-        const bb = this.computeBollinger(candles, bbP, dev);
-        const u = bb.upper[n - 1], l = bb.lower[n - 1];
-        rules.push({
-          name: `Bollinger Band Contact (P${bbP} D${dev})`,
-          passed: (u !== null && last.high >= u) || (l !== null && last.low <= l)
-        });
-      }
+      // Multi-Instance Indicators Rule Evaluation
+      const typeCounts = {};
+      inds.forEach((ind) => {
+        const type = (ind.indicator || '').toUpperCase();
+        typeCounts[type] = (typeCounts[type] || 0) + 1;
+        const count = typeCounts[type];
+        const instNum = count > 1 ?  # : '';
+        const p = ind.params || {};
 
-      // Rule: RSI
-      const rsiInd = findInd('RSI');
-      if (rsiInd) {
-        const period = rsiInd.params?.period || 14;
-        const rsiVals = this.computeRSI(candles, period);
-        const currRsi = rsiVals[n - 1] || 50;
-        const ob = rsiInd.params?.overbought || 70;
-        const os = rsiInd.params?.oversold || 30;
-        rules.push({
-          name: `RSI Zone (${currRsi.toFixed(1)} / OB ${ob} - OS ${os})`,
-          passed: currRsi >= ob || currRsi <= os
-        });
-      }
-
-      // Rule: Stochastic
-      const stochInd = findInd('STOCHASTIC');
-      if (stochInd) {
-        const st = this.computeStochastic(candles, stochInd.params?.k_period || 14, stochInd.params?.d_period || 3);
-        const kVal = st.k[n - 1], dVal = st.d[n - 1];
-        const ob = stochInd.params?.overbought || 80;
-        const os = stochInd.params?.oversold || 20;
-        rules.push({
-          name: `Stochastic (K:${kVal?.toFixed(1)||'?'} D:${dVal?.toFixed(1)||'?'})`,
-          passed: kVal !== null && (kVal >= ob || kVal <= os)
-        });
-      }
-
-      // Rule: MACD
-      const macdInd = findInd('MACD');
-      if (macdInd) {
-        const m = this.computeMACD(candles, macdInd.params?.fast_period || 12, macdInd.params?.slow_period || 26, macdInd.params?.signal_period || 9);
-        const hist = m.histogram[n - 1];
-        const prevHist = m.histogram[n - 2];
-        rules.push({
-          name: `MACD Histogram (${hist?.toFixed(5)||'?'})`,
-          passed: hist !== null && prevHist !== null && ((hist > 0 && hist > prevHist) || (hist < 0 && hist < prevHist))
-        });
-      }
-
-      // Rule: Supertrend
-      const stInd = findIndMulti(['SUPERTREND', 'ST']);
-      if (stInd) {
-        const s = this.computeSupertrend(candles, stInd.params?.atr_period || 10, stInd.params?.multiplier || 3.0);
-        rules.push({
-          name: `Supertrend (${s.trend[n-1]||'?'})`,
-          passed: s.trend[n - 1] !== null
-        });
-      }
-
-      // Rule: Parabolic SAR
-      const sarInd = findIndMulti(['PARABOLIC_SAR', 'SAR', 'PSAR']);
-      if (sarInd) {
-        const s = this.computeParabolicSAR(candles, sarInd.params?.step || 0.02, sarInd.params?.max_step || 0.2);
-        const sarBelow = s.sar[n - 1] !== null && s.sar[n - 1] < last.close;
-        rules.push({
-          name: `SAR (${s.trend[n-1]||'?'} / ${s.sar[n-1]?.toFixed(5)||'?'})`,
-          passed: s.sar[n - 1] !== null
-        });
-      }
-
-      // Rule: Alligator
-      const alligInd = findInd('ALLIGATOR');
-      if (alligInd) {
-        const a = this.computeAlligator(candles, alligInd.params?.jaw_period || 13, alligInd.params?.teeth_period || 8, alligInd.params?.lips_period || 5);
-        const aligned = a.lips[n-1] !== null && a.teeth[n-1] !== null && a.jaw[n-1] !== null &&
-          ((a.lips[n-1] > a.teeth[n-1] && a.teeth[n-1] > a.jaw[n-1]) ||
-           (a.lips[n-1] < a.teeth[n-1] && a.teeth[n-1] < a.jaw[n-1]));
-        rules.push({
-          name: `Alligator Alignment`,
-          passed: aligned
-        });
-      }
-
-      // Rule: Keltner Channel
-      const keltInd = findIndMulti(['KELTNER', 'DONCHIAN_KELTNER']);
-      if (keltInd) {
-        const k = this.computeKeltner(candles, keltInd.params?.ema_period || 20, keltInd.params?.atr_period || 10, keltInd.params?.multiplier || 1.0);
-        rules.push({
-          name: `Keltner Channel Touch`,
-          passed: (k.upper[n-1] !== null && last.high >= k.upper[n-1]) || (k.lower[n-1] !== null && last.low <= k.lower[n-1])
-        });
-      }
-
-      // Rule: CCI
-      const cciInd = findInd('CCI');
-      if (cciInd) {
-        const c = this.computeCCI(candles, cciInd.params?.period || 20);
-        const val = c[n - 1];
-        const ob = cciInd.params?.overbought || 100;
-        const os = cciInd.params?.oversold || -100;
-        rules.push({
-          name: `CCI (${val?.toFixed(1)||'?'} / ±${ob})`,
-          passed: val !== null && (val >= ob || val <= os)
-        });
-      }
-
-      // Rule: DeMarker
-      const demInd = findIndMulti(['DEMARKER', 'DEM']);
-      if (demInd) {
-        const d = this.computeDeMarker(candles, demInd.params?.period || 14);
-        const val = d[n - 1];
-        rules.push({
-          name: `DeMarker (${val?.toFixed(3)||'?'})`,
-          passed: val !== null && (val >= 0.7 || val <= 0.3)
-        });
-      }
-
-      // Rule: Williams %R
-      const wrInd = findIndMulti(['WILLIAMS_R', 'WILLIAMS_%R', 'WR']);
-      if (wrInd) {
-        const w = this.computeWilliamsR(candles, wrInd.params?.period || 14);
-        const val = w[n - 1];
-        rules.push({
-          name: `Williams %R (${val?.toFixed(1)||'?'})`,
-          passed: val !== null && (val >= -20 || val <= -80)
-        });
-      }
-
-      // Rule: Awesome Oscillator
-      const aoInd = findIndMulti(['AWESOME_OSCILLATOR', 'AO']);
-      if (aoInd) {
-        const a = this.computeAO(candles, aoInd.params?.fast_period || 5, aoInd.params?.slow_period || 34);
-        const val = a[n - 1], prev = a[n - 2];
-        rules.push({
-          name: `AO (${val?.toFixed(5)||'?'})`,
-          passed: val !== null && prev !== null && ((val > 0 && val > prev) || (val < 0 && val < prev))
-        });
-      }
-
-      // Rule: Vortex
-      const vortexInd = findInd('VORTEX');
-      if (vortexInd) {
-        const v = this.computeVortex(candles, vortexInd.params?.period || 14);
-        rules.push({
-          name: `Vortex (+VI:${v.plusVI[n-1]?.toFixed(3)||'?'} -VI:${v.minusVI[n-1]?.toFixed(3)||'?'})`,
-          passed: v.plusVI[n-1] !== null && v.minusVI[n-1] !== null && v.plusVI[n-1] !== v.minusVI[n-1]
-        });
-      }
-
-      // Rule: Elder Ray
-      const elderInd = findIndMulti(['BULLS_POWER', 'BEARS_POWER', 'ELDER', 'ELDER_RAY']);
-      if (elderInd) {
-        const e = this.computeElderRay(candles, elderInd.params?.period || 13);
-        rules.push({
-          name: `Elder Ray (B+:${e.bulls[n-1]?.toFixed(5)||'?'} B-:${e.bears[n-1]?.toFixed(5)||'?'})`,
-          passed: e.bulls[n-1] !== null && e.bears[n-1] !== null
-        });
-      }
+        if (type === 'BOLLINGER') {
+          const bbP = p.period_1 || p.period || 20;
+          const dev = p.deviation || 2.0;
+          const bb = this.computeBollinger(candles, bbP, dev);
+          const u = bb.upper[n - 1], l = bb.lower[n - 1];
+          rules.push({
+            name: Bollinger (P D),
+            passed: (u !== null && last.high >= u) || (l !== null && last.low <= l)
+          });
+        } else if (type === 'RSI') {
+          const period = p.period || 14;
+          const rsiVals = this.computeRSI(candles, period);
+          const currRsi = rsiVals[n - 1] || 50;
+          const ob = p.overbought || 70;
+          const os = p.oversold || 30;
+          rules.push({
+            name: RSI ( / OB  - OS ),
+            passed: currRsi >= ob || currRsi <= os
+          });
+        } else if (['EMA', 'SMA', 'MOVING_AVERAGE'].includes(type)) {
+          const period = p.period || 20;
+          const isEma = (p.ma_type || 'EMA').toUpperCase() === 'EMA';
+          const maVals = isEma ? this.computeEMA(candles, period) : this.computeSMA(candles, period);
+          const currMa = maVals[n - 1];
+          rules.push({
+            name: ${isEma ? 'EMA' : 'SMA'} (P),
+            passed: currMa !== null && (last.close >= currMa || last.open <= currMa)
+          });
+        } else if (type === 'STOCHASTIC') {
+          const st = this.computeStochastic(candles, p.k_period || 14, p.d_period || 3);
+          const kVal = st.k[n - 1], dVal = st.d[n - 1];
+          const ob = p.overbought || 80, os = p.oversold || 20;
+          rules.push({
+            name: Stochastic (K: D:),
+            passed: kVal !== null && (kVal >= ob || kVal <= os)
+          });
+        } else if (type === 'MACD') {
+          const m = this.computeMACD(candles, p.fast_period || 12, p.slow_period || 26, p.signal_period || 9);
+          const hist = m.histogram[n - 1];
+          const prevHist = m.histogram[n - 2];
+          rules.push({
+            name: MACD (),
+            passed: hist !== null && prevHist !== null && ((hist > 0 && hist > prevHist) || (hist < 0 && hist < prevHist))
+          });
+        } else if (['SUPERTREND', 'ST'].includes(type)) {
+          const s = this.computeSupertrend(candles, p.atr_period || 10, p.multiplier || 3.0);
+          rules.push({
+            name: Supertrend (),
+            passed: s.trend[n - 1] !== null
+          });
+        } else if (['PARABOLIC_SAR', 'SAR', 'PSAR'].includes(type)) {
+          const s = this.computeParabolicSAR(candles, p.step || 0.02, p.max_step || 0.2);
+          rules.push({
+            name: SAR ( / ),
+            passed: s.sar[n - 1] !== null
+          });
+        } else if (type === 'ALLIGATOR') {
+          const a = this.computeAlligator(candles, p.jaws_period || p.jaw_period || 13, p.teeth_period || 8, p.lips_period || 5);
+          const aligned = a.lips[n-1] !== null && a.teeth[n-1] !== null && a.jaw[n-1] !== null &&
+            ((a.lips[n-1] > a.teeth[n-1] && a.teeth[n-1] > a.jaw[n-1]) ||
+             (a.lips[n-1] < a.teeth[n-1] && a.teeth[n-1] < a.jaw[n-1]));
+          rules.push({
+            name: Alligator Alignment,
+            passed: aligned
+          });
+        } else if (['KELTNER', 'DONCHIAN_KELTNER'].includes(type)) {
+          const k = this.computeKeltner(candles, p.ema_period || 20, p.atr_period || 10, p.multiplier || 1.0);
+          rules.push({
+            name: Keltner Channel Touch,
+            passed: (k.upper[n-1] !== null && last.high >= k.upper[n-1]) || (k.lower[n-1] !== null && last.low <= k.lower[n-1])
+          });
+        } else if (type === 'DONCHIAN') {
+          const d = this.computeDonchian(candles, p.period || 20);
+          rules.push({
+            name: Donchian Touch,
+            passed: (d.upper[n-1] !== null && last.high >= d.upper[n-1]) || (d.lower[n-1] !== null && last.low <= d.lower[n-1])
+          });
+        } else if (type === 'ENVELOPES') {
+          const env = this.computeEnvelopes(candles, p.period || 14, p.deviation || p.deviation_pct || 0.1);
+          rules.push({
+            name: Envelopes Touch,
+            passed: (env.upper[n-1] !== null && last.high >= env.upper[n-1]) || (env.lower[n-1] !== null && last.low <= env.lower[n-1])
+          });
+        } else if (type === 'ICHIMOKU') {
+          const ichi = this.computeIchimoku(candles, p.tenkan || p.tenkan_period || 9, p.kijun || p.kijun_period || 26, p.senkou_b || p.senkou_b_period || 52);
+          const aboveKumo = ichi.spanA[n-1] !== null && ichi.spanB[n-1] !== null &&
+            (last.close > Math.max(ichi.spanA[n-1], ichi.spanB[n-1]) || last.close < Math.min(ichi.spanA[n-1], ichi.spanB[n-1]));
+          rules.push({
+            name: Ichimoku Cloud Breakout,
+            passed: aboveKumo
+          });
+        } else if (type === 'FRACTAL') {
+          const frac = this.computeFractal(candles, p.period || 2);
+          const hasFrac = (n >= 3) && (frac.up[n-2] !== null || frac.down[n-2] !== null);
+          rules.push({
+            name: Fractal Pivot,
+            passed: hasFrac
+          });
+        } else if (['AWESOME_OSCILLATOR', 'AO'].includes(type)) {
+          const aoVals = this.computeAO(candles, p.fast_period || 5, p.slow_period || 34);
+          rules.push({
+            name: AO (),
+            passed: aoVals[n-1] !== null && aoVals[n-1] !== 0
+          });
+        } else if (['WILLIAMS_R', 'WR'].includes(type)) {
+          const wrVals = this.computeWilliamsR(candles, p.period || 14);
+          const curr = wrVals[n-1] || -50;
+          const ob = p.overbought || -20, os = p.oversold || -80;
+          rules.push({
+            name: Williams %R (),
+            passed: curr >= ob || curr <= os
+          });
+        } else if (type === 'CCI') {
+          const cciVals = this.computeCCI(candles, p.period || 20);
+          const curr = cciVals[n-1] || 0;
+          const lvl = p.level || p.overbought || 100;
+          rules.push({
+            name: CCI (),
+            passed: Math.abs(curr) >= lvl
+          });
+        } else if (['DEMARKER', 'DEM'].includes(type)) {
+          const demVals = this.computeDeMarker(candles, p.period || 14);
+          const curr = demVals[n-1] || 0.5;
+          rules.push({
+            name: DeMarker (),
+            passed: curr >= 0.7 || curr <= 0.3
+          });
+        } else if (['BULLS_POWER', 'BEARS_POWER', 'ELDER', 'ELDER_RAY'].includes(type)) {
+          const el = this.computeElderRay(candles, p.period || 13);
+          rules.push({
+            name: Elder Ray,
+            passed: el.bullPower[n-1] !== null && (el.bullPower[n-1] > 0 || el.bearPower[n-1] < 0)
+          });
+        } else if (type === 'ADX') {
+          const adx = this.computeADX(candles, p.period || 14);
+          const thresh = p.min_adx || 25;
+          rules.push({
+            name: ADX ( >= ),
+            passed: adx.adx[n-1] !== null && adx.adx[n-1] >= thresh
+          });
+        } else if (type === 'AROON') {
+          const ar = this.computeAroon(candles, p.period || 14);
+          rules.push({
+            name: Aroon Trend,
+            passed: ar.up[n-1] !== null && Math.abs(ar.up[n-1] - ar.down[n-1]) >= 40
+          });
+        } else if (type === 'ATR') {
+          const atr = this.computeATR(candles, p.period || 14);
+          rules.push({
+            name: ATR (),
+            passed: atr[n-1] !== null && atr[n-1] > 0
+          });
+        } else if (type === 'MOMENTUM') {
+          const mom = this.computeMomentum(candles, p.period || 10);
+          rules.push({
+            name: Momentum (),
+            passed: mom[n-1] !== null && mom[n-1] !== 0
+          });
+        } else if (type === 'ROC') {
+          const roc = this.computeROC(candles, p.period || 12);
+          rules.push({
+            name: ROC (),
+            passed: roc[n-1] !== null && roc[n-1] !== 0
+          });
+        } else if (type === 'VORTEX') {
+          const vx = this.computeVortex(candles, p.period || 14);
+          rules.push({
+            name: Vortex Cross,
+            passed: vx.plusVI[n-1] !== null && vx.minusVI[n-1] !== null && vx.plusVI[n-1] !== vx.minusVI[n-1]
+          });
+        } else if (['SCHAFF', 'STC', 'SCHAFF_TREND_CYCLE'].includes(type)) {
+          const stc = this.computeSTC(candles, p.fast_period || 23, p.slow_period || 50, p.cycle_period || 10);
+          const curr = stc[n-1] || 50;
+          rules.push({
+            name: STC (),
+            passed: curr >= 75 || curr <= 25
+          });
+        } else if (['VOLUME_OSCILLATOR', 'VO'].includes(type)) {
+          const vo = this.computeVolumeOscillator(candles, p.short_period || 5, p.long_period || 10);
+          rules.push({
+            name: Volume Osc (),
+            passed: vo[n-1] !== null && vo[n-1] > 0
+          });
+        } else if (['ZIGZAG', 'ZIG_ZAG'].includes(type)) {
+          const zz = this.computeZigZag(candles, p.depth || 12, p.deviation || 5, p.backstep || 3);
+          const hasRecentPivot = zz && zz.pivots.some(pv => pv.index >= n - 4);
+          rules.push({
+            name: ZigZag Swing Pivot,
+            passed: hasRecentPivot
+          });
+        }
+      });
 
       // Compute score
       const passedCount = rules.filter(r => r.passed).length;

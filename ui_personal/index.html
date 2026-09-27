@@ -108,15 +108,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="personal-status-card">
-          <div class="personal-status-title">
-            <span>🛡️</span>
-            <span>Personal Edition</span>
-          </div>
-          <div class="personal-status-desc">
-            All OTC pairs disabled. Real-time market data feed with single-active trade sequential locking.
-          </div>
-        </div>
       </div>
     </aside>
 
@@ -132,7 +123,7 @@
         <div class="view-header">
           <div class="view-title-group">
             <h2>Live Markets Monitor</h2>
-            <p>Real-time market quotes and broker payout rates for all currency pairs (Zero OTC)</p>
+            <p>Real-time market quotes and broker payout rates for all currency pairs</p>
           </div>
           <button class="btn-secondary" onclick="refreshMarketRates()">
             🔄 Refresh Rates
@@ -253,6 +244,7 @@
 
             <!-- Canvas Container (Fills 100% Remaining Height) -->
             <div class="chart-station-container" style="flex: 1; height: 100%; position: relative;">
+              <div id="live-chart-indicator-pills" class="chart-active-indicators-bar"></div>
               <canvas id="interactiveChartCanvas" class="chart-canvas"></canvas>
             </div>
           </div>
@@ -383,6 +375,7 @@
 
             <!-- Hardware Canvas Container (Spacious Full Width) -->
             <div style="flex: 1; min-height: 380px; position: relative; background: #04060a; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
+              <div id="strat-chart-indicator-pills" class="chart-active-indicators-bar"></div>
               <canvas id="strategyVisualizerCanvas" class="chart-canvas" style="width: 100%; height: 100%;"></canvas>
             </div>
 
@@ -598,584 +591,128 @@
                 </div>
               </div>
 
-                            <!-- Collapsible Section 3: Technical Indicators & Oscillators with Expandable Parameters -->
-              <div style="background: var(--bg-surface); padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px;">
-                <div style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                  <span>📊 TECHNICAL INDICATORS & OSCILLATORS (27 ALGORITHMS)</span>
-                  <span style="font-size: 10px; color: var(--text-dim); font-weight: 400;">Click any indicator to configure parameters</span>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11.5px;">
-                <div style="font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; margin-bottom: 4px; grid-column: span 2; border-bottom: 1px solid var(--border); padding-bottom: 3px;">
-                  🌐 Trend & Volatility Overlays (Price-Chart Bound)
-                </div>
-                  <div id="sec-ind-bollinger" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-bollinger-filter" onchange="toggleIndicatorDrawer('bollinger', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Bollinger Bands Contact / Protrusion</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Bollinger Bands Hyperparameters -->
-                  <div id="ind-params-bollinger" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🎯 Bollinger Bands Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period 1 (Fast)</label>
-                        <input type="number" id="ind-bb-p1" class="form-input" value="10" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period 2 (Slow)</label>
-                        <input type="number" id="ind-bb-p2" class="form-input" value="13" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Std Deviation</label>
-                        <input type="number" id="ind-bb-dev" class="form-input" value="2.0" min="1.0" max="3.5" step="0.1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Min Protrusion %</label>
-                        <input type="number" id="ind-bb-protrusion" class="form-input" value="20" min="5" max="80" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
+                            <!-- Dynamic Multi-Instance Indicator Stack & Confluence Engine -->
+              <div class="indicator-stack-section">
+                <div class="indicator-stack-header">
+                  <div class="stack-title-group">
+                    <span style="font-size: 13px;">📊</span>
+                    <div>
+                      <div class="stack-title">DYNAMIC INDICATOR STACK (27 ALGORITHMS)</div>
+                      <div style="font-size: 9.5px; color: var(--text-dim);">Add, stack & customize multiple instances of any indicator</div>
                     </div>
                   </div>
-                  <div id="sec-ind-supertrend" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-supertrend-filter" onchange="toggleIndicatorDrawer('supertrend', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Supertrend Dynamic Follower</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Supertrend ATR Follower Hyperparameters -->
-                  <div id="ind-params-supertrend" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🚀 Supertrend ATR Follower Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">ATR Period</label>
-                        <input type="number" id="ind-st-period" class="form-input" value="10" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                  <div class="stack-actions">
+                    <span id="indicator-stack-badge" class="badge" style="background: rgba(0,240,255,0.12); color: var(--cyan-bright); padding: 3px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); border: 1px solid rgba(0,240,255,0.25);">0 Active</span>
+                    <button type="button" class="btn-primary" id="btn-add-indicator-dropdown" onclick="toggleIndicatorCatalogDropdown(event)" style="font-size: 11px; padding: 4px 10px; display: flex; align-items: center; gap: 5px;">
+                      <span>+ Add Indicator</span> <span style="font-size: 9px;">▼</span>
+                    </button>
+                    <!-- 27 Indicators Dropdown Catalog -->
+                    <div id="indicator-catalog-dropdown" class="dropdown-menu-catalog">
+                      <div class="dropdown-catalog-group">🌐 Trend & Volatility Overlays</div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('BOLLINGER')">
+                        <span>🎯 Bollinger Bands</span><span class="item-sub">Cloud / Channels</span>
                       </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">ATR Multiplier</label>
-                        <input type="number" id="ind-st-mult" class="form-input" value="3.0" min="1.0" max="6.0" step="0.1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('EMA')">
+                        <span>📈 Moving Average</span><span class="item-sub">SMA / EMA Ribbon</span>
                       </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-sar" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-sar-filter" onchange="toggleIndicatorDrawer('sar', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Parabolic SAR Acceleration</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Parabolic SAR Hyperparameters -->
-                  <div id="ind-params-sar" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">⚡ Parabolic SAR Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Acceleration Step</label>
-                        <input type="number" id="ind-sar-step" class="form-input" value="0.02" min="0.005" max="0.1" step="0.005" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ALLIGATOR')">
+                        <span>🐊 Alligator</span><span class="item-sub">Bill Williams</span>
                       </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Max Acceleration</label>
-                        <input type="number" id="ind-sar-max" class="form-input" value="0.2" min="0.05" max="0.5" step="0.01" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ENVELOPES')">
+                        <span>✉️ Envelopes</span><span class="item-sub">Deviation Band</span>
                       </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-ma" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-ma-filter" onchange="toggleIndicatorDrawer('ma', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Moving Average (SMA/EMA/WMA)</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Moving Average Hyperparameters -->
-                  <div id="ind-params-ma" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">📈 Moving Average Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('FRACTAL')">
+                        <span>🔺 Fractal</span><span class="item-sub">High/Low Arrows</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ICHIMOKU')">
+                        <span>☁️ Ichimoku Cloud</span><span class="item-sub">Kumo Cloud</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('KELTNER')">
+                        <span>🛡️ Keltner Channel</span><span class="item-sub">ATR Volatility</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('DONCHIAN')">
+                        <span>📦 Donchian Channel</span><span class="item-sub">Breakout Band</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('SUPERTREND')">
+                        <span>🚀 Supertrend</span><span class="item-sub">ATR Trend Follow</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('PSAR')">
+                        <span>⚡ Parabolic SAR</span><span class="item-sub">Acceleration Dots</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ZIGZAG')">
+                        <span>⚡ Zig Zag</span><span class="item-sub">Swing Peaks/Valleys</span>
+                      </div>
 
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-ma-period" class="form-input" value="14" min="2" max="200" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-group">🌊 Oscillators & Momentum (Sub-Panels)</div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('RSI')">
+                        <span>⚡ Relative Strength Index (RSI)</span><span class="item-sub">Overbought/Oversold</span>
                       </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Type</label>
-                        <select id="ind-ma-type" class="form-input" style="padding: 3px 6px; font-size: 11px;" onchange="recalculateStrategyVisualizer()">
-                          <option value="SMA" selected>SMA (Simple)</option>
-                          <option value="EMA">EMA (Exponential)</option>
-                          <option value="WMA">WMA (Weighted)</option>
-                        </select>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('STOCHASTIC')">
+                        <span>🎯 Stochastic Oscillator</span><span class="item-sub">%K / %D Cross</span>
                       </div>
-        
-                    </div>
-                  </div>
-                  <div id="sec-ind-keltner" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-keltner-filter" onchange="toggleIndicatorDrawer('keltner', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Keltner Channel Reversion</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Keltner Channel Hyperparameters -->
-                  <div id="ind-params-keltner" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">📏 Keltner Channel Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">EMA Period</label>
-                        <input type="number" id="ind-keltner-period" class="form-input" value="20" min="5" max="100" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('MACD')">
+                        <span>📊 MACD</span><span class="item-sub">12, 26, 9 Histogram</span>
                       </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">ATR Period</label>
-                        <input type="number" id="ind-keltner-atr" class="form-input" value="10" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ADX')">
+                        <span>🏹 ADX / DMI</span><span class="item-sub">Trend Strength</span>
                       </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Multiplier</label>
-                        <input type="number" id="ind-keltner-mult" class="form-input" value="1.0" min="0.5" max="4.0" step="0.1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('AROON')">
+                        <span>📐 Aroon</span><span class="item-sub">Up / Down Oscillator</span>
                       </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-donchian" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-donchian-filter" onchange="toggleIndicatorDrawer('donchian', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Donchian Channel Breakout</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Donchian Channel Hyperparameters -->
-                  <div id="ind-params-donchian" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🧱 Donchian Channel Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-donchian-period" class="form-input" value="20" min="5" max="100" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('AO')">
+                        <span>🔥 Awesome Oscillator (AO)</span><span class="item-sub">Median Momentum</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('BULLS_BEARS')">
+                        <span>🐂 Bulls & Bears Power</span><span class="item-sub">Elder Ray</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('CCI')">
+                        <span>🧭 Commodity Channel Index (CCI)</span><span class="item-sub">Mean Deviation</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('DEMARKER')">
+                        <span>🔬 DeMarker</span><span class="item-sub">Exhaustion Scalp</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ATR')">
+                        <span>🌊 Average True Range (ATR)</span><span class="item-sub">Volatility Range</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('MOMENTUM')">
+                        <span>💨 Momentum Indicator</span><span class="item-sub">Velocity Wave</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('ROC')">
+                        <span>🎢 Rate of Change (ROC)</span><span class="item-sub">Speed Percentage</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('WILLIAMS_R')">
+                        <span>🎯 Williams %R</span><span class="item-sub">Sniper Boundary</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('VORTEX')">
+                        <span>🌀 Vortex Indicator</span><span class="item-sub">+VI / -VI Flow</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('STC')">
+                        <span>🎛️ Schaff Trend Cycle</span><span class="item-sub">Cycle Oscillator</span>
+                      </div>
+                      <div class="dropdown-catalog-item" onclick="addIndicatorInstance('VOLUME_OSC')">
+                        <span>🔊 Volume Oscillator</span><span class="item-sub">Volume Moving Avg</span>
                       </div>
                     </div>
+
+                    <!-- Quick Preset Buttons -->
+                    <button type="button" class="btn-secondary" onclick="addDualBollingerPreset()" title="Add Dual Bollinger Setup (Period 10 Dev 2.0 & Period 13 Dev 2.5)" style="font-size: 10px; padding: 4px 7px;">
+                      + Dual BB
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="addEmaRibbonPreset()" title="Add Triple EMA Ribbon (20, 50, 200)" style="font-size: 10px; padding: 4px 7px;">
+                      + EMA Ribbon
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="clearAllIndicatorInstances()" title="Clear all indicator cards" style="font-size: 10px; padding: 4px 7px; color: var(--rose);">
+                      🗑️
+                    </button>
                   </div>
-                  <div id="sec-ind-envelopes" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-envelopes-filter" onchange="toggleIndicatorDrawer('envelopes', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Moving Average Envelopes</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Envelopes Hyperparameters -->
-                  <div id="ind-params-envelopes" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">✉️ Envelopes Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-env-period" class="form-input" value="14" min="5" max="100" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Deviation %</label>
-                        <input type="number" id="ind-env-dev" class="form-input" value="0.1" min="0.01" max="2.0" step="0.01" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-alligator" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-alligator-filter" onchange="toggleIndicatorDrawer('alligator', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Alligator 3-Line Alignment</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Bill Williams Alligator Hyperparameters -->
-                  <div id="ind-params-alligator" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🐊 Bill Williams Alligator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Jaw Period</label>
-                        <input type="number" id="ind-allig-jaw" class="form-input" value="13" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Teeth Period</label>
-                        <input type="number" id="ind-allig-teeth" class="form-input" value="8" min="3" max="30" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Lips Period</label>
-                        <input type="number" id="ind-allig-lips" class="form-input" value="5" min="2" max="20" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-ichimoku" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-ichimoku-filter" onchange="toggleIndicatorDrawer('ichimoku', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Ichimoku Cloud Equilibrium</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Ichimoku Kinko Hyo Hyperparameters -->
-                  <div id="ind-params-ichimoku" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">☁️ Ichimoku Kinko Hyo Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Tenkan-sen (Conversion)</label>
-                        <input type="number" id="ind-ichi-tenkan" class="form-input" value="9" min="3" max="30" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Kijun-sen (Base)</label>
-                        <input type="number" id="ind-ichi-kijun" class="form-input" value="26" min="10" max="60" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Senkou Span B</label>
-                        <input type="number" id="ind-ichi-senkou" class="form-input" value="52" min="20" max="120" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-fractal" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-fractal-filter" onchange="toggleIndicatorDrawer('fractal', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Fractal Swing Pivots</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Bill Williams Fractal Hyperparameters -->
-                  <div id="ind-params-fractal" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🔺 Bill Williams Fractal Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Bars Per Side</label>
-                        <input type="number" id="ind-frac-period" class="form-input" value="2" min="1" max="5" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-zigzag" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-zigzag-filter" onchange="toggleIndicatorDrawer('zigzag', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Zig Zag Swing Reversal</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Zig Zag Filter Hyperparameters -->
-                  <div id="ind-params-zigzag" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">⚡ Zig Zag Filter Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Depth</label>
-                        <input type="number" id="ind-zz-depth" class="form-input" value="12" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Deviation %</label>
-                        <input type="number" id="ind-zz-dev" class="form-input" value="5" min="1" max="20" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Backstep</label>
-                        <input type="number" id="ind-zz-backstep" class="form-input" value="3" min="1" max="15" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                <div style="font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; margin-bottom: 4px; grid-column: span 2; border-bottom: 1px solid var(--border); padding-bottom: 3px;">
-                  📈 Momentum & Oscillators (Sub-Panel & Exhaustion)
                 </div>
-                  <div id="sec-ind-rsi" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-rsi-filter" onchange="toggleIndicatorDrawer('rsi', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">RSI Overbought / Oversold</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: RSI (Relative Strength Index) Hyperparameters -->
-                  <div id="ind-params-rsi" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">📊 RSI (Relative Strength Index) Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">RSI Period</label>
-                        <input type="number" id="ind-rsi-period" class="form-input" value="14" min="2" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Overbought (Sell PUT)</label>
-                        <input type="number" id="ind-rsi-ob" class="form-input" value="70" min="50" max="95" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Oversold (Buy CALL)</label>
-                        <input type="number" id="ind-rsi-os" class="form-input" value="30" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-stoch" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-stochastic-filter" onchange="toggleIndicatorDrawer('stoch', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Stochastic Oscillator Dip</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Stochastic Oscillator Hyperparameters -->
-                  <div id="ind-params-stoch" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">📈 Stochastic Oscillator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">%K Period</label>
-                        <input type="number" id="ind-stoch-k" class="form-input" value="14" min="2" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">%D Period</label>
-                        <input type="number" id="ind-stoch-d" class="form-input" value="3" min="1" max="20" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Overbought Level</label>
-                        <input type="number" id="ind-stoch-ob" class="form-input" value="80" min="60" max="95" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Oversold Level</label>
-                        <input type="number" id="ind-stoch-os" class="form-input" value="20" min="5" max="40" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-macd" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-macd-filter" onchange="toggleIndicatorDrawer('macd', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">MACD Momentum Expansion</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: MACD Momentum Hyperparameters -->
-                  <div id="ind-params-macd" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">📊 MACD Momentum Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Fast EMA</label>
-                        <input type="number" id="ind-macd-fast" class="form-input" value="12" min="2" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Slow EMA</label>
-                        <input type="number" id="ind-macd-slow" class="form-input" value="26" min="5" max="100" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Signal Line</label>
-                        <input type="number" id="ind-macd-signal" class="form-input" value="9" min="1" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-ao" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-ao-filter" onchange="toggleIndicatorDrawer('ao', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Awesome Oscillator (AO)</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Awesome Oscillator Hyperparameters -->
-                  <div id="ind-params-ao" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">✨ Awesome Oscillator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Fast SMA</label>
-                        <input type="number" id="ind-ao-fast" class="form-input" value="5" min="2" max="20" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Slow SMA</label>
-                        <input type="number" id="ind-ao-slow" class="form-input" value="34" min="10" max="100" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-williams" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-williams-filter" onchange="toggleIndicatorDrawer('williams', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Williams %R Extreme</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Williams %R Hyperparameters -->
-                  <div id="ind-params-williams" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🎯 Williams %R Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-wr-period" class="form-input" value="14" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Overbought Level</label>
-                        <input type="number" id="ind-wr-ob" class="form-input" value="-20" min="-40" max="0" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Oversold Level</label>
-                        <input type="number" id="ind-wr-os" class="form-input" value="-80" min="-100" max="-60" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-cci" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-cci-filter" onchange="toggleIndicatorDrawer('cci', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">CCI Trend Confirmation</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Commodity Channel Index (CCI) Hyperparameters -->
-                  <div id="ind-params-cci" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🔄 Commodity Channel Index (CCI) Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-cci-period" class="form-input" value="20" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Overbought (+)</label>
-                        <input type="number" id="ind-cci-ob" class="form-input" value="100" min="50" max="300" step="10" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Oversold (-)</label>
-                        <input type="number" id="ind-cci-os" class="form-input" value="-100" min="-300" max="-50" step="10" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-demarker" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-demarker-filter" onchange="toggleIndicatorDrawer('demarker', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">DeMarker Pressure Meter</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: DeMarker Hyperparameters -->
-                  <div id="ind-params-demarker" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🧭 DeMarker Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-dem-period" class="form-input" value="14" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Overbought Level</label>
-                        <input type="number" id="ind-dem-ob" class="form-input" value="0.7" min="0.55" max="0.95" step="0.05" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Oversold Level</label>
-                        <input type="number" id="ind-dem-os" class="form-input" value="0.3" min="0.05" max="0.45" step="0.05" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-elder" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-elder-filter" onchange="toggleIndicatorDrawer('elder', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Bulls & Bears Power (Elder Ray)</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Elder Ray Bulls & Bears Power Hyperparameters -->
-                  <div id="ind-params-elder" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🐂 Elder Ray Bulls & Bears Power Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">EMA Period</label>
-                        <input type="number" id="ind-elder-period" class="form-input" value="13" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-adx" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-adx-filter" onchange="toggleIndicatorDrawer('adx', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">ADX Trend Strength Filter</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Average Directional Index (ADX) Hyperparameters -->
-                  <div id="ind-params-adx" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">📶 Average Directional Index (ADX) Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">ADX Period</label>
-                        <input type="number" id="ind-adx-period" class="form-input" value="14" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-aroon" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-aroon-filter" onchange="toggleIndicatorDrawer('aroon', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Aroon Trend / Oscillator</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Aroon Oscillator Hyperparameters -->
-                  <div id="ind-params-aroon" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🧭 Aroon Oscillator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-aroon-period" class="form-input" value="14" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-atr" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-atr-filter" onchange="toggleIndicatorDrawer('atr', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">ATR Volatility Expansion Filter</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Average True Range (ATR) Hyperparameters -->
-                  <div id="ind-params-atr" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🌊 Average True Range (ATR) Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">ATR Period</label>
-                        <input type="number" id="ind-atr-period" class="form-input" value="14" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-momentum" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-momentum-filter" onchange="toggleIndicatorDrawer('momentum', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Momentum Directional Flow</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Momentum Indicator Hyperparameters -->
-                  <div id="ind-params-momentum" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">💨 Momentum Indicator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-mom-period" class="form-input" value="10" min="2" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-roc" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-roc-filter" onchange="toggleIndicatorDrawer('roc', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Rate of Change (ROC)</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Rate of Change Hyperparameters -->
-                  <div id="ind-params-roc" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🎢 Rate of Change Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-roc-period" class="form-input" value="9" min="2" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-vortex" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-vortex-filter" onchange="toggleIndicatorDrawer('vortex', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Vortex Flow (+VI > -VI)</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Vortex Indicator Hyperparameters -->
-                  <div id="ind-params-vortex" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🌀 Vortex Indicator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Period</label>
-                        <input type="number" id="ind-vortex-period" class="form-input" value="14" min="3" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-stc" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-stc-filter" onchange="toggleIndicatorDrawer('stc', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Schaff Trend Cycle (STC)</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Schaff Trend Cycle Hyperparameters -->
-                  <div id="ind-params-stc" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🎛️ Schaff Trend Cycle Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Fast Period</label>
-                        <input type="number" id="ind-stc-fast" class="form-input" value="23" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Slow Period</label>
-                        <input type="number" id="ind-stc-slow" class="form-input" value="50" min="20" max="100" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Cycle Period</label>
-                        <input type="number" id="ind-stc-cycle" class="form-input" value="10" min="3" max="30" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
-                  </div>
-                  <div id="sec-ind-volosc" style="border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; transition: all 0.3s;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                      <input type="checkbox" id="strat-volosc-filter" onchange="toggleIndicatorDrawer('volosc', this.checked); recalculateStrategyVisualizer();">
-                      <span style="font-weight: 700;">Volume Oscillator Confirmation</span>
-                    </label>
-                  </div>
-                  <!-- Drawer: Volume Oscillator Hyperparameters -->
-                  <div id="ind-params-volosc" style="display: none; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 6px; padding: 10px; grid-column: span 2;">
-                    <div style="font-size: 10.5px; font-weight: 700; color: var(--cyan-bright); margin-bottom: 6px;">🔊 Volume Oscillator Hyperparameters</div>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Short Period</label>
-                        <input type="number" id="ind-vo-short" class="form-input" value="5" min="2" max="20" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                      <div>
-                        <label style="font-size: 10px; color: var(--text-dim); display: block;">Long Period</label>
-                        <input type="number" id="ind-vo-long" class="form-input" value="10" min="5" max="50" step="1" style="padding: 3px 6px; font-size: 11px;" oninput="recalculateStrategyVisualizer()">
-                      </div>
-                    </div>
+
+                <!-- Dynamic Indicator Cards Injected Here -->
+                <div id="dynamic-indicator-stack" class="indicator-cards-list">
+                  <div id="indicator-stack-empty-placeholder" style="text-align: center; padding: 22px 14px; color: var(--text-dim); border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px; background: rgba(0,0,0,0.15);">
+                    <div style="font-size: 20px; margin-bottom: 6px;">🎯</div>
+                    <div style="font-size: 11.5px; font-weight: 700; color: var(--text-main); margin-bottom: 3px;">No Indicators In Stack</div>
+                    <div style="font-size: 10px;">Click <b style="color: var(--cyan-bright);">+ Add Indicator</b> above or choose <b style="color: var(--cyan-bright);">+ Dual BB</b> to add multi-cloud Bollinger Bands.</div>
                   </div>
                 </div>
               </div>
@@ -2158,6 +1695,7 @@
 
   <!-- Scripts -->
   <script src="strategy_evaluator.js"></script>
+  <script src="indicator_stack.js"></script>
   <script src="chart_widget.js"></script>
   <script src="app.js"></script>
 </body>

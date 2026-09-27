@@ -1,6 +1,6 @@
 # TradePulse Personal Edition — Institutional Live Forex Workstation
 
-> **Dedicated Personal Edition** engineered exclusively for authentic **Real Market Forex Currencies (Zero OTC)** with embedded Quotex terminal docking, hardware-locked licensing, 1-to-1 personal Telegram signal broadcasting, and algorithmic mean-reversion & trend confluence strategies.
+> **Dedicated Personal Edition** engineered exclusively for authentic **Real Market Forex Currencies** with embedded Quotex terminal docking, hardware-locked licensing, 1-to-1 personal Telegram signal broadcasting, and dynamic multi-indicator confluence strategies.
 
 📖 **Detailed User & Trading Guide**: See [docs/PERSONAL_USER_GUIDE.md](file:///c:/Users/shanj/OneDrive/Desktop/Ai-telegrambot/docs/PERSONAL_USER_GUIDE.md) for full step-by-step setup, Telegram BotFather configuration, Quotex docking walkthrough, and strategy mechanics.
 
@@ -10,8 +10,7 @@
 
 | Feature | Specification |
 | :--- | :--- |
-| **Market Scope** | **100% Real Market Currencies Only** (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, EUR/GBP, etc.) |
-| **OTC Synthetic Pairs** | **Disabled (0% OTC)** — Eliminates synthetic broker price simulations |
+| **Market Scope** | **Real Market Currencies** (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, EUR/GBP, etc.) |
 | **Active Strategy** | **Dual Bollinger Band Protrusion Reversal (`DUAL_BOLLINGER_PROTRUSION_1M`)** |
 | **Terminal Integration** | **Embedded Native Quotex Terminal** docked directly inside the desktop window |
 | **Security & Activation** | **Single-PC HWID Hardware-Lock** + 1-Year Subscription License client |
@@ -85,18 +84,18 @@ The preloaded algorithmic engine is tuned specifically for 1-minute live Forex p
 ┌────────────────────────────────────────────────────────────────────────┐
 │  ⚡ TradePulse Personal  [🔑 License: Active] [🏛️ Quotex: Live] [🟢 START]│
 ├──────────────┬─────────────────────────────────────────────────────────┤
-│  📊 Markets  │  LIVE MARKETS MONITOR (27 Real Forex Pairs)            │
-│  📈 Chart    │  Live Interbank Rates · Broker Payouts · Zero OTC       │
+│  📊 Markets  │  LIVE MARKETS MONITOR (28 Real Forex Pairs)            │
+│  📈 Chart    │  Live Market Quotes · Broker Payout Rates               │
 │  ⚙️ Strategy │─────────────────────────────────────────────────────────│
 │  ✈️ Telegram │  LIVE CANDLESTICK STATION                               │
-│  📜 History  │  Hardware-Accelerated Canvas · EMA 20/50 · Bollinger    │
+│  📜 History  │  Hardware-Accelerated Canvas · EMA Ribbons · Bollinger  │
 │  🏛️ Broker   │─────────────────────────────────────────────────────────│
 │  🛡️ Risk     │  EMBEDDED QUOTEX TERMINAL                               │
 │              │  Native Browser Dock · Direct Account Login & Live PnL  │
 └──────────────┴─────────────────────────────────────────────────────────┘
 ```
 
-1. **📊 Live Markets Monitor**: Real-time ticker and broker payout board for all major, minor, and exotic interbank currency pairs.
+1. **📊 Live Markets Monitor**: Real-time ticker and broker payout board for all major, minor, and exotic currency pairs.
 2. **📈 Live Chart Station**: High-performance candlestick chart with Regular/Heikin-Ashi modes, EMA overlays, Bollinger Bands cloud, and multi-indicator technical analysis suite.
 3. **⚙️ Strategy Lab & Customizer**:
    - **Expandable Indicator Drawers**: Direct fine-tuning for Dual Bollinger Bands (fast/slow periods, deviation, protrusion %), RSI (period, OB/OS thresholds), Stochastic (%K, %D, levels), MACD (fast, slow, signal), Supertrend (ATR period, multiplier), and Parabolic SAR (acceleration step, max).

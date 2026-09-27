@@ -1,13 +1,13 @@
 """
 TradePulse Personal — Institutional Real Forex Workstation
 ==========================================================
-Dedicated personal edition engineered exclusively for all Real Market Forex Currencies (NO OTC).
+Dedicated personal edition engineered for Real Market Forex Currencies.
 Includes 1-to-1 personal Telegram signal broadcasting with a strict 5-user security limit.
 Compiled for distribution with no terminal, console, or code exposure.
 
 Key Specifications:
-- 100% Real Market Forex Currencies (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, EUR/GBP, etc.)
-- Zero OTC pairs (no synthetic broker simulation)
+- Real Market Forex Currencies (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, EUR/GBP, etc.)
+- Multi-source live quote and candle ingestion
 - Embedded Quotex Login & Live Trading Terminal
 - Bot scanner ONLY startable and functional when Quotex login is completed AND bot is started
 - Personal Telegram Bot with strict 5-user access limit
@@ -152,7 +152,7 @@ class TradePulsePersonalEngine:
         license_client.set_revocation_callback(self._on_license_revoked)
 
         
-        # High-frequency open-source real market feed (Interbank Forex)
+        # High-frequency open-source real market feed (Real Forex)
         self.real_market_feed = RealMarketFeed(
             candle_store=self.candle_store,
             on_tick=self._on_tick,
@@ -879,7 +879,7 @@ class PersonalWebViewApi:
             return False
 
     def sync_broker_position(self, x, y, w, h, visible):
-        """Aligns embedded native Quotex terminal over the UI broker station container."""
+        """Aligns embedded native Quotex terminal over the UI broker station container without obscuring header or sidebar."""
         is_vis = bool(visible and w > 20 and h > 20)
         self._broker_is_on_screen = is_vis
 
@@ -895,24 +895,75 @@ class PersonalWebViewApi:
             try:
                 scale = float(getattr(self._main_form, '_scale', 1.0))
                 if is_vis:
-                    self._broker_panel.Location = Drawing.Point(int(x * scale), int(y * scale))
-                    self._broker_panel.Size = Drawing.Size(int(w * scale), int(h * scale))
+                    # Enforce strict bounds: Never obscure sidebar (left 240px) or header (top 56px)
+                    min_x = int(240 * scale)
+                    min_y = int(56 * scale)
+                    calc_x = max(min_x, int(x * scale))
+                    calc_y = max(min_y, int(y * scale))
+                    client_w = self._main_form.ClientSize.Width
+                    client_h = self._main_form.ClientSize.Height
+                    calc_w = max(300, min(client_w - calc_x, int(w * scale)))
+                    calc_h = max(200, min(client_h - calc_y, int(h * scale)))
+
+                    self._broker_panel.Location = Drawing.Point(calc_x, calc_y)
+                    self._broker_panel.Size = Drawing.Size(calc_w, calc_h)
                     self._broker_panel.Visible = True
                     if self._broker_wv:
+                        self._broker_wv.Location = Drawing.Point(0, 0)
+                        self._broker_wv.Size = Drawing.Size(calc_w, calc_h)
                         self._broker_wv.Visible = True
+                        self._broker_wv.BringToFront()
                     self._broker_panel.BringToFront()
                 else:
                     self._broker_panel.Visible = False
                     self._broker_panel.SendToBack()
-                    self._broker_panel.Location = Drawing.Point(-2000, -2000)
-            except Exception:
-                pass
+                    self._broker_panel.Location = Drawing.Point(-3000, -3000)
+            except Exception as ex:
+                logger.debug(f"[BROKER SYNC NOTE] {ex}")
 
         self._run_on_ui(do_sync)
         return True
 
     def set_broker_visible(self, visible: bool):
-        return self.sync_broker_position(240, 52, 1000, 700, visible)
+        """Directly toggles visibility of the native embedded broker station, filling the available viewport."""
+        self._broker_is_on_screen = bool(visible)
+        if visible and (not self._broker_panel or not self._broker_wv):
+            self.init_embedded_broker()
+
+        if not self._broker_panel or not self._main_form:
+            return False
+
+        Drawing = self._Drawing or __import__('System.Drawing', fromlist=['*'])
+
+        def do_vis():
+            try:
+                scale = float(getattr(self._main_form, '_scale', 1.0))
+                init_x = int(240 * scale)
+                init_y = int(56 * scale)
+                client_w = self._main_form.ClientSize.Width
+                client_h = self._main_form.ClientSize.Height
+                init_w = max(400, client_w - init_x)
+                init_h = max(300, client_h - init_y)
+
+                if visible:
+                    self._broker_panel.Location = Drawing.Point(init_x, init_y)
+                    self._broker_panel.Size = Drawing.Size(init_w, init_h)
+                    self._broker_panel.Visible = True
+                    if self._broker_wv:
+                        self._broker_wv.Location = Drawing.Point(0, 0)
+                        self._broker_wv.Size = Drawing.Size(init_w, init_h)
+                        self._broker_wv.Visible = True
+                        self._broker_wv.BringToFront()
+                    self._broker_panel.BringToFront()
+                else:
+                    self._broker_panel.Visible = False
+                    self._broker_panel.SendToBack()
+                    self._broker_panel.Location = Drawing.Point(-3000, -3000)
+            except Exception as e:
+                logger.debug(f"[BROKER VIS NOTE] {e}")
+
+        self._run_on_ui(do_vis)
+        return True
 
     def refresh_broker(self):
         if self._broker_wv:

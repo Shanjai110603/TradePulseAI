@@ -1,6 +1,6 @@
 # TradePulse Personal Edition — Comprehensive User Manual & Setup Guide
 
-This documentation provides a complete, step-by-step guide for configuring, running, and trading with **TradePulse Personal Edition**, the dedicated, 100% Real Forex (Zero OTC) algorithmic trading workstation.
+This documentation provides a complete, step-by-step guide for configuring, running, and trading with **TradePulse Personal Edition**, the dedicated algorithmic trading workstation with dynamic multi-indicator confluence.
 
 ---
 
@@ -24,7 +24,7 @@ This documentation provides a complete, step-by-step guide for configuring, runn
 TradePulse Personal Edition is engineered specifically for solo proprietary traders demanding extreme precision on live binary options / high-frequency Forex markets.
 
 ### Key Distinctives:
-- **100% Real Interbank Forex Markets**: Only genuine interbank currency pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, EUR/GBP, etc.) are ingested. All broker-simulated OTC pairs are strictly disabled.
+- **Live Real-Market Forex Feeds**: Genuine currency pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, EUR/GBP, etc.) ingested with multi-source real-time pricing and dynamic fallback.
 - **Zero-Latency Mathematical Engine**: Pure Python indicator calculation computing intra-candle price action, dynamic Bollinger envelope breaches, ADX market regimes, and horizontal support/resistance levels in microseconds.
 - **Isolated State & Storage**: Reads and writes to `~/.tradepulse/tradepulse_personal.db`, `~/.tradepulse/strategies_personal.json`, and `~/.tradepulse/telegram_config_personal.json`.
 - **Gated Safety Pipeline**: The signal broadcast scanner cannot fire unless:
@@ -210,8 +210,8 @@ python main_personal.py --headless
 ### Q1: Why is the "Start Scanner" button disabled?
 > **Answer**: Ensure you have logged into Quotex inside the **🏛️ Quotex Broker** tab. The scanner is gated for safety until broker authentication is complete.
 
-### Q2: Why are there no OTC pairs visible?
-> **Answer**: TradePulse Personal is strictly designed for **100% Real Interbank Forex Markets**. OTC pairs are intentionally filtered out to eliminate simulated broker spreads.
+### Q2: How are currency pairs selected?
+> **Answer**: TradePulse Personal focuses on authentic live currency pairs with real-time multi-source data feeds for maximum signal accuracy.
 
 ### Q3: Telegram messages are not sending.
 > **Answer**:

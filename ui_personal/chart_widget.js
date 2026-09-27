@@ -358,9 +358,16 @@ class InteractiveChartEngine {
     this.render();
   }
 
-  // ==========================================================================
-  // Indicators Algorithms
-  // ==========================================================================
+  _hexToRgba(hex, alpha = 1) {
+    if (!hex || typeof hex !== 'string') return `rgba(0, 240, 255, ${alpha})`;
+    if (hex.startsWith('rgba') || hex.startsWith('rgb')) return hex;
+    let c = hex.replace('#', '');
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    const num = parseInt(c, 16);
+    if (isNaN(num)) return `rgba(0, 240, 255, ${alpha})`;
+    return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+  }
+
   _computeEMA(data, period) {
     if (!data || data.length === 0) return [];
     const k = 2 / (period + 1);
@@ -379,6 +386,20 @@ class InteractiveChartEngine {
       }
     }
     return ema;
+  }
+
+  _computeSMA(data, period) {
+    if (!data || data.length === 0) return [];
+    const sma = [];
+    for (let i = 0; i < data.length; i++) {
+      if (i < period - 1) {
+        sma.push(null);
+      } else {
+        const sum = data.slice(i - period + 1, i + 1).reduce((acc, c) => acc + c.close, 0);
+        sma.push(sum / period);
+      }
+    }
+    return sma;
   }
 
   _computeBollinger(data, period = 20, mult = 2.0) {
@@ -584,41 +605,53 @@ class InteractiveChartEngine {
       });
     }
 
-    // 3. Bollinger Bands Cloud
-    if (this.indicators.bb) {
-      const bbInd = this.strategyConfig?.filters?.indicators?.find(i => (i.indicator || '').toUpperCase() === 'BOLLINGER');
-      const bbP = bbInd?.params?.period_1 || bbInd?.params?.period || 20;
-      const bbDev = bbInd?.params?.deviation || 2.0;
-      const bbAll = this._computeBollinger(activeCandles, bbP, bbDev);
+    // 3. Multi-Cloud Bollinger Bands Engine (Multiple Clouds & Independent Deviations)
+    const bbInstances = (this.strategyConfig?.filters?.indicators || []).filter(i => 
+      (i.indicator || '').toUpperCase() === 'BOLLINGER' && i.visible_on_chart !== false
+    );
+    const activeBBs = bbInstances.length > 0 ? bbInstances : (this.indicators.bb ? [{
+      indicator: 'BOLLINGER',
+      params: { period: 20, deviation: 2.0, show_cloud: true, color: '#00f0ff' }
+    }] : []);
+
+    activeBBs.forEach((inst, bbIdx) => {
+      const p = inst.params?.period_1 || inst.params?.period || 20;
+      const dev = inst.params?.deviation || 2.0;
+      const color = inst.color || inst.params?.color || (bbIdx === 0 ? '#00f0ff' : (bbIdx === 1 ? '#ec4899' : '#f59e0b'));
+      const showCloud = inst.show_cloud !== false && inst.params?.show_cloud !== false;
+
+      const bbAll = this._computeBollinger(activeCandles, p, dev);
       const bbUpper = bbAll.upper.slice(startIdx, endIdx);
       const bbMiddle = bbAll.middle.slice(startIdx, endIdx);
       const bbLower = bbAll.lower.slice(startIdx, endIdx);
 
       // Cloud Area Fill
-      ctx.beginPath();
-      let started = false;
-      for (let i = 0; i < visibleBars.length; i++) {
-        if (bbUpper[i] !== null) {
-          const x = i * candleWidth + candleWidth / 2;
-          const y = getY(bbUpper[i]);
-          if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+      if (showCloud) {
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < visibleBars.length; i++) {
+          if (bbUpper[i] !== null) {
+            const x = i * candleWidth + candleWidth / 2;
+            const y = getY(bbUpper[i]);
+            if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+          }
         }
-      }
-      for (let i = visibleBars.length - 1; i >= 0; i--) {
-        if (bbLower[i] !== null) {
-          const x = i * candleWidth + candleWidth / 2;
-          const y = getY(bbLower[i]);
-          ctx.lineTo(x, y);
+        for (let i = visibleBars.length - 1; i >= 0; i--) {
+          if (bbLower[i] !== null) {
+            const x = i * candleWidth + candleWidth / 2;
+            const y = getY(bbLower[i]);
+            ctx.lineTo(x, y);
+          }
         }
+        ctx.closePath();
+        ctx.fillStyle = this._hexToRgba(color, 0.08);
+        ctx.fill();
       }
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(99, 102, 241, 0.08)';
-      ctx.fill();
 
-      // Outer & Middle Lines
-      ctx.lineWidth = 1.2;
-      ctx.strokeStyle = 'rgba(129, 140, 248, 0.55)';
-      ctx.setLineDash([3, 3]);
+      // Outer Envelope Lines
+      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = this._hexToRgba(color, 0.7);
+      ctx.setLineDash(bbIdx === 0 ? [3, 3] : [5, 2]);
       [bbUpper, bbLower].forEach(s => {
         ctx.beginPath();
         let st = false;
@@ -635,7 +668,7 @@ class InteractiveChartEngine {
 
       // Midline
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(99, 102, 241, 0.7)';
+      ctx.strokeStyle = this._hexToRgba(color, 0.85);
       ctx.beginPath();
       let midStarted = false;
       bbMiddle.forEach((v, i) => {
@@ -646,28 +679,51 @@ class InteractiveChartEngine {
         }
       });
       ctx.stroke();
-    }
+    });
 
-    // 4. EMA Ribbon Lines (EMA 20, EMA 50, EMA 200)
-    const drawEma = (period, color, width) => {
-      const emaAll = this._computeEMA(activeCandles, period).slice(startIdx, endIdx);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.beginPath();
-      let started = false;
-      emaAll.forEach((v, i) => {
-        if (v !== null) {
-          const x = i * candleWidth + candleWidth / 2;
-          const y = getY(v);
-          if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
-        }
+    // 4. Moving Average / EMA Ribbon Engine (Multi-Instance)
+    const maInstances = (this.strategyConfig?.filters?.indicators || []).filter(i => 
+      ['EMA', 'SMA', 'MOVING_AVERAGE'].includes((i.indicator || '').toUpperCase()) && i.visible_on_chart !== false
+    );
+    if (maInstances.length > 0) {
+      maInstances.forEach((inst, mIdx) => {
+        const p = inst.params?.period || 20;
+        const color = inst.color || inst.params?.color || (mIdx === 0 ? '#00f0ff' : (mIdx === 1 ? '#f59e0b' : '#a855f7'));
+        const isEma = (inst.params?.ma_type || 'EMA').toUpperCase() === 'EMA';
+        const vals = isEma ? this._computeEMA(activeCandles, p).slice(startIdx, endIdx) : this._computeSMA(activeCandles, p).slice(startIdx, endIdx);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        let started = false;
+        vals.forEach((v, i) => {
+          if (v !== null) {
+            const x = i * candleWidth + candleWidth / 2;
+            const y = getY(v);
+            if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+          }
+        });
+        ctx.stroke();
       });
-      ctx.stroke();
-    };
-
-    if (this.indicators.ema20) drawEma(20, '#00f0ff', 1.8);
-    if (this.indicators.ema50) drawEma(50, '#f59e0b', 1.6);
-    if (this.indicators.ema200) drawEma(200, '#a855f7', 1.8);
+    } else {
+      const drawEma = (period, color, width) => {
+        const emaAll = this._computeEMA(activeCandles, period).slice(startIdx, endIdx);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        let started = false;
+        emaAll.forEach((v, i) => {
+          if (v !== null) {
+            const x = i * candleWidth + candleWidth / 2;
+            const y = getY(v);
+            if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+          }
+        });
+        ctx.stroke();
+      };
+      if (this.indicators.ema20) drawEma(20, '#00f0ff', 1.8);
+      if (this.indicators.ema50) drawEma(50, '#f59e0b', 1.6);
+      if (this.indicators.ema200) drawEma(200, '#a855f7', 1.8);
+    }
 
     // 5. Supertrend Dynamic ATR Ribbon
     if (this.indicators.supertrend) {
