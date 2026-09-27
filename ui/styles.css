@@ -1651,8 +1651,8 @@ input:checked + .slider:before {
    -------------------------------------------------------------------------- */
 .strategy-lab-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 14px;
   flex: 1;
   min-height: 0;
   overflow: hidden;

@@ -201,14 +201,83 @@ class RealMarketFeed:
             logger.debug(f"[REAL MARKET FEED] Chart API error for {ticker}: {e}")
             return []
 
+    @staticmethod
+    def fetch_authentic_history_sync(symbol: str, count: int = 300) -> List[Candle]:
+        """
+        Synchronously fetches authentic 1-minute historical candles from Yahoo Finance v8 chart API.
+        Guarantees 100% genuine real-market candles with zero synthetic fallback.
+        """
+        ticker = REAL_MARKET_YAHOO_MAP.get(symbol)
+        if not ticker:
+            clean_sym = symbol.replace("/", "").replace(" ", "").upper()
+            ticker = f"{clean_sym}=X"
+
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+        }
+        try:
+            with httpx.Client(headers=headers, timeout=5.0) as client:
+                resp = client.get(url)
+                if resp.status_code != 200:
+                    return []
+                data = resp.json()
+                result = data.get("chart", {}).get("result")
+                if not result or len(result) == 0:
+                    return []
+
+                res = result[0]
+                timestamps = res.get("timestamp", [])
+                indicators = res.get("indicators", {}).get("quote", [{}])[0]
+                opens = indicators.get("open", [])
+                highs = indicators.get("high", [])
+                lows = indicators.get("low", [])
+                closes = indicators.get("close", [])
+                volumes = indicators.get("volume", [])
+
+                candles: List[Candle] = []
+                for i, ts in enumerate(timestamps):
+                    if i >= len(opens) or i >= len(closes):
+                        break
+                    o = opens[i]
+                    h = highs[i]
+                    l = lows[i]
+                    c = closes[i]
+                    v = volumes[i] if i < len(volumes) and volumes[i] is not None else 0.0
+                    if any(x is None for x in [o, h, l, c]):
+                        continue
+                    candles.append(Candle(
+                        timestamp=int(ts),
+                        open=float(o),
+                        high=float(h),
+                        low=float(l),
+                        close=float(c),
+                        volume=float(v)
+                    ))
+                if count and len(candles) > count:
+                    return candles[-count:]
+                return candles
+        except Exception as e:
+            logger.debug(f"[REAL MARKET FEED] Sync chart API error for {ticker}: {e}")
+            return []
+
     async def _run_forex_polling(self):
         """Paced high-frequency polling loop fetching live spot rates for Forex & Commodities."""
+        from core.ingester.market_hours import get_forex_market_status
+
         symbols_list = list(REAL_MARKET_YAHOO_MAP.items())
         batch_size = 5
         idx = 0
 
         while self.running:
             try:
+                market_status = get_forex_market_status()
+                if not market_status["is_open"]:
+                    # Interbank Forex closed for the weekend (Friday 21:00 UTC - Sunday 21:00 UTC)
+                    await asyncio.sleep(5.0)
+                    continue
+
                 # Poll a slice of symbols every cycle
                 batch = symbols_list[idx : idx + batch_size]
                 idx = (idx + batch_size) % len(symbols_list)

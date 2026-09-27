@@ -7,13 +7,39 @@ and real-time telemetry (active strategies, bot details, system specs).
 import sqlite3
 import datetime
 import hashlib
+import hmac
 import json
 import logging
+import os
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
 logger = logging.getLogger("TradePulse.MasterDB")
+
+def hash_password(password: str) -> str:
+    """Derives a salted PBKDF2-HMAC-SHA256 password hash."""
+    salt = os.urandom(16).hex()
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), 100000)
+    return f"pbkdf2:sha256:100000${salt}${key.hex()}"
+
+def verify_password(stored_hash: str, password: str) -> bool:
+    """Timing-safe verification of password against stored PBKDF2 or legacy hash."""
+    if not stored_hash or not password:
+        return False
+    if stored_hash.startswith("pbkdf2:sha256:"):
+        try:
+            algo_part, salt_hex, key_hex = stored_hash.split("$")
+            iterations = int(algo_part.split(":")[2])
+            calc_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), iterations)
+            return hmac.compare_digest(calc_key.hex(), key_hex)
+        except Exception:
+            return False
+    # Backward compatibility with legacy single-round SHA-256
+    legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(stored_hash, legacy_hash)
+
 
 DB_DIR = Path(__file__).resolve().parent
 DB_PATH = DB_DIR / "master_database.db"
@@ -25,10 +51,15 @@ class MasterDatabase:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.init_db()
 
-    def _get_conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _get_conn(self):
         conn = sqlite3.connect(str(self.db_path), timeout=15.0)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def init_db(self):
         with self._get_conn() as conn:
@@ -80,16 +111,17 @@ class MasterDatabase:
                 )
             """)
 
-            # Seed default admin if not exists (username: admin, password: adminPassword123!)
+            # Seed default admin if not exists
             cur = conn.cursor()
             cur.execute("SELECT id FROM admin_users WHERE username = 'admin'")
             if not cur.fetchone():
-                default_pw_hash = hashlib.sha256("adminPassword123!".encode()).hexdigest()
+                initial_pw = os.environ.get("ADMIN_INITIAL_PASSWORD", "adminPassword123!")
+                default_pw_hash = hash_password(initial_pw)
                 conn.execute(
                     "INSERT INTO admin_users (username, password_hash) VALUES (?, ?)",
                     ("admin", default_pw_hash)
                 )
-                logger.info("🔑 Initialized Master Admin Account (admin / adminPassword123!)")
+                logger.info("🔑 Initialized Master Admin Account (admin)")
 
     # -------------------------------------------------------------------------
     # License & Subscription Operations
@@ -221,6 +253,10 @@ class MasterDatabase:
             conn.execute("DELETE FROM client_telemetry WHERE license_key = ?", (license_key,))
             return True
 
+    def reset_hwid(self, license_key: str) -> bool:
+        """Alias for reset_hwid_binding."""
+        return self.reset_hwid_binding(license_key)
+
     def toggle_license_status(self, license_key: str, status: Optional[str] = None) -> str:
         lic = self.get_license(license_key)
         if not lic:
@@ -348,13 +384,25 @@ class MasterDatabase:
     # Admin Authentication
     # -------------------------------------------------------------------------
     def verify_admin(self, username: str, password: str) -> bool:
-        pw_hash = hashlib.sha256(password.encode()).hexdigest()
         with self._get_conn() as conn:
             row = conn.execute(
-                "SELECT id FROM admin_users WHERE username = ? AND password_hash = ?",
-                (username, pw_hash)
+                "SELECT password_hash FROM admin_users WHERE username = ?",
+                (username,)
             ).fetchone()
-            return bool(row)
+            if not row:
+                return False
+            stored_hash = row["password_hash"]
+            is_valid = verify_password(stored_hash, password)
+            if is_valid and not stored_hash.startswith("pbkdf2:"):
+                # Automatically upgrade legacy single-round SHA-256 to salted PBKDF2
+                try:
+                    new_hash = hash_password(password)
+                    conn.execute("UPDATE admin_users SET password_hash = ? WHERE username = ?", (new_hash, username))
+                    conn.commit()
+                    logger.info(f"[SECURITY] Upgraded legacy password hash to PBKDF2 for admin user '{username}'")
+                except Exception as e:
+                    logger.debug(f"[SECURITY] Failed to upgrade legacy hash: {e}")
+            return is_valid
 
 
 master_db = MasterDatabase()

@@ -5,6 +5,7 @@ Generates cryptographic machine hardware ID (HWID), verifies active
 1-year subscription with the Master Control Panel Server, and syncs
 client telemetry (active strategies, bot info, and scanner status).
 """
+import datetime
 import hashlib
 import json
 import logging
@@ -18,6 +19,7 @@ import urllib.request
 import urllib.parse
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+
 
 logger = logging.getLogger("TradePulse.LicensingClient")
 
@@ -45,9 +47,8 @@ def get_system_hwid() -> str:
         except Exception:
             pass
 
-        try:
             cmd = "wmic baseboard get serialnumber"
-            res = subprocess.check_output(cmd, shell=True, text=True, timeout=2).strip()
+            res = subprocess.check_output(cmd, shell=True, text=True, timeout=2, stderr=subprocess.DEVNULL).strip()
             lines = [l.strip() for l in res.splitlines() if l.strip() and "SerialNumber" not in l]
             if lines:
                 raw_components.append(lines[0])
@@ -70,13 +71,17 @@ def get_system_hwid() -> str:
 class LicenseClient:
     """Manages client license activation, local cache, and master server telemetry."""
 
-    def __init__(self, data_dir: Optional[Path] = None):
-        if data_dir:
-            self.data_dir = data_dir
+    def __init__(self, data_dir: Optional[Path] = None, cache_path: Optional[Path] = None):
+        if cache_path:
+            self.license_file = Path(cache_path)
+            self.data_dir = self.license_file.parent
+        elif data_dir:
+            self.data_dir = Path(data_dir)
+            self.license_file = self.data_dir / "personal_license.json"
         else:
             self.data_dir = Path.home() / ".tradepulse"
+            self.license_file = self.data_dir / "personal_license.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.license_file = self.data_dir / "personal_license.json"
         
         self.hwid: str = get_system_hwid()
         self.license_key: str = ""
@@ -87,15 +92,20 @@ class LicenseClient:
         self.last_error_message: str = ""
         self.customer_name: str = ""
         self.expires_at: str = ""
+        self.last_verified_online_ts: float = 0.0
         
         self._heartbeat_thread: Optional[threading.Thread] = None
         self._running: bool = False
         self._get_telemetry_callback = None
+        self._on_revocation_callback = None
 
         self.load_cached_license()
 
     def set_telemetry_callback(self, cb):
         self._get_telemetry_callback = cb
+
+    def set_revocation_callback(self, cb):
+        self._on_revocation_callback = cb
 
     def load_cached_license(self):
         if self.license_file.exists():
@@ -103,6 +113,9 @@ class LicenseClient:
                 data = json.loads(self.license_file.read_text(encoding="utf-8"))
                 self.license_key = data.get("license_key", "")
                 self.server_url = data.get("server_url", self.server_url).rstrip("/")
+                self.customer_name = data.get("customer_name", "")
+                self.expires_at = data.get("expires_at", "")
+                self.last_verified_online_ts = data.get("last_verified_online_ts", 0.0)
             except Exception as e:
                 logger.debug(f"Error loading cached license: {e}")
 
@@ -112,11 +125,22 @@ class LicenseClient:
                 "license_key": self.license_key,
                 "server_url": self.server_url,
                 "hwid": self.hwid,
+                "customer_name": self.customer_name,
+                "expires_at": self.expires_at,
+                "last_verified_online_ts": getattr(self, "last_verified_online_ts", time.time()),
                 "cached_at": time.time()
             }
             self.license_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as e:
             logger.error(f"Error saving license cache: {e}")
+
+    def clear_cached_license(self):
+        try:
+            if self.license_file.exists():
+                self.license_file.unlink()
+                logger.info("[LICENSING] Cleared local cached license.")
+        except Exception as e:
+            logger.debug(f"Error deleting cached license: {e}")
 
     def validate_license(self, license_key: Optional[str] = None, server_url: Optional[str] = None) -> Tuple[bool, str]:
         """
@@ -169,6 +193,7 @@ class LicenseClient:
                     self.license_data = resp_json.get("license", {})
                     self.customer_name = self.license_data.get("customer_name", "Client")
                     self.expires_at = self.license_data.get("expires_at", "")
+                    self.last_verified_online_ts = time.time()
                     self.last_error_message = ""
                     self.save_cached_license()
                     logger.info(f"✅ Subscription Active! Verified for {self.customer_name} (HWID: {self.hwid})")
@@ -187,13 +212,35 @@ class LicenseClient:
             self.is_licensed = False
             self.last_error_message = msg
             logger.warning(f"🔒 License Validation Denied: {msg}")
+            if e.code in (403, 404):
+                self.clear_cached_license()
             return False, msg
 
         except Exception as e:
             logger.debug(f"Network error contacting master server: {e}")
             # If server is temporarily unreachable and we already had a cached license
-            if self.license_key == key_to_check and self.is_licensed:
-                return True, "Active (Offline Cached Mode)"
+            if self.license_key == key_to_check and (self.is_licensed or self.last_verified_online_ts > 0):
+                # 1. Verify expiration date
+                if self.expires_at:
+                    try:
+                        exp_dt = datetime.datetime.fromisoformat(self.expires_at.replace("Z", "+00:00"))
+                        now_dt = datetime.datetime.now(datetime.timezone.utc)
+                        if now_dt > exp_dt:
+                            self.is_licensed = False
+                            self.last_error_message = f"Subscription expired on {self.expires_at}."
+                            return False, self.last_error_message
+                    except Exception:
+                        pass
+                # 2. Check 48-hour offline grace period
+                time_offline = time.time() - getattr(self, "last_verified_online_ts", 0.0)
+                if time_offline > 172800:  # 48 hours
+                    self.is_licensed = False
+                    self.last_error_message = "Maximum offline grace period exceeded (48h). Connect to internet to verify subscription."
+                    return False, self.last_error_message
+                self.is_licensed = True
+                hours_left = max(0, int((172800 - time_offline) / 3600))
+                return True, f"Active (Offline Mode - {hours_left}h grace remaining)"
+
             self.is_licensed = False
             self.last_error_message = f"Cannot reach Master Server ({self.server_url}). Check connection."
             return False, self.last_error_message
@@ -207,6 +254,17 @@ class LicenseClient:
 
     def stop_heartbeat(self):
         self._running = False
+
+    def revoke(self, reason: str = "License has been revoked, suspended, or unbound by administrator."):
+        """Immediately revokes license, wipes local cache, and invokes revocation callback."""
+        self.is_licensed = False
+        self.last_error_message = reason
+        self.clear_cached_license()
+        if self._on_revocation_callback:
+            try:
+                self._on_revocation_callback(reason)
+            except Exception as e:
+                logger.debug(f"Error in revocation callback: {e}")
 
     def _heartbeat_loop(self):
         while self._running:
@@ -245,7 +303,14 @@ class LicenseClient:
                     method="POST"
                 )
                 with urllib.request.urlopen(req, timeout=5.0) as resp:
-                    pass
+                    if resp.status == 200:
+                        self.last_verified_online_ts = time.time()
+            except urllib.error.HTTPError as he:
+                if he.code in (403, 404):
+                    logger.warning(f"🔒 Heartbeat received HTTP {he.code}: License has been revoked, suspended, or unbound by administrator!")
+                    self.revoke("License has been revoked, suspended, or unbound by administrator.")
+                else:
+                    logger.debug(f"[HEARTBEAT] HTTP error: {he}")
             except Exception as e:
                 logger.debug(f"[HEARTBEAT] ping note: {e}")
 

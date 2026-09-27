@@ -1,4 +1,4 @@
-﻿# ⚡ TradePulse AI — Institutional Binary Options & OTC Signal Station
+# ⚡ TradePulse AI — Institutional Binary Options & OTC Signal Station
 
 <div align="center">
 
@@ -170,6 +170,18 @@ When `TELEGRAM_COMMANDS_ENABLED=True`, authorized administrators can send comman
 - **Local-First Storage**: Session tokens and trade history are stored locally in an encrypted SQLite database on your machine.
 - **No Hardcoded Secrets**: All API tokens, chat IDs, and credentials are dynamically loaded from environment variables and `.env`.
 - **Fail-Closed Permissions**: Administrative commands strictly reject requests from unauthorized Telegram IDs.
+
+## 🧪 Automated Test Suite
+
+TradePulse includes an automated end-to-end testing suite:
+```bash
+pytest tests/ -v
+```
+Covers:
+- Technical indicator calculations (EMA, RSI, Bollinger Bands, SMC Structure, Candlestick Formations)
+- Strategy AST condition compiler and fail-closed security rules
+- Quantitative parameter optimizer (48-grid sweep) & Monte Carlo permutation stress tests
+- Master Control Panel REST API authentication and single-system licensing
 
 ---
 

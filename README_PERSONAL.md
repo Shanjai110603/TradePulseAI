@@ -98,7 +98,12 @@ The preloaded algorithmic engine is tuned specifically for 1-minute live Forex p
 
 1. **📊 Live Markets Monitor**: Real-time ticker and broker payout board for all major, minor, and exotic interbank currency pairs.
 2. **📈 Live Chart Station**: High-performance candlestick chart with Regular/Heikin-Ashi modes, EMA overlays, Bollinger Bands cloud, and multi-indicator technical analysis suite.
-3. **⚙️ Strategy Workshop**: Custom strategy laboratory with 18 archetype presets, visual indicator builder, candle anatomy filters, and Smart Money Concepts (SMC).
+3. **⚙️ Strategy Lab & Customizer**:
+   - **Expandable Indicator Drawers**: Direct fine-tuning for Dual Bollinger Bands (fast/slow periods, deviation, protrusion %), RSI (period, OB/OS thresholds), Stochastic (%K, %D, levels), MACD (fast, slow, signal), Supertrend (ATR period, multiplier), and Parabolic SAR (acceleration step, max).
+   - **Target Currency Scope & Pair Picker**: Quick toggles between All 28 Real Forex pairs, Major 7 pairs, or custom multi-select interactive currency chips.
+   - **Candle Anatomy Precision**: Exact dropdown calibration (including 20% Dual BB body ratio and 40% max opposing wick), Pin Bar rejection multiplier, and S&R clearance buffer.
+   - **Confluence Matrix**: Multi-factor voting engine requiring $N$ of $M$ indicators to agree before dispatching signals.
+   - **Sticky Library Sidebar**: Clean persistent left sidebar that remains visible while tuning deep strategy configurations.
 4. **✈️ Personal Telegram Relay**: Connect your personal Telegram Bot Token and Chat/Channel ID to receive real-time pre-alerts, signals with rendered chart images, and trade outcome cards.
 5. **📜 Trade History & PnL**: Comprehensive log of all dispatched signals, strike entry/exit prices, MFE/MAE excursions, and net session win rate.
 6. **🏛️ Quotex Terminal**: Native docked Quotex web view allowing direct platform interaction without leaving the application.
@@ -150,7 +155,53 @@ Ai-telegrambot/
 
 ---
 
+## ⚡ Quantitative Parameter Optimizer & Monte Carlo Stress-Test
+
+TradePulse features a built-in parameter tournament and robustness engine inspired by VectorBT and StrategyQuant:
+- **48-Combination Grid Sweep**: Systematically evaluates permutations of RSI Periods (7, 10, 14, 21), Overbought/Oversold thresholds (70/30, 75/25, 80/20), and Bollinger Band Standard Deviations (1.8, 2.0, 2.2, 2.5) against historical market candles.
+- **500-Permutation Monte Carlo Stress-Test**: Reshuffles trade sequences 500 times to simulate worst-case drawdown paths, calculate maximum consecutive loss streaks at the 95th percentile, and compute mathematical probability of ruin.
+- **Half-Kelly Capital Allocation**: Automatically suggests optimal mathematical stake sizing per trade.
+
+---
+
+## ✈️ Remote Telegram Bot Commands
+
+Control your TradePulse workstation from your phone anywhere in the world:
+- `/start` or `/help` — Welcome banner, list of commands, and system status
+- `/status` or `/ping` — Live scanner state, Quotex connection, and subscriber quota
+- `/stats` — Today's completed trades, win rate %, wins, and losses
+- `/bestpairs` — Ranked list of today's highest-performing currency pairs
+- `/pause` — Remotely halt signal scanning
+- `/resume` — Remotely resume live market scanning (requires Quotex login & active license)
+- `/subscribe` & `/unsubscribe` — Opt in or out of signal alerts (capped at 5 users)
+
+---
+
+## 🏛️ Master Control Panel (Business & Developer Server)
+
+Centralized subscription, hardware licensing, and client telemetry server located in `master_control_panel/`:
+- **PBKDF2-HMAC-SHA256 Security**: 100,000 salt iterations and cryptographic Bearer session tokens.
+- **Single-System HWID Lock**: Authorizes, tracks, and binds machines with remote hardware reset capabilities.
+- **Start the Server**:
+  ```bash
+  python master_control_panel/server.py
+  ```
+- **Web Admin Interface**: Open `http://localhost:8000` to manage customer licenses, track live system metrics, and view real-time client telemetry.
+
+---
+
+## 🧪 Automated Test Suite
+
+Run the full end-to-end unit, integration, and security test suite:
+```bash
+pytest tests/ -v
+```
+Verifies technical indicators, AST rule engines, fail-closed security, quantitative optimizer sweeps, Monte Carlo simulations, PBKDF2 password security, and Master Control Panel REST APIs.
+
+---
+
 ## 🔒 Security & Telegram User Limit
 
-- **Single-Machine Lockdown**: Automatically binds to the motherboard UUID, CPU serial, and Windows Machine GUID.
+- **Single-Machine Lockdown**: Automatically binds to the motherboard UUID, CPU serial, and Windows Machine GUID with 48-hour offline grace period enforcement.
 - **5-User Subscriber Cap**: The personal Telegram bridge rejects unauthorized subscribers beyond the 5-user quota to protect your private signal stream.
+

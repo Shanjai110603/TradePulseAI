@@ -31,8 +31,24 @@ class PatternRuleEngine:
         if not node:
             return True, "Empty node passed", {}
 
-        operator = node.get("operator", "AND").upper()
-        conditions = node.get("conditions", [])
+        # If node is a direct leaf condition rather than a compound operator node
+        raw_type = str(node.get("type", "")).upper()
+        raw_op = str(node.get("operator", "")).upper()
+        if "type" in node and "conditions" not in node and not raw_op and raw_type not in ("CONFLUENCE_VOTING", "VOTING", "CONFLUENCE"):
+            params = node.get("params", {})
+            if isinstance(params, dict) and "conditions" in params:
+                pass  # Compound condition wrapped in params
+            else:
+                return cls._evaluate_condition_or_subnode(
+                    node, candles, multi_timeframe_candles, technical_snapshot, direction_context
+                )
+
+        operator = (raw_op or raw_type or "AND").upper()
+        conditions = node.get("conditions")
+        if conditions is None and isinstance(node.get("params"), dict):
+            conditions = node["params"].get("conditions", [])
+        if conditions is None:
+            conditions = []
         child_details = []
 
         if operator == "AND":
@@ -69,9 +85,44 @@ class PatternRuleEngine:
                 )
                 if not passed:
                     return True, "NOT condition successfully inverted failure", {"inverted": True}
-                return False, f"NOT condition failed (child succeeded: {reason})", {"inverted": False}
+        elif operator in ("CONFLUENCE_VOTING", "VOTING", "CONFLUENCE"):
+            params = node.get("params", {}) if isinstance(node.get("params"), dict) else {}
+            min_agreeing = int(node.get("min_agreeing") or params.get("min_agreeing_factors") or params.get("min_agreeing") or 2)
+            passed_count = 0
+            reasons = []
+            for cond in conditions:
+                passed, reason, det = cls._evaluate_condition_or_subnode(
+                    cond, candles, multi_timeframe_candles, technical_snapshot, direction_context
+                )
+                child_details.append({"condition": cond.get("type", "nested"), "passed": passed, "reason": reason})
+                if passed:
+                    passed_count += 1
+                else:
+                    reasons.append(reason)
+
+            if passed_count >= min_agreeing:
+                return True, f"Confluence threshold met: {passed_count}/{len(conditions)} agreed (required: {min_agreeing})", {"children": child_details, "confluence_count": passed_count, "votes_passed": passed_count}
+            return False, f"Insufficient confluence: only {passed_count}/{len(conditions)} agreed (required: {min_agreeing})", {"children": child_details, "confluence_count": passed_count, "votes_passed": passed_count}
 
         return False, f"Unknown operator: {operator}", {}
+
+    @classmethod
+    def evaluate(
+        cls,
+        ast: Dict[str, Any],
+        candles: List[Candle],
+        multi_timeframe_candles: Optional[Dict[str, List[Candle]]] = None,
+        technical_snapshot: Optional[Dict[str, Any]] = None,
+        direction: str = "CALL"
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """Convenience evaluation alias matching Compiler AST output format."""
+        return cls.evaluate_node(
+            node=ast,
+            candles=candles,
+            multi_timeframe_candles=multi_timeframe_candles,
+            technical_snapshot=technical_snapshot,
+            direction_context=direction
+        )
 
     @classmethod
     def _evaluate_condition_or_subnode(
@@ -136,7 +187,7 @@ class PatternRuleEngine:
         elif cond_type == "sr_clearance":
             return cls.evaluate_sr_clearance(candles, technical_snapshot, params, direction_context)
 
-        return True, f"Unrecognized condition {cond_type} skipped", {}
+        return False, f"Unrecognized condition '{cond_type}' rejected (fail-closed)", {}
 
     @classmethod
     def evaluate_candlestick_formation(

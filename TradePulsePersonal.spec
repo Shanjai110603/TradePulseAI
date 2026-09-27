@@ -61,6 +61,8 @@ hidden_imports = [
     'core.ingester.frame_parser',
     'core.ingester.socket_client',
     'core.ingester.real_market_feed',
+    'core.ingester.market_hours',
+    'core.ingester.tv_scanner',
     'core.indicators.engine',
     'core.charts.generator',
     'core.strategy.schema',

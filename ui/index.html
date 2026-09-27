@@ -57,6 +57,10 @@
           <span class="nav-item-icon">📊</span>
           <span>History & PnL</span>
         </div>
+        <div class="nav-item" id="nav-optimizer" onclick="openOptimizerModal()">
+          <span class="nav-item-icon">⚡</span>
+          <span>Optimizer & MC</span>
+        </div>
         <div class="nav-item" id="nav-preferences" onclick="switchView('preferences')">
           <span class="nav-item-icon">⚙️</span>
           <span>Preferences</span>
@@ -535,27 +539,86 @@
         </div>
       </div>
 
+      <!-- Top Command Strip: Active Strategy Selection, Presets & Actions -->
+      <div class="strategy-studio-topbar" style="display: flex; justify-content: space-between; align-items: center; background: rgba(10, 15, 29, 0.85); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <label style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin: 0; letter-spacing: 0.5px;">ACTIVE STRATEGY:</label>
+          <select id="strategy-master-select" class="form-input" onchange="selectStrategy(this.value)" style="min-width: 240px; font-weight: 700; font-size: 12px; background: var(--bg-surface); padding: 5px 10px; border-color: rgba(0, 240, 255, 0.3);">
+            <!-- Dynamically populated via JS -->
+          </select>
+          <button type="button" class="btn-primary" onclick="createNewStrategy()" style="font-size: 11px; padding: 5px 10px;">➕ New</button>
+          <button type="button" class="btn-secondary" onclick="duplicateCurrentStrategy()" style="font-size: 11px; padding: 5px 10px;">📋 Copy</button>
+          <button type="button" class="btn-secondary" id="btn-delete-strat" onclick="handleDeleteStrategy()" style="font-size: 11px; padding: 5px 8px; color: var(--rose); border-color: rgba(255, 51, 102, 0.3);">🗑️</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span id="strat-diff-badge" class="nav-badge" style="display: none; background: rgba(0, 240, 255, 0.15); color: var(--cyan-bright); border-color: rgba(0, 240, 255, 0.3); font-size: 10.5px;">vs Saved: +0.0% WR</span>
+          <button type="button" class="btn-secondary" onclick="openOptimizerModal()" style="font-size: 11px; padding: 5px 12px;">⚡ Optimizer</button>
+          <button type="button" class="btn-primary" onclick="document.getElementById('strategy-form').requestSubmit()" style="font-size: 11px; padding: 5px 14px;">💾 Save Strategy</button>
+          <button type="button" class="btn-secondary" onclick="open28PairMatrixModal()" style="font-size: 11px; padding: 5px 12px; border-color: rgba(0, 240, 255, 0.4); color: var(--cyan-bright);">🌐 28-Pair Matrix</button>
+        </div>
+      </div>
+
       <div class="strategy-lab-layout">
-        <!-- Strategies List (Left Column) -->
-        <div class="panel-card strategy-lab-sidebar-panel">
-          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; letter-spacing: 0.5px;">
-            Your Custom Strategies
+        <!-- Pane 1: Live Strategy Visualizer Stage (Full Width) -->
+        <div class="panel-card" style="display: flex; flex-direction: column; overflow: hidden; padding: 12px; gap: 8px; height: 100%;">
+          <!-- Unified Top Bar: Pair Switcher & Timeframe & Session Badge & Compact Stats in 1 Row -->
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: rgba(0,0,0,0.3); padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin: 0;">PAIR:</label>
+              <select id="strat-preview-pair-select" class="form-input" onchange="changeStrategyPreviewPair(this.value)" style="width: 130px; padding: 4px 8px; font-weight: 700; font-size: 11.5px; background: var(--bg-surface);">
+                <!-- Populated via JS with all 28 Forex Pairs -->
+              </select>
+              <div style="display: gap: 3px;">
+                <button type="button" class="token-chip active" id="btn-strat-tf-1m" onclick="setStrategyPreviewTf('1M')" style="padding: 2px 7px; font-size: 10.5px;">1M</button>
+                <button type="button" class="token-chip" id="btn-strat-tf-3m" onclick="setStrategyPreviewTf('3M')" style="padding: 2px 7px; font-size: 10.5px;">3M</button>
+                <button type="button" class="token-chip" id="btn-strat-tf-5m" onclick="setStrategyPreviewTf('5M')" style="padding: 2px 7px; font-size: 10.5px;">5M</button>
+              </div>
+              <span id="strat-market-status-badge" class="nav-badge" style="background: rgba(245, 158, 11, 0.15); color: var(--amber); border-color: rgba(245, 158, 11, 0.3); font-size: 10px;">🟡 WEEKEND STANDBY</span>
+            </div>
+
+            <!-- Unified Compact Strategy Performance Stats -->
+            <div id="strat-live-hud-stats" style="display: flex; gap: 14px; align-items: center; font-family: var(--font-mono); font-size: 11px;">
+              <div>Signals: <b id="hud-strat-signals" style="color: var(--cyan-bright);">--</b></div>
+              <div>Record: <b id="hud-strat-wins" style="color: var(--emerald);">--</b>W / <b id="hud-strat-losses" style="color: var(--rose);">--</b>L</div>
+              <div>Win Rate: <b id="hud-strat-winrate" style="color: var(--emerald); font-size: 12.5px;">--%</b></div>
+              <div>Profit Factor: <b id="hud-strat-pf" style="color: var(--cyan-bright);">--</b></div>
+            </div>
           </div>
-          <div class="strategy-list" id="strategy-list-container">
-            <!-- Dynamically populated strategy cards -->
+
+          <!-- Hardware Canvas Container (Spacious Full Width) -->
+          <div style="flex: 1; min-height: 380px; position: relative; background: #04060a; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
+            <canvas id="strategyVisualizerCanvas" class="chart-canvas" style="width: 100%; height: 100%;"></canvas>
+          </div>
+
+          <!-- Bottom Live Rule Radar Strip -->
+          <div id="strat-active-rule-radar" style="background: rgba(10, 15, 29, 0.85); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10.5px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; white-space: nowrap;">
+              <span class="pulse-beacon" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan-bright);"></span>
+              <strong style="color: var(--cyan-bright);">ACTIVE BAR CONFLUENCE:</strong>
+              <span id="strat-radar-summary" style="font-weight: 700; color: var(--text-dim);">EVALUATING BAR...</span>
+            </div>
+            <div id="strat-radar-chips" style="display: flex; gap: 4px; overflow-x: auto;">
+              <!-- Populated via JS -->
+            </div>
           </div>
         </div>
 
         <!-- Strategy Editor Form -->
-        <div class="panel-card" style="padding: 20px;">
+        <div class="panel-card" style="padding: 16px; overflow-y: auto;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="font-size: 15px; font-weight: 800;" id="strat-editor-title">Create New Strategy</h3>
-            <button class="btn-secondary" style="font-size: 11px; padding: 6px 12px;" onclick="runStrategyBacktest()">
-              ⚡ Run Backtest
-            </button>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-primary" style="font-size: 11px; padding: 6px 12px;" onclick="openOptimizerModal()">
+                ⚡ Optimizer & MC
+              </button>
+              <button type="button" class="btn-secondary" style="font-size: 11px; padding: 6px 12px;" onclick="runStrategyBacktest()">
+                📊 Run Backtest
+              </button>
+            </div>
           </div>
 
-          <form id="strategy-form" onsubmit="handleSaveStrategy(event)">
+          <form id="strategy-form" onsubmit="handleSaveStrategy(event)" onchange="onStrategyFormChange()">
             <input type="hidden" id="strat-id">
 
             <!-- Quick Strategy Archetype Preset Loader -->
@@ -712,10 +775,12 @@
                     <input type="checkbox" class="custom-checkbox" id="rule-rsi">
                     <span>RSI Overbought / Oversold</span>
                   </label>
-                  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
-                    <input type="checkbox" class="custom-checkbox" id="rule-bollinger">
-                    <span>Bollinger Bands Rebound</span>
-                  </label>
+                  <div id="sec-ind-bollinger" style="border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; transition: all 0.3s;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                      <input type="checkbox" class="custom-checkbox" id="rule-bollinger" onchange="if(typeof recalculateStrategyVisualizer === 'function') recalculateStrategyVisualizer();">
+                      <span>Bollinger Band Contact / Rebound</span>
+                    </label>
+                  </div>
                   <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="custom-checkbox" id="rule-stochastic">
                     <span>Stochastic Oscillator Dip</span>
@@ -1940,9 +2005,183 @@
       </div>
     </section>
 
+  <!-- ====================================================================
+       MODAL: STRATEGY OPTIMIZER & MONTE CARLO STRESS TEST
+       ==================================================================== -->
+  <div class="modal-overlay" id="optimizer-modal">
+    <div class="modal-card" style="max-width: 860px; max-height: 88vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>⚡</span>
+          <h3 style="font-size: 16px; font-weight: 800;">Quantitative Parameter Optimizer & Monte Carlo Stress-Test</h3>
+        </div>
+        <button class="modal-close-btn" onclick="closeOptimizerModal()">✕</button>
+      </div>
+
+      <!-- Controls -->
+      <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 10px; align-items: flex-end; margin-bottom: 16px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+        <div>
+          <label style="font-size: 10.5px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 4px;">TARGET PAIR</label>
+          <select class="form-select" id="opt-symbol-select" style="padding: 6px 10px; font-size: 11.5px;">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 10.5px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 4px;">PAYOUT (%)</label>
+          <input type="number" class="form-input" id="opt-payout-input" value="85" min="50" max="98" style="padding: 6px 10px; font-size: 11.5px;">
+        </div>
+        <div>
+          <label style="font-size: 10.5px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 4px;">SWEEP CONFIG</label>
+          <div style="font-size: 11px; color: var(--cyan-bright); padding-top: 6px;">RSI (4) × BB Dev (4) = 48 Grid Setups</div>
+        </div>
+        <button type="button" class="btn-primary" onclick="executeOptimizerSweep()" id="btn-run-optimizer" style="height: 34px; padding: 0 16px;">
+          ⚡ Run Grid Sweep
+        </button>
+      </div>
+
+      <!-- Monte Carlo Summary Card -->
+      <div id="opt-monte-carlo-container" style="display: none; margin-bottom: 14px;">
+        <div style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin-bottom: 6px;">MONTE CARLO RESHUFFLE STRESS-TEST (500 Permutations)</div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+          <div class="stat-card" style="padding: 10px;">
+            <div class="stat-title" style="font-size: 10px;">95TH % MAX LOSS STREAK</div>
+            <div class="stat-val" id="mc-stat-streak" style="font-size: 18px; color: var(--rose);">0</div>
+            <div style="font-size: 9.5px; color: var(--text-dim);">Consecutive Losses</div>
+          </div>
+          <div class="stat-card" style="padding: 10px;">
+            <div class="stat-title" style="font-size: 10px;">95TH % DRAWDOWN</div>
+            <div class="stat-val" id="mc-stat-dd" style="font-size: 18px; color: var(--rose);">$0.00</div>
+            <div style="font-size: 9.5px; color: var(--text-dim);">Worst-case Permutation</div>
+          </div>
+          <div class="stat-card" style="padding: 10px;">
+            <div class="stat-title" style="font-size: 10px;">RUIN PROBABILITY</div>
+            <div class="stat-val" id="mc-stat-ruin" style="font-size: 18px; color: var(--emerald);">0.0%</div>
+            <div style="font-size: 9.5px; color: var(--text-dim);">Account Ruin Risk</div>
+          </div>
+          <div class="stat-card" style="padding: 10px;">
+            <div class="stat-title" style="font-size: 10px;">MEDIAN EXPECTED PROFIT</div>
+            <div class="stat-val" id="mc-stat-median" style="font-size: 18px; color: var(--cyan-bright);">+$0.00</div>
+            <div style="font-size: 9.5px; color: var(--text-dim);">Simulated Median PnL</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ranked Results Table -->
+      <div id="opt-results-container" style="display: none;">
+        <div style="font-size: 11px; font-weight: 800; color: var(--cyan-bright); margin-bottom: 6px;">RANKED POSITIVE EXPECTED VALUE CONFIGURATIONS</div>
+        <div class="table-container" style="max-height: 280px; overflow-y: auto;">
+          <table class="data-table" style="font-size: 11.5px; width: 100%;">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>RSI Period</th>
+                <th>OB / OS</th>
+                <th>BB Dev</th>
+                <th>Win Rate</th>
+                <th>Trades</th>
+                <th>EV / Trade</th>
+                <th>Profit Factor</th>
+                <th>Half-Kelly Stake</th>
+              </tr>
+            </thead>
+            <tbody id="opt-results-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="opt-empty-state" style="text-align: center; padding: 40px; color: var(--text-muted);">
+        Click <b>Run Grid Sweep</b> to simulate 48 parameter variations across authentic historical market candles.
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 5: 28-PAIR BATCH CONFLUENCE MATRIX MODAL
+       ==================================================================== -->
+  <div class="modal-overlay" id="matrix-modal">
+    <div class="modal-card" style="max-width: 920px; max-height: 88vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>🌐</span>
+          <h3 style="font-size: 16px; font-weight: 800;">28-Pair Multi-Market Confluence Matrix</h3>
+        </div>
+        <button class="modal-close-btn" onclick="close28PairMatrixModal()">✕</button>
+      </div>
+
+      <!-- Matrix Summary Banner -->
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;">
+        <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 10.5px; color: var(--text-dim);">TOTAL PAIRS</div>
+          <div style="font-size: 18px; font-weight: 800; color: #fff;" id="matrix-total-pairs">28 Real Forex</div>
+        </div>
+        <div style="background: rgba(0, 245, 155, 0.05); border: 1px solid rgba(0, 245, 155, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 10.5px; color: var(--text-dim);">PROFITABLE PAIRS</div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--emerald);" id="matrix-profitable-pairs">-- / 28</div>
+        </div>
+        <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 10.5px; color: var(--text-dim);">AVG WIN RATE</div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--cyan-bright);" id="matrix-avg-wr">--%</div>
+        </div>
+        <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 10.5px; color: var(--text-dim);">DATA PIPELINE</div>
+          <div style="font-size: 13px; font-weight: 800; color: var(--amber);">100% Authentic Live</div>
+        </div>
+      </div>
+
+      <!-- Progress / Loading Bar -->
+      <div id="matrix-loading-bar" style="display: none; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+          <span style="color: var(--cyan-bright);">Evaluating authentic market history across 28 pairs...</span>
+          <span id="matrix-progress-pct" style="color: #fff; font-weight: 700;">0%</span>
+        </div>
+        <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+          <div id="matrix-progress-fill" style="height: 100%; width: 0%; background: var(--cyan-bright); transition: width 0.1s ease;"></div>
+        </div>
+      </div>
+
+      <!-- 28-Pair Table -->
+      <div class="forex-table-container" style="max-height: 400px; overflow-y: auto;">
+        <table class="forex-table" style="font-size: 11.5px;">
+          <thead>
+            <tr>
+              <th>Pair</th>
+              <th>Live Spot Rate</th>
+              <th>Payout</th>
+              <th>Signals</th>
+              <th>Wins / Losses</th>
+              <th>Win Rate</th>
+              <th>Profit Factor</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="matrix-results-tbody">
+            <!-- Dynamically populated via JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+        <button type="button" class="btn-secondary" onclick="close28PairMatrixModal()">Close</button>
+        <button type="button" class="btn-primary" onclick="run28PairStrategyEvaluation()" id="btn-run-matrix-eval">
+          ⚡ Evaluate All 28 Pairs Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
   </main>
 </div>
 
+<script src="strategy_evaluator.js"></script>
 <script src="chart_widget.js"></script>
 <script src="app.js"></script>
 </body>

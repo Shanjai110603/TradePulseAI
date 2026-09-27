@@ -27,13 +27,14 @@ class IndicatorRule(BaseModel):
     min_val: Optional[float] = None
     max_val: Optional[float] = None
     field: Optional[str] = None  # e.g. 'histogram', 'signal', 'percent_b', 'k'
-
+    params: Optional[Dict[str, Any]] = None  # Fine-grained indicator hyperparameters
 
 
 class PriceActionConfig(BaseModel):
     require_engulfing: bool = False
     require_sr_breakout: bool = False
     min_sr_clearance_pct: float = 0.0  # e.g. 0.1% buffer from nearest opposing S/R
+    min_rejection_wick_ratio: float = 0.0  # e.g. 2.0x body ratio for pinbars
 
 
 class SMCConfig(BaseModel):
@@ -43,12 +44,19 @@ class SMCConfig(BaseModel):
     order_block_enabled: bool = False
 
 
+class ConfluenceConfig(BaseModel):
+    enabled: bool = False
+    min_agreeing_indicators: int = 2
+    min_quality_score: float = 75.0
+
+
 class StrategyFilters(BaseModel):
     trend: TrendFilterConfig = Field(default_factory=TrendFilterConfig)
     candle_anatomy: CandleAnatomyConfig = Field(default_factory=CandleAnatomyConfig)
     indicators: List[IndicatorRule] = Field(default_factory=list)
     price_action: PriceActionConfig = Field(default_factory=PriceActionConfig)
     smc: SMCConfig = Field(default_factory=SMCConfig)
+    confluence: ConfluenceConfig = Field(default_factory=ConfluenceConfig)
 
 
 class UserStrategy(BaseModel):

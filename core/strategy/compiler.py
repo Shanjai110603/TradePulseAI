@@ -55,20 +55,43 @@ class StrategyCompiler:
                 "operator": "AND",
                 "conditions": [{"type": "mtf_momentum", "params": {}}]
             }
-        elif strat_id_lower in ("strat_dual_bollinger_protrusion_1m", "strat_dual_bb_protrusion"):
+        elif strat_id_lower in ("strat_bollinger_mean_reversion", "strat_bollinger_mean", "bollinger_mean"):
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "bollinger_mean_reversion", "params": {}}]
+            }
+        elif strat_id_lower in ("strat_bollinger_squeeze_breakout", "strat_bollinger_squeeze", "bollinger_squeeze"):
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "bollinger_squeeze_breakout", "params": {}}]
+            }
+        elif strat_id_lower in ("strat_bollinger_rsi_confluence", "strat_bollinger_rsi", "bollinger_rsi"):
+            return {
+                "operator": "AND",
+                "conditions": [{"type": "bollinger_rsi_confluence", "params": {}}]
+            }
+        elif strat_id_lower in ("strat_dual_bollinger_protrusion_1m", "strat_dual_bb_protrusion") or any(
+            (getattr(i, "indicator", "") or "").upper() in ("DUAL_BOLLINGER_PROTRUSION", "DUAL_BB") for i in getattr(strategy.filters, "indicators", [])
+        ):
             # Compile dedicated AST execution node for the Dual Bollinger Band Protrusion Reversal Strategy:
-            # - Evaluates 10 & 13 period Bollinger Bands with 2.0 standard deviation
-            # - Enforces minimum 20% candle body protrusion beyond outer envelope
+            # - Evaluates Bollinger Bands (default 10 & 13) with standard deviation (default 2.0)
+            # - Enforces minimum body protrusion (default 20%) beyond outer envelope
             # - Enforces market regime check (immediate in consolidation vs S/R confluence in trends)
+            bb_ind = next((i for i in getattr(strategy.filters, "indicators", []) if (getattr(i, "indicator", "") or "").upper() in ("BOLLINGER", "DUAL_BOLLINGER_PROTRUSION", "DUAL_BB")), None)
+            bb_params = getattr(bb_ind, "params", {}) or {} if bb_ind else {}
+            p1 = int(bb_params.get("period_1", getattr(bb_ind, "period", 10) if bb_ind else 10))
+            p2 = int(bb_params.get("period_2", 13))
+            dev = float(bb_params.get("deviation", 2.0))
+            min_prot = float(bb_params.get("min_body_protrusion", 0.20))
             return {
                 "operator": "AND",
                 "conditions": [{
                     "type": "dual_bollinger_protrusion",
                     "params": {
-                        "period_1": 10,
-                        "period_2": 13,
-                        "deviation": 2.0,
-                        "min_body_protrusion": 0.20,
+                        "period_1": p1,
+                        "period_2": p2,
+                        "deviation": dev,
+                        "min_body_protrusion": min_prot,
                         "require_box_or_sr": True
                     }
                 }]
@@ -79,14 +102,17 @@ class StrategyCompiler:
 
         # 1. Candle Anatomy Rules
         anatomy = filters.candle_anatomy
+        anatomy_params = {
+            "min_body_ratio": anatomy.min_body_ratio,
+            "max_opposing_wick": anatomy.max_opposing_wick,
+            "filter_preceding_doji": anatomy.filter_preceding_doji,
+            "filter_spike_multiplier": anatomy.filter_spike_multiplier,
+        }
+        if getattr(anatomy, "min_rejection_wick_ratio", 0.0) > 0:
+            anatomy_params["min_rejection_wick_ratio"] = anatomy.min_rejection_wick_ratio
         root_conditions.append({
             "type": "candle_anatomy",
-            "params": {
-                "min_body_ratio": anatomy.min_body_ratio,
-                "max_opposing_wick": anatomy.max_opposing_wick,
-                "filter_preceding_doji": anatomy.filter_preceding_doji,
-                "filter_spike_multiplier": anatomy.filter_spike_multiplier,
-            }
+            "params": anatomy_params
         })
 
         # 2. Price Action / Engulfing Rules
@@ -112,16 +138,19 @@ class StrategyCompiler:
 
         # 3. Indicators Rules
         for ind in filters.indicators:
+            ind_params = {
+                "indicator": ind.indicator,
+                "period": ind.period,
+                "condition": ind.condition,
+                "min_val": ind.min_val,
+                "max_val": ind.max_val,
+                "field": getattr(ind, "field", None),
+            }
+            if getattr(ind, "params", None):
+                ind_params.update(ind.params)
             root_conditions.append({
                 "type": "indicator_threshold",
-                "params": {
-                    "indicator": ind.indicator,
-                    "period": ind.period,
-                    "condition": ind.condition,
-                    "min_val": ind.min_val,
-                    "max_val": ind.max_val,
-                    "field": getattr(ind, "field", None),
-                }
+                "params": ind_params
             })
 
         # 4. Smart Money Concepts (SMC)
@@ -134,6 +163,15 @@ class StrategyCompiler:
             root_conditions.append({"type": "break_of_structure", "params": {"lookback": 5}})
         if smc.order_block_enabled:
             root_conditions.append({"type": "order_block", "params": {}})
+
+        confluence = getattr(filters, "confluence", None)
+        if confluence and getattr(confluence, "enabled", False):
+            return {
+                "operator": "CONFLUENCE_VOTING",
+                "min_agreeing": int(getattr(confluence, "min_agreeing_indicators", 2)),
+                "min_quality_score": float(getattr(confluence, "min_quality_score", 75.0)),
+                "conditions": root_conditions
+            }
 
         return {
             "operator": "AND",

@@ -41,9 +41,15 @@ class HistoricalBacktestEngine:
         draws = 0
         results_log = []
         is_strat_5m = (strategy.timeframe or "1M").upper() == "5M"
+        cooldown_sec = getattr(strategy, 'cooldown_seconds', 120) or 120
+        tf_sec = 300 if is_strat_5m else 60
+        lockout_bars = max(expiry_bars, (cooldown_sec + tf_sec - 1) // tf_sec)
+        next_allowed_bar = 20
 
         # Step through history (leaving room for trade expiry resolution)
         for i in range(20, len(candles_1m) - expiry_bars):
+            if i < next_allowed_bar:
+                continue
             history_slice = candles_1m[:i + 1]
             trigger_candle = history_slice[-1]
             entry_price = trigger_candle.close
@@ -85,6 +91,7 @@ class HistoricalBacktestEngine:
 
                 if passed:
                     total_signals += 1
+                    next_allowed_bar = i + lockout_bars
                     # Resolve outcome at future bar
                     exit_candle = candles_1m[i + expiry_bars]
                     exit_price = exit_candle.close
@@ -197,6 +204,7 @@ class HistoricalBacktestEngine:
             "avg_mae": avg_mae,
             "payout_pct": payout_pct,
             "equity_curve": equity_curve[-30:],
-            "signals": results_log[-30:]  # Last 30 triggers
+            "signals": results_log[-30:],  # Last 30 triggers
+            "results_log": results_log     # Full results log
         }
 

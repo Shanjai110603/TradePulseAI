@@ -47,7 +47,84 @@ const TEMPLATE_TOKENS = {
   ]
 };
 
+const DEFAULT_TEMPLATES = {
+  signal: "🚀 <b>SIGNAL ALERT: {strategy}</b>\n" +
+    "────────────────────────\n" +
+    "📊 <b>Asset:</b> <code>{asset}</code>\n" +
+    "💰 <b>Payout:</b> <b>{payout}%</b>\n" +
+    "{arrow} <b>Direction:</b> <b>{dir_badge}</b>\n" +
+    "⏱ <b>Timeframe:</b> <b>{chart_timeframe}</b>\n" +
+    "⌛ <b>Expiry:</b> <b>{expiry} Mins</b>\n" +
+    "🕒 <b>Entry:</b> <b>Next Candle Open ({entry_time})</b>\n" +
+    "────────────────────────\n" +
+    "<i>Place trade immediately on candle open.</i>",
+  pre_signal: "⚡ <b>PRE-SIGNAL RADAR: PREPARE ENTRY</b>\n" +
+    "────────────────────────\n" +
+    "📊 <b>Asset:</b> <code>{asset}</code>\n" +
+    "🎯 <b>Direction:</b> <b>{dir_badge}</b>\n" +
+    "⏱ <b>Timeframe:</b> <b>{timeframe}</b> (Expiry: {expiry}m)\n" +
+    "💰 <b>Payout:</b> <b>{payout}%</b>\n" +
+    "⏳ <b>Candle Close In:</b> <b>~{remaining_seconds}s</b>\n" +
+    "🧠 <b>Pattern:</b> {strategy}\n" +
+    "{stake_line}" +
+    "────────────────────────\n" +
+    "<i>Prepare pair & stake in Quotex. Entry on candle close.</i>",
+  outcome: "{header}\n" +
+    "────────────────────────\n" +
+    "📊 <b>Asset:</b> <code>{asset}</code>\n" +
+    "🎯 <b>Strategy:</b> <code>{strategy}</code>\n" +
+    "📌 <b>Direction:</b> <b>{direction}</b>\n" +
+    "🏁 <b>Result:</b> <b>{outcome_badge}</b>\n" +
+    "━━━━━━━━━━━━━━━━━━━━\n" +
+    "💵 <b>Entry Strike:</b> <code>{entry_price}</code>\n" +
+    "🏁 <b>Exit Price:</b>   <code>{exit_price}</code>\n" +
+    "{pnl_text}\n" +
+    "━━━━━━━━━━━━━━━━━━━━\n" +
+    "🔒 <i>TradePulse Real-Time Verification</i>",
+  circuit_breaker: "🛑 <b>TRADEPULSE CIRCUIT BREAKER ACTIVATED</b>\n" +
+    "━━━━━━━━━━━━━━━━━━━━\n" +
+    "⚠️ <b>Signal Scanner Auto-Paused</b>\n" +
+    "• <b>Trigger Reason:</b> <b>{cb_reason}</b>\n" +
+    "• <b>Session Net PnL:</b> <b>{net_pnl}</b>\n" +
+    "• <b>Total Trades:</b> <b>{total_trades}</b>\n" +
+    "━━━━━━━━━━━━━━━━━━━━\n" +
+    "🔒 <i>Scanner halted to safeguard capital. Manage in TradePulse Terminal.</i>"
+};
+
 let chartEngine = null;
+
+// ============================================================================
+// HTML & Attribute Sanitizers (XSS Defense)
+// ============================================================================
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeAttr(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/</g, '\\x3c')
+    .replace(/>/g, '\\x3e');
+}
 
 // ============================================================================
 // Initialization & pywebview Handshake
@@ -55,6 +132,9 @@ let chartEngine = null;
 document.addEventListener('DOMContentLoaded', () => {
   chartEngine = new InteractiveChartEngine('interactiveChartCanvas');
   window.chartEngine = chartEngine;
+
+  // Initialize live message appearance preview immediately on load
+  initTemplateEditor();
 
   // Initialize PyWebView bridge
   if (window.pywebview && window.pywebview.api) {
@@ -121,6 +201,7 @@ function initAppState(state) {
   updateTelegramRulesUI();
   renderLiveMarketsTable();
   populateChartPairSelector();
+  changeChartPair(PersonalState.activeChartPair || 'EUR/USD');
   renderStrategiesList();
   if (PersonalState.strategies.length > 0) {
     selectStrategyForEditing(PersonalState.strategies[0].id);
@@ -151,6 +232,23 @@ function switchView(viewName) {
       chartEngine.resize();
       fetchCandlesForPair(PersonalState.activeChartPair);
     }, 60);
+  }
+
+  // If entering strategies view, initialize and resize strategy visualizer
+  if (viewName === 'strategies') {
+    setTimeout(() => {
+      if (!strategyChartEngine) {
+        initStrategyVisualizer();
+      } else {
+        strategyChartEngine.resize();
+        fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+      }
+    }, 60);
+  }
+
+  // If entering telegram view, refresh the live message card preview
+  if (viewName === 'telegram') {
+    updateCardPreview();
   }
 
   // If entering or leaving embedded broker, update native visibility
@@ -305,6 +403,7 @@ function renderLiveMarketsTable() {
 
   tbody.innerHTML = liveAssets.map(a => {
     const sym = a.symbol;
+    const safeJsSym = escapeJsString(sym);
     const price = PersonalState.prices[sym] ? formatLivePrice(sym, PersonalState.prices[sym]) : '---';
     const payout = PersonalState.payouts[sym] ? `${PersonalState.payouts[sym]}%` : '85%';
 
@@ -313,13 +412,13 @@ function renderLiveMarketsTable() {
         <td>
           <div class="pair-badge">
             <div class="pair-flag">💱</div>
-            <span>${sym}</span>
+            <span>${escapeHtml(sym)}</span>
           </div>
         </td>
-        <td class="rate-cell" id="rate-${sanitizeId(sym)}">${price}</td>
-        <td><span class="payout-pill">${payout}</span></td>
+        <td class="rate-cell" id="rate-${sanitizeId(sym)}">${escapeHtml(price)}</td>
+        <td><span class="payout-pill">${escapeHtml(payout)}</span></td>
         <td style="text-align: right;">
-          <button class="btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="openPairChart('${sym}')">
+          <button class="btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="openPairChart('${safeJsSym}')">
             📈 Chart
           </button>
         </td>
@@ -371,12 +470,86 @@ function populateChartPairSelector() {
   if (!sel) return;
 
   const liveAssets = (PersonalState.assets || []).filter(a => !a.symbol.includes('(OTC)') && a.symbol.includes('/'));
-  sel.innerHTML = liveAssets.map(a => `<option value="${a.symbol}">${a.symbol}</option>`).join('');
-  if (PersonalState.activeChartPair) sel.value = PersonalState.activeChartPair;
+  const pairs = liveAssets.length > 0 ? liveAssets.map(a => a.symbol) : ALL_REAL_FOREX_PAIRS;
+  sel.innerHTML = pairs.map(sym => `<option value="${sym}">${sym}</option>`).join('');
+  if (PersonalState.activeChartPair) {
+    sel.value = PersonalState.activeChartPair;
+  }
 }
 
+function updateChartHudStats(candles, symbol) {
+  if (!candles || candles.length === 0) return;
+  const last = candles[candles.length - 1];
+  const first = candles[0];
+
+  const priceEl = document.getElementById('chart-hud-price');
+  const changeEl = document.getElementById('chart-hud-change');
+  const highEl = document.getElementById('chart-hud-high');
+  const lowEl = document.getElementById('chart-hud-low');
+  const spreadEl = document.getElementById('chart-hud-spread');
+  const payoutEl = document.getElementById('chart-hud-payout');
+
+  if (priceEl) priceEl.textContent = formatLivePrice(symbol, last.close);
+
+  if (changeEl) {
+    const diff = last.close - first.open;
+    const pct = ((diff / first.open) * 100).toFixed(2);
+    const isPos = diff >= 0;
+    changeEl.textContent = `${isPos ? '+' : ''}${pct}%`;
+    changeEl.style.color = isPos ? 'var(--emerald)' : 'var(--rose)';
+    if (priceEl) priceEl.style.color = isPos ? 'var(--emerald)' : 'var(--rose)';
+  }
+
+  let highest = -Infinity;
+  let lowest = Infinity;
+  for (let i = 0; i < candles.length; i++) {
+    if (candles[i].high > highest) highest = candles[i].high;
+    if (candles[i].low < lowest) lowest = candles[i].low;
+  }
+
+  if (highEl && highest !== -Infinity) highEl.textContent = formatLivePrice(symbol, highest);
+  if (lowEl && lowest !== Infinity) lowEl.textContent = formatLivePrice(symbol, lowest);
+
+  if (spreadEl) {
+    const isJpy = symbol.includes('JPY');
+    const spreadPips = (isJpy ? 0.012 : 0.00008) * (isJpy ? 100 : 10000);
+    spreadEl.textContent = `${spreadPips.toFixed(1)} pips`;
+  }
+
+  if (payoutEl) {
+    const payout = PersonalState.payouts[symbol] || 85;
+    payoutEl.textContent = `${payout}% PAYOUT`;
+  }
+}
+window.updateChartHudStats = updateChartHudStats;
+
 function changeChartPair(pair) {
+  if (!pair) return;
   PersonalState.activeChartPair = pair;
+
+  // Sync Dropdown
+  const sel = document.getElementById('chart-pair-select');
+  if (sel && sel.value !== pair) sel.value = pair;
+
+  // Sync Top Pair Chips
+  const chipSanitized = sanitizeId(pair);
+  document.querySelectorAll('[id^="chip-pair-"]').forEach(chip => {
+    chip.classList.toggle('active', chip.id === `chip-pair-${chipSanitized}`);
+  });
+
+  // Update Payout badge
+  const payout = PersonalState.payouts[pair] || 85;
+  const payoutEl = document.getElementById('chart-hud-payout');
+  if (payoutEl) payoutEl.textContent = `${payout}% PAYOUT`;
+
+  // Update Live Rate from state if available
+  const curPrice = PersonalState.prices[pair];
+  if (curPrice) {
+    const priceEl = document.getElementById('chart-hud-price');
+    if (priceEl) priceEl.textContent = formatLivePrice(pair, curPrice);
+  }
+
+  // Update Chart Engine
   if (chartEngine) {
     chartEngine.setSymbol(pair);
     fetchCandlesForPair(pair);
@@ -386,17 +559,23 @@ window.changeChartPair = changeChartPair;
 
 function fetchCandlesForPair(symbol, tf = '1M') {
   const reqTf = tf || (chartEngine ? chartEngine.timeframe : '1M');
+  const targetSymbol = symbol || PersonalState.activeChartPair || 'EUR/USD';
+
   if (window.pywebview && window.pywebview.api && window.pywebview.api.get_candles_for_chart) {
-    window.pywebview.api.get_candles_for_chart(symbol, reqTf).then(candles => {
+    window.pywebview.api.get_candles_for_chart(targetSymbol, reqTf).then(candles => {
       if (chartEngine && Array.isArray(candles)) {
         chartEngine.setCandles(candles);
+        updateChartHudStats(candles, targetSymbol);
       }
+    }).catch(err => {
+      console.warn('Error fetching candles:', err);
     });
   }
 }
+window.fetchCandlesForPair = fetchCandlesForPair;
 
 function setChartTimeframe(tf) {
-  document.querySelectorAll('#btn-tf-1m, #btn-tf-5m, #btn-tf-15m').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#btn-tf-1m, #btn-tf-3m, #btn-tf-5m, #btn-tf-15m, #btn-tf-30m').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`btn-tf-${tf.toLowerCase()}`);
   if (btn) btn.classList.add('active');
 
@@ -408,49 +587,878 @@ function setChartTimeframe(tf) {
 }
 window.setChartTimeframe = setChartTimeframe;
 
-function toggleHeikinAshi() {
+function setChartStyle(style) {
   if (chartEngine) {
-    const isHA = !chartEngine.heikinAshi;
-    chartEngine.setHeikinAshi(isHA);
-    const btn = document.getElementById('btn-chart-ha');
-    if (btn) {
-      btn.textContent = isHA ? '📊 Heikin-Ashi' : '🕯️ Regular';
-      btn.className = isHA ? 'btn-secondary active' : 'btn-secondary';
-    }
-    showToast(`Switched chart to ${isHA ? 'Heikin-Ashi Smoothed Trend' : 'Regular Candlesticks'}`, 'info');
+    chartEngine.setChartMode(style);
+    showToast(`Chart style changed to ${style}`, 'info');
   }
 }
-window.toggleHeikinAshi = toggleHeikinAshi;
+window.setChartStyle = setChartStyle;
 
-function toggleChartIndicator(ind) {
-  if (chartEngine) {
-    if (ind === 'ema') {
-      chartEngine.toggleIndicator('ema20');
-      chartEngine.toggleIndicator('ema50');
-      const btn = document.getElementById('btn-ind-ema');
-      if (btn) btn.classList.toggle('active', chartEngine.indicators.ema20);
-      showToast('Toggled EMA 20/50 lines', 'info');
-    } else if (ind === 'bb') {
-      chartEngine.toggleIndicator('bb');
-      const btn = document.getElementById('btn-ind-bb');
-      if (btn) btn.classList.toggle('active', chartEngine.indicators.bb);
-      showToast('Toggled Bollinger Bands Cloud', 'info');
-    }
+function toggleChartOverlay(overlay) {
+  if (!chartEngine) return;
+  if (overlay === 'ema') {
+    chartEngine.toggleIndicator('ema20');
+    chartEngine.toggleIndicator('ema50');
+    const active = chartEngine.indicators.ema20;
+    const btn = document.getElementById('btn-ind-ema');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`EMA 20/50 Ribbon ${active ? 'Enabled' : 'Disabled'}`, 'info');
+  } else if (overlay === 'bb') {
+    chartEngine.toggleIndicator('bb');
+    const active = chartEngine.indicators.bb;
+    const btn = document.getElementById('btn-ind-bb');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`Bollinger Cloud ${active ? 'Enabled' : 'Disabled'}`, 'info');
+  } else if (overlay === 'supertrend') {
+    chartEngine.toggleIndicator('supertrend');
+    const active = chartEngine.indicators.supertrend;
+    const btn = document.getElementById('btn-ind-supertrend');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`Supertrend ATR Ribbon ${active ? 'Enabled' : 'Disabled'}`, 'info');
+  } else if (overlay === 'sr') {
+    chartEngine.toggleIndicator('sr');
+    const active = chartEngine.indicators.sr;
+    const btn = document.getElementById('btn-ind-sr');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`Support & Resistance Pivots ${active ? 'Enabled' : 'Disabled'}`, 'info');
   }
 }
-window.toggleChartIndicator = toggleChartIndicator;
+window.toggleChartOverlay = toggleChartOverlay;
+
+function toggleChartSubPanel(panel) {
+  if (!chartEngine) return;
+  if (panel === 'rsi') {
+    chartEngine.toggleIndicator('rsi');
+    const active = chartEngine.indicators.rsi;
+    const btn = document.getElementById('btn-sub-rsi');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`RSI (14) Sub-Panel ${active ? 'Enabled' : 'Disabled'}`, 'info');
+  } else if (panel === 'macd') {
+    chartEngine.toggleIndicator('macd');
+    const active = chartEngine.indicators.macd;
+    const btn = document.getElementById('btn-sub-macd');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`MACD Histogram Sub-Panel ${active ? 'Enabled' : 'Disabled'}`, 'info');
+  } else if (panel === 'volume') {
+    chartEngine.toggleIndicator('volume');
+    const active = chartEngine.indicators.volume;
+    const btn = document.getElementById('btn-sub-volume');
+    if (btn) btn.classList.toggle('active', active);
+    showToast(`Volume Histogram ${active ? 'Enabled' : 'Disabled'}`, 'info');
+  }
+}
+window.toggleChartSubPanel = toggleChartSubPanel;
+
+function setChartDrawing(tool) {
+  if (!chartEngine) return;
+  chartEngine.setDrawingTool(tool);
+  if (tool === 'clear') {
+    showToast('Cleared all chart drawings', 'info');
+  } else if (tool === 'hline') {
+    showToast('Click anywhere on chart to place Horizontal S&R Ray', 'info');
+  } else if (tool === 'trendline') {
+    showToast('Click two points on chart to draw Trendline', 'info');
+  }
+}
+window.setChartDrawing = setChartDrawing;
+
+function chartZoom(dir) {
+  if (!chartEngine) return;
+  if (dir < 0) {
+    chartEngine.zoomIn();
+  } else {
+    chartEngine.zoomOut();
+  }
+}
+window.chartZoom = chartZoom;
+
+function chartResetView() {
+  if (!chartEngine) return;
+  chartEngine.resetView();
+  showToast('Chart zoom & pan reset to default', 'info');
+}
+window.chartResetView = chartResetView;
 
 // ============================================================================
 // Complete Strategy Customizer Lab
 // ============================================================================
-function renderStrategiesList() {
-  const container = document.getElementById('strategies-list-container');
-  const countIndicator = document.getElementById('strat-count-indicator');
+const ALL_REAL_FOREX_PAIRS = [
+  "EUR/USD", "GBP/USD", "USD/JPY", "USD/CAD", "USD/CHF", "AUD/USD", "NZD/USD",
+  "EUR/GBP", "EUR/JPY", "EUR/AUD", "EUR/CAD", "EUR/CHF", "EUR/NZD",
+  "GBP/JPY", "GBP/AUD", "GBP/CAD", "GBP/CHF", "GBP/NZD",
+  "AUD/JPY", "AUD/CAD", "AUD/CHF", "AUD/NZD",
+  "CAD/JPY", "CAD/CHF", "CHF/JPY",
+  "NZD/JPY", "NZD/CAD", "NZD/CHF"
+];
+
+const MAJOR_REAL_FOREX_PAIRS = [
+  "EUR/USD", "GBP/USD", "USD/JPY", "USD/CAD", "USD/CHF", "AUD/USD", "NZD/USD"
+];
+
+let personalCurrentScope = 'ALL_REAL';
+let personalSelectedCustomAssets = new Set(ALL_REAL_FOREX_PAIRS);
+
+// ============================================================================
+// VISUAL STRATEGY STUDIO CONTROLLER & REAL-TIME BENCH
+// ============================================================================
+let strategyChartEngine = null;
+let activeStrategyPreviewPair = 'EUR/USD';
+let activeStrategyPreviewTf = '1M';
+let savedStrategyBaselineWR = 0;
+let strategyFormDebounceTimer = null;
+
+function initStrategyVisualizer() {
+  const canvas = document.getElementById('strategyVisualizerCanvas');
+  if (!canvas) return;
+
+  if (!strategyChartEngine) {
+    strategyChartEngine = new InteractiveChartEngine('strategyVisualizerCanvas');
+  }
+
+  // Populate pair selector with all 28 Real Forex pairs
+  const sel = document.getElementById('strat-preview-pair-select');
+  if (sel) {
+    sel.innerHTML = ALL_REAL_FOREX_PAIRS.map(sym => `<option value="${sym}">${sym}</option>`).join('');
+    sel.value = activeStrategyPreviewPair;
+  }
+
+  fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+}
+window.initStrategyVisualizer = initStrategyVisualizer;
+
+function setStrategyPreviewTf(tf) {
+  activeStrategyPreviewTf = tf;
+  document.querySelectorAll('[id^="btn-strat-tf-"]').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `btn-strat-tf-${tf.toLowerCase()}`);
+  });
+  if (strategyChartEngine) {
+    strategyChartEngine.timeframe = tf;
+  }
+  fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+}
+window.setStrategyPreviewTf = setStrategyPreviewTf;
+
+function changeStrategyPreviewPair(pair) {
+  if (!pair) return;
+  activeStrategyPreviewPair = pair;
+  const sel = document.getElementById('strat-preview-pair-select');
+  if (sel && sel.value !== pair) sel.value = pair;
+  fetchCandlesForStrategyPreview(pair);
+}
+window.changeStrategyPreviewPair = changeStrategyPreviewPair;
+
+function fetchCandlesForStrategyPreview(pair) {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_candles_for_chart) {
+    return;
+  }
+  window.pywebview.api.get_candles_for_chart(pair, activeStrategyPreviewTf).then(candles => {
+    if (candles && candles.length > 0 && strategyChartEngine) {
+      strategyChartEngine.setCandles(candles);
+      strategyChartEngine.symbol = pair;
+      strategyChartEngine.timeframe = activeStrategyPreviewTf;
+      recalculateStrategyVisualizer();
+    }
+  }).catch(err => {
+    console.error('Error fetching candles for strategy visualizer:', err);
+  });
+}
+window.fetchCandlesForStrategyPreview = fetchCandlesForStrategyPreview;
+
+function onStrategyFormChange() {
+  if (strategyFormDebounceTimer) clearTimeout(strategyFormDebounceTimer);
+  strategyFormDebounceTimer = setTimeout(() => {
+    recalculateStrategyVisualizer();
+  }, 40);
+}
+window.onStrategyFormChange = onStrategyFormChange;
+
+function recalculateStrategyVisualizer() {
+  if (!strategyChartEngine || !strategyChartEngine.candles || strategyChartEngine.candles.length === 0) return;
+  if (typeof StrategyEvaluator === 'undefined') return;
+
+  const currentStrat = compileCurrentStrategyForm();
+  if (!currentStrat) return;
+
+  // 1. Configure chart indicators matching strategy
+  strategyChartEngine.setStrategyConfig(currentStrat);
+
+  // 2. Evaluate strategy on visible authentic candles
+  const evalResult = StrategyEvaluator.evaluateStrategy(currentStrat, strategyChartEngine.candles);
+
+  // 3. Set signal markers (CALL/PUT arrows + WIN/LOSS tags) on canvas
+  strategyChartEngine.setSignalMarkers(evalResult.results_log);
+
+  // 4. Update HUD Performance Stats
+  const sigEl = document.getElementById('hud-strat-signals');
+  const winEl = document.getElementById('hud-strat-wins');
+  const lossEl = document.getElementById('hud-strat-losses');
+  const wrEl = document.getElementById('hud-strat-winrate');
+  const pfEl = document.getElementById('hud-strat-pf');
+
+  if (sigEl) sigEl.textContent = evalResult.total_signals;
+  if (winEl) winEl.textContent = evalResult.wins;
+  if (lossEl) lossEl.textContent = evalResult.losses;
+  if (wrEl) {
+    wrEl.textContent = `${evalResult.win_rate}%`;
+    wrEl.style.color = evalResult.win_rate >= 60 ? 'var(--emerald)' : (evalResult.win_rate >= 54 ? 'var(--cyan-bright)' : 'var(--rose)');
+  }
+  if (pfEl) pfEl.textContent = evalResult.profit_factor.toFixed(2);
+
+  // 5. Update A/B Diff Badge
+  const diffBadge = document.getElementById('strat-diff-badge');
+  if (diffBadge) {
+    if (savedStrategyBaselineWR > 0) {
+      const diff = evalResult.win_rate - savedStrategyBaselineWR;
+      const isPos = diff >= 0;
+      diffBadge.style.display = 'inline-block';
+      diffBadge.textContent = `vs Saved: ${isPos ? '+' : ''}${diff.toFixed(1)}% WR`;
+      diffBadge.style.color = isPos ? 'var(--emerald)' : 'var(--rose)';
+      diffBadge.style.borderColor = isPos ? 'rgba(0, 245, 155, 0.4)' : 'rgba(255, 51, 102, 0.4)';
+    } else {
+      diffBadge.style.display = 'none';
+    }
+  }
+
+  // 6. Update Active Bar Rule Radar
+  updateActiveRuleRadar(currentStrat);
+}
+window.recalculateStrategyVisualizer = recalculateStrategyVisualizer;
+
+function updateActiveRuleRadar(currentStrat) {
+  if (!strategyChartEngine || !strategyChartEngine.candles || typeof StrategyEvaluator === 'undefined') return;
+  const radar = StrategyEvaluator.evaluateActiveBarRadar(currentStrat, strategyChartEngine.candles, strategyChartEngine.livePrice);
+
+  const summaryEl = document.getElementById('strat-radar-summary');
+  const chipsEl = document.getElementById('strat-radar-chips');
+
+  if (summaryEl) {
+    summaryEl.textContent = `${radar.summary} (${radar.score}% MET)`;
+    summaryEl.style.color = radar.score >= 70 ? 'var(--emerald)' : (radar.score >= 50 ? 'var(--cyan-bright)' : 'var(--text-dim)');
+  }
+
+  if (chipsEl) {
+    chipsEl.innerHTML = radar.rules.map(r => {
+      let clickAction = '';
+      if (r.name.includes('Bollinger') || r.name.includes('Dev')) {
+        clickAction = `onclick="focusStrategyRule('bollinger')" title="Click to tune Bollinger Band Contact settings"`;
+      } else if (r.name.includes('Body') || r.name.includes('Ratio')) {
+        clickAction = `onclick="focusStrategyRule('body')" title="Click to tune Candle Anatomy settings"`;
+      } else if (r.name.includes('RSI')) {
+        clickAction = `onclick="focusStrategyRule('rsi')" title="Click to tune RSI settings"`;
+      } else {
+        clickAction = `onclick="focusStrategyRule('general')"`;
+      }
+      return `
+        <button type="button" class="token-chip ${r.passed ? 'active' : ''}" ${clickAction} style="cursor: pointer; font-size: 10px; padding: 2px 8px; background: ${r.passed ? 'rgba(0, 245, 155, 0.18)' : 'rgba(255,255,255,0.06)'}; color: ${r.passed ? 'var(--emerald)' : 'var(--amber)'}; border-color: ${r.passed ? 'rgba(0, 245, 155, 0.4)' : 'rgba(245, 158, 11, 0.3)'}; transition: all 0.2s;">
+          ${r.passed ? '✅' : '⏳'} ${r.name}
+        </button>
+      `;
+    }).join('');
+  }
+
+  strategyChartEngine.updateLiveConfluenceRadar(radar);
+}
+
+function focusStrategyRule(ruleKey) {
+  if (ruleKey === 'bollinger') {
+    const sec = document.getElementById('sec-ind-bollinger');
+    const checkbox = document.getElementById('strat-bollinger-filter');
+    const drawer = document.getElementById('ind-params-bollinger');
+    if (checkbox && !checkbox.checked) {
+      checkbox.checked = true;
+      toggleIndicatorDrawer('bollinger', true);
+    } else if (drawer) {
+      drawer.style.display = 'grid';
+    }
+    if (sec) {
+      sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      sec.style.transition = 'all 0.4s ease';
+      sec.style.background = 'rgba(0, 240, 255, 0.15)';
+      sec.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)';
+      sec.style.borderColor = 'var(--cyan-bright)';
+      setTimeout(() => {
+        sec.style.background = '';
+        sec.style.boxShadow = '';
+        sec.style.borderColor = 'transparent';
+      }, 2500);
+    }
+    const devInput = document.getElementById('ind-bb-dev');
+    if (devInput) {
+      setTimeout(() => devInput.focus(), 300);
+    }
+    recalculateStrategyVisualizer();
+    if (typeof showToast === 'function') showToast('Focused on Bollinger Band Contact rules', 'info');
+  } else if (ruleKey === 'body') {
+    const el = document.getElementById('strat-body-ratio');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+    }
+  } else if (ruleKey === 'rsi') {
+    const sec = document.getElementById('sec-ind-rsi');
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+window.focusStrategyRule = focusStrategyRule;
+
+function compileCurrentStrategyForm() {
+  const id = document.getElementById('strat-id-input')?.value || 'temp_strat';
+  const name = document.getElementById('strat-name-input')?.value || 'Custom Strategy';
+  const tf = document.getElementById('strat-tf-select')?.value || '1M';
+  const expiry = parseInt(document.getElementById('strat-exp-input')?.value, 10) || 2;
+  const payout = parseFloat(document.getElementById('strat-payout-input')?.value) || 80;
+  const direction = document.getElementById('strat-direction-select')?.value || 'BOTH';
+  const cooldown = parseInt(document.getElementById('strat-cooldown-select')?.value, 10) || 120;
+
+  const trendEnabled = document.getElementById('strat-trend-filter')?.checked || false;
+  const trendMtf = document.getElementById('strat-trend-mtf')?.value || '5M';
+  const trendEma = parseInt(document.getElementById('strat-trend-ema')?.value, 10) || 20;
+
+  const bodyRatio = parseFloat(document.getElementById('strat-body-ratio')?.value || 0.20);
+  const maxWick = parseFloat(document.getElementById('strat-max-wick')?.value || 0.40);
+  const filterDoji = document.getElementById('strat-doji-filter')?.checked || false;
+
+  const indicators = [];
+
+  // 1. Bollinger Bands
+  if (document.getElementById('strat-bollinger-filter')?.checked) {
+    indicators.push({
+      indicator: 'BOLLINGER',
+      params: {
+        period_1: parseInt(document.getElementById('ind-bb-p1')?.value, 10) || 10,
+        period_2: parseInt(document.getElementById('ind-bb-p2')?.value, 10) || 13,
+        deviation: parseFloat(document.getElementById('ind-bb-dev')?.value) || 2.0,
+        min_body_protrusion: parseFloat(document.getElementById('ind-bb-protrusion')?.value) || 20
+      }
+    });
+  }
+
+  // 2. Supertrend
+  if (document.getElementById('strat-supertrend-filter')?.checked) {
+    indicators.push({
+      indicator: 'SUPERTREND',
+      params: {
+        atr_period: parseInt(document.getElementById('ind-st-period')?.value, 10) || 10,
+        multiplier: parseFloat(document.getElementById('ind-st-mult')?.value) || 3.0
+      }
+    });
+  }
+
+  // 3. Parabolic SAR
+  if (document.getElementById('strat-sar-filter')?.checked) {
+    indicators.push({
+      indicator: 'PARABOLIC_SAR',
+      params: {
+        step: parseFloat(document.getElementById('ind-sar-step')?.value) || 0.02,
+        max_step: parseFloat(document.getElementById('ind-sar-max')?.value) || 0.2
+      }
+    });
+  }
+
+  // 4. Moving Average
+  if (document.getElementById('strat-ma-filter')?.checked) {
+    indicators.push({
+      indicator: 'MOVING_AVERAGE',
+      params: {
+        period: parseInt(document.getElementById('ind-ma-period')?.value, 10) || 14,
+        type: document.getElementById('ind-ma-type')?.value || 'SMA'
+      }
+    });
+  }
+
+  // 5. Keltner Channel
+  if (document.getElementById('strat-keltner-filter')?.checked) {
+    indicators.push({
+      indicator: 'KELTNER',
+      params: {
+        ema_period: parseInt(document.getElementById('ind-keltner-period')?.value, 10) || 20,
+        atr_period: parseInt(document.getElementById('ind-keltner-atr')?.value, 10) || 10,
+        multiplier: parseFloat(document.getElementById('ind-keltner-mult')?.value) || 1.0
+      }
+    });
+  }
+
+  // 6. Donchian Channel
+  if (document.getElementById('strat-donchian-filter')?.checked) {
+    indicators.push({
+      indicator: 'DONCHIAN',
+      params: {
+        period: parseInt(document.getElementById('ind-donchian-period')?.value, 10) || 20
+      }
+    });
+  }
+
+  // 7. Envelopes
+  if (document.getElementById('strat-envelopes-filter')?.checked) {
+    indicators.push({
+      indicator: 'ENVELOPES',
+      params: {
+        period: parseInt(document.getElementById('ind-env-period')?.value, 10) || 14,
+        deviation_pct: parseFloat(document.getElementById('ind-env-dev')?.value) || 0.1
+      }
+    });
+  }
+
+  // 8. Alligator
+  if (document.getElementById('strat-alligator-filter')?.checked) {
+    indicators.push({
+      indicator: 'ALLIGATOR',
+      params: {
+        jaw_period: parseInt(document.getElementById('ind-allig-jaw')?.value, 10) || 13,
+        teeth_period: parseInt(document.getElementById('ind-allig-teeth')?.value, 10) || 8,
+        lips_period: parseInt(document.getElementById('ind-allig-lips')?.value, 10) || 5
+      }
+    });
+  }
+
+  // 9. Ichimoku Cloud
+  if (document.getElementById('strat-ichimoku-filter')?.checked) {
+    indicators.push({
+      indicator: 'ICHIMOKU',
+      params: {
+        tenkan_period: parseInt(document.getElementById('ind-ichi-tenkan')?.value, 10) || 9,
+        kijun_period: parseInt(document.getElementById('ind-ichi-kijun')?.value, 10) || 26,
+        senkou_b_period: parseInt(document.getElementById('ind-ichi-senkou')?.value, 10) || 52
+      }
+    });
+  }
+
+  // 10. Fractal
+  if (document.getElementById('strat-fractal-filter')?.checked) {
+    indicators.push({
+      indicator: 'FRACTAL',
+      params: {
+        period: parseInt(document.getElementById('ind-frac-period')?.value, 10) || 2
+      }
+    });
+  }
+
+  // 11. Zig Zag
+  if (document.getElementById('strat-zigzag-filter')?.checked) {
+    indicators.push({
+      indicator: 'ZIGZAG',
+      params: {
+        depth: parseInt(document.getElementById('ind-zz-depth')?.value, 10) || 12,
+        deviation: parseFloat(document.getElementById('ind-zz-dev')?.value) || 5,
+        backstep: parseInt(document.getElementById('ind-zz-backstep')?.value, 10) || 3
+      }
+    });
+  }
+
+  // 12. RSI
+  if (document.getElementById('strat-rsi-filter')?.checked) {
+    indicators.push({
+      indicator: 'RSI',
+      params: {
+        period: parseInt(document.getElementById('ind-rsi-period')?.value, 10) || 14,
+        overbought: parseInt(document.getElementById('ind-rsi-ob')?.value, 10) || 70,
+        oversold: parseInt(document.getElementById('ind-rsi-os')?.value, 10) || 30
+      }
+    });
+  }
+
+  // 13. Stochastic
+  if (document.getElementById('strat-stochastic-filter')?.checked) {
+    indicators.push({
+      indicator: 'STOCHASTIC',
+      params: {
+        k_period: parseInt(document.getElementById('ind-stoch-k')?.value, 10) || 14,
+        d_period: parseInt(document.getElementById('ind-stoch-d')?.value, 10) || 3,
+        overbought: parseInt(document.getElementById('ind-stoch-ob')?.value, 10) || 80,
+        oversold: parseInt(document.getElementById('ind-stoch-os')?.value, 10) || 20
+      }
+    });
+  }
+
+  // 14. MACD
+  if (document.getElementById('strat-macd-filter')?.checked) {
+    indicators.push({
+      indicator: 'MACD',
+      params: {
+        fast_period: parseInt(document.getElementById('ind-macd-fast')?.value, 10) || 12,
+        slow_period: parseInt(document.getElementById('ind-macd-slow')?.value, 10) || 26,
+        signal_period: parseInt(document.getElementById('ind-macd-signal')?.value, 10) || 9
+      }
+    });
+  }
+
+  // 15. Awesome Oscillator
+  if (document.getElementById('strat-ao-filter')?.checked) {
+    indicators.push({
+      indicator: 'AWESOME_OSCILLATOR',
+      params: {
+        fast_period: parseInt(document.getElementById('ind-ao-fast')?.value, 10) || 5,
+        slow_period: parseInt(document.getElementById('ind-ao-slow')?.value, 10) || 34
+      }
+    });
+  }
+
+  // 16. Williams %R
+  if (document.getElementById('strat-williams-filter')?.checked) {
+    indicators.push({
+      indicator: 'WILLIAMS_R',
+      params: {
+        period: parseInt(document.getElementById('ind-wr-period')?.value, 10) || 14,
+        overbought: parseInt(document.getElementById('ind-wr-ob')?.value, 10) || -20,
+        oversold: parseInt(document.getElementById('ind-wr-os')?.value, 10) || -80
+      }
+    });
+  }
+
+  // 17. CCI
+  if (document.getElementById('strat-cci-filter')?.checked) {
+    indicators.push({
+      indicator: 'CCI',
+      params: {
+        period: parseInt(document.getElementById('ind-cci-period')?.value, 10) || 20,
+        overbought: parseInt(document.getElementById('ind-cci-ob')?.value, 10) || 100,
+        oversold: parseInt(document.getElementById('ind-cci-os')?.value, 10) || -100
+      }
+    });
+  }
+
+  // 18. DeMarker
+  if (document.getElementById('strat-demarker-filter')?.checked) {
+    indicators.push({
+      indicator: 'DEMARKER',
+      params: {
+        period: parseInt(document.getElementById('ind-dem-period')?.value, 10) || 14,
+        overbought: parseFloat(document.getElementById('ind-dem-ob')?.value) || 0.7,
+        oversold: parseFloat(document.getElementById('ind-dem-os')?.value) || 0.3
+      }
+    });
+  }
+
+  // 19. Bulls & Bears Power (Elder Ray)
+  if (document.getElementById('strat-elder-filter')?.checked) {
+    indicators.push({
+      indicator: 'ELDER_RAY',
+      params: {
+        period: parseInt(document.getElementById('ind-elder-period')?.value, 10) || 13
+      }
+    });
+  }
+
+  // 20. ADX
+  if (document.getElementById('strat-adx-filter')?.checked) {
+    indicators.push({
+      indicator: 'ADX',
+      params: {
+        period: parseInt(document.getElementById('ind-adx-period')?.value, 10) || 14
+      }
+    });
+  }
+
+  // 21. Aroon
+  if (document.getElementById('strat-aroon-filter')?.checked) {
+    indicators.push({
+      indicator: 'AROON',
+      params: {
+        period: parseInt(document.getElementById('ind-aroon-period')?.value, 10) || 14
+      }
+    });
+  }
+
+  // 22. ATR
+  if (document.getElementById('strat-atr-filter')?.checked) {
+    indicators.push({
+      indicator: 'ATR',
+      params: {
+        period: parseInt(document.getElementById('ind-atr-period')?.value, 10) || 14
+      }
+    });
+  }
+
+  // 23. Momentum
+  if (document.getElementById('strat-momentum-filter')?.checked) {
+    indicators.push({
+      indicator: 'MOMENTUM',
+      params: {
+        period: parseInt(document.getElementById('ind-mom-period')?.value, 10) || 10
+      }
+    });
+  }
+
+  // 24. ROC
+  if (document.getElementById('strat-roc-filter')?.checked) {
+    indicators.push({
+      indicator: 'ROC',
+      params: {
+        period: parseInt(document.getElementById('ind-roc-period')?.value, 10) || 9
+      }
+    });
+  }
+
+  // 25. Vortex
+  if (document.getElementById('strat-vortex-filter')?.checked) {
+    indicators.push({
+      indicator: 'VORTEX',
+      params: {
+        period: parseInt(document.getElementById('ind-vortex-period')?.value, 10) || 14
+      }
+    });
+  }
+
+  // 26. Schaff Trend Cycle
+  if (document.getElementById('strat-stc-filter')?.checked) {
+    indicators.push({
+      indicator: 'SCHAFF_TREND_CYCLE',
+      params: {
+        fast_period: parseInt(document.getElementById('ind-stc-fast')?.value, 10) || 23,
+        slow_period: parseInt(document.getElementById('ind-stc-slow')?.value, 10) || 50,
+        cycle_period: parseInt(document.getElementById('ind-stc-cycle')?.value, 10) || 10
+      }
+    });
+  }
+
+  // 27. Volume Oscillator
+  if (document.getElementById('strat-volosc-filter')?.checked) {
+    indicators.push({
+      indicator: 'VOLUME_OSCILLATOR',
+      params: {
+        short_period: parseInt(document.getElementById('ind-vo-short')?.value, 10) || 5,
+        long_period: parseInt(document.getElementById('ind-vo-long')?.value, 10) || 10
+      }
+    });
+  }
+
+  const confToggle = document.getElementById('strat-confluence-toggle')?.checked || false;
+  const confMin = parseInt(document.getElementById('strat-confluence-min')?.value, 10) || 2;
+  const confScore = parseInt(document.getElementById('strat-confluence-score')?.value, 10) || 75;
+
+  const smc = {
+    fvg_enabled: document.getElementById('strat-smc-fvg')?.checked || false,
+    liquidity_sweep_enabled: document.getElementById('strat-smc-sweep')?.checked || false,
+    bos_enabled: document.getElementById('strat-smc-bos')?.checked || false,
+    order_block_enabled: document.getElementById('strat-smc-ob')?.checked || false
+  };
+
+  return {
+    id,
+    name,
+    timeframe: tf,
+    expiry_minutes: expiry,
+    min_payout: payout,
+    direction,
+    cooldown_seconds: cooldown,
+    filters: {
+      trend: { enabled: trendEnabled, mtf_timeframe: trendMtf, ema_period: trendEma },
+      candle_anatomy: { min_body_ratio: bodyRatio, max_opposing_wick: maxWick, filter_preceding_doji: filterDoji },
+      indicators,
+      confluence: {
+        enabled: confToggle,
+        min_agreeing_factors: confMin,
+        min_quality_score: confScore,
+        min_factors: confToggle ? confMin : 1
+      },
+      smc
+    }
+  };
+
+}
+
+function revertStrategyChanges() {
+  const currentId = document.getElementById('strat-id-input')?.value;
+  if (!currentId) return;
+  selectStrategyForEditing(currentId);
+  showToast('Reverted parameters to saved strategy', 'info');
+}
+window.revertStrategyChanges = revertStrategyChanges;
+
+// 28-Pair Confluence Matrix Modal Controller
+function open28PairMatrixModal() {
+  const modal = document.getElementById('matrix-modal');
+  if (modal) {
+    modal.classList.add('active');
+    run28PairStrategyEvaluation();
+  }
+}
+window.open28PairMatrixModal = open28PairMatrixModal;
+
+function close28PairMatrixModal() {
+  const modal = document.getElementById('matrix-modal');
+  if (modal) modal.classList.remove('active');
+}
+window.close28PairMatrixModal = close28PairMatrixModal;
+
+async function run28PairStrategyEvaluation() {
+  const tbody = document.getElementById('matrix-results-tbody');
+  const loadBar = document.getElementById('matrix-loading-bar');
+  const progressFill = document.getElementById('matrix-progress-fill');
+  const progressPct = document.getElementById('matrix-progress-pct');
+  const btn = document.getElementById('btn-run-matrix-eval');
+
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (loadBar) loadBar.style.display = 'block';
+  if (btn) btn.disabled = true;
+
+  const currentStrat = compileCurrentStrategyForm();
+  let profitableCount = 0;
+  let totalWR = 0;
+  let testedCount = 0;
+
+  for (let i = 0; i < ALL_REAL_FOREX_PAIRS.length; i++) {
+    const pair = ALL_REAL_FOREX_PAIRS[i];
+    const pct = Math.round(((i + 1) / ALL_REAL_FOREX_PAIRS.length) * 100);
+    if (progressFill) progressFill.style.width = `${pct}%`;
+    if (progressPct) progressPct.textContent = `${pct}% (${pair})`;
+
+    try {
+      let candles = [];
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_candles_for_chart) {
+        candles = await window.pywebview.api.get_candles_for_chart(pair, '1M');
+      }
+
+      if (candles && candles.length >= 25 && typeof StrategyEvaluator !== 'undefined') {
+        const res = StrategyEvaluator.evaluateStrategy(currentStrat, candles);
+        testedCount++;
+        totalWR += res.win_rate;
+        if (res.win_rate >= 55) profitableCount++;
+
+        const curRate = candles[candles.length - 1].close;
+        const payout = PersonalState.payouts[pair] || 85;
+        const isProfitable = res.win_rate >= 55;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${pair}</strong></td>
+          <td style="font-family: var(--font-mono);">${formatLivePrice(pair, curRate)}</td>
+          <td><span class="nav-badge" style="background: rgba(0, 245, 155, 0.1); color: var(--emerald);">${payout}%</span></td>
+          <td>${res.total_signals}</td>
+          <td><span style="color: var(--emerald);">${res.wins}W</span> / <span style="color: var(--rose);">${res.losses}L</span></td>
+          <td><strong style="color: ${isProfitable ? 'var(--emerald)' : 'var(--rose)'}; font-size: 12px;">${res.win_rate}%</strong></td>
+          <td style="font-family: var(--font-mono);">${res.profit_factor.toFixed(2)}</td>
+          <td>
+            <button type="button" class="btn-secondary" style="font-size: 10px; padding: 2px 8px;" onclick="close28PairMatrixModal(); changeStrategyPreviewPair('${pair}');">
+              👁️ View
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    } catch (e) {
+      console.debug('Matrix eval error for', pair, e);
+    }
+  }
+
+  if (loadBar) loadBar.style.display = 'none';
+  if (btn) btn.disabled = false;
+
+  const profEl = document.getElementById('matrix-profitable-pairs');
+  const avgWrEl = document.getElementById('matrix-avg-wr');
+  if (profEl) profEl.textContent = `${profitableCount} / ${testedCount}`;
+  if (avgWrEl && testedCount > 0) avgWrEl.textContent = `${(totalWR / testedCount).toFixed(1)}%`;
+}
+window.run28PairStrategyEvaluation = run28PairStrategyEvaluation;
+
+function toggleIndicatorDrawer(key, show) {
+  const drawer = document.getElementById(`ind-params-${key}`);
+  if (drawer) {
+    drawer.style.display = show ? 'grid' : 'none';
+  }
+}
+window.toggleIndicatorDrawer = toggleIndicatorDrawer;
+
+function setPersonalAssetScope(scope) {
+  personalCurrentScope = scope;
+  const pillAll = document.getElementById('scope-pill-all');
+  const pillMajors = document.getElementById('scope-pill-majors');
+  const pillCustom = document.getElementById('scope-pill-custom');
+  const badge = document.getElementById('strat-asset-scope-badge');
+  const customContainer = document.getElementById('strat-custom-assets-container');
+
+  if (pillAll) pillAll.classList.toggle('active', scope === 'ALL_REAL');
+  if (pillMajors) pillMajors.classList.toggle('active', scope === 'MAJORS');
+  if (pillCustom) pillCustom.classList.toggle('active', scope === 'CUSTOM');
+
+  if (scope === 'ALL_REAL') {
+    if (badge) badge.textContent = 'All Real Forex (28 Pairs)';
+    if (customContainer) customContainer.style.display = 'none';
+  } else if (scope === 'MAJORS') {
+    if (badge) badge.textContent = 'Major 7 Pairs';
+    if (customContainer) customContainer.style.display = 'none';
+  } else {
+    if (badge) badge.textContent = `Custom (${personalSelectedCustomAssets.size} Pairs)`;
+    if (customContainer) customContainer.style.display = 'block';
+    renderPersonalAssetChips();
+  }
+}
+window.setPersonalAssetScope = setPersonalAssetScope;
+
+function togglePersonalAssetChip(pair) {
+  if (personalSelectedCustomAssets.has(pair)) {
+    personalSelectedCustomAssets.delete(pair);
+  } else {
+    personalSelectedCustomAssets.add(pair);
+  }
+  const badge = document.getElementById('strat-asset-scope-badge');
+  if (badge && personalCurrentScope === 'CUSTOM') {
+    badge.textContent = `Custom (${personalSelectedCustomAssets.size} Pairs)`;
+  }
+  renderPersonalAssetChips();
+}
+window.togglePersonalAssetChip = togglePersonalAssetChip;
+
+function selectPersonalAssetGroup(type) {
+  if (type === 'ALL') {
+    ALL_REAL_FOREX_PAIRS.forEach(p => personalSelectedCustomAssets.add(p));
+  } else if (type === 'NONE') {
+    personalSelectedCustomAssets.clear();
+  }
+  const badge = document.getElementById('strat-asset-scope-badge');
+  if (badge && personalCurrentScope === 'CUSTOM') {
+    badge.textContent = `Custom (${personalSelectedCustomAssets.size} Pairs)`;
+  }
+  renderPersonalAssetChips();
+}
+window.selectPersonalAssetGroup = selectPersonalAssetGroup;
+
+function filterPersonalAssetChips(query) {
+  renderPersonalAssetChips(query);
+}
+window.filterPersonalAssetChips = filterPersonalAssetChips;
+
+function renderPersonalAssetChips(filterQuery = '') {
+  const container = document.getElementById('strat-asset-chips-grid');
   if (!container) return;
 
+  const q = (filterQuery || '').trim().toUpperCase();
+  const pairsToShow = ALL_REAL_FOREX_PAIRS.filter(p => !q || p.toUpperCase().includes(q));
+
+  container.innerHTML = pairsToShow.map(pair => {
+    const isSelected = personalSelectedCustomAssets.has(pair);
+    return `
+      <div class="personal-asset-chip ${isSelected ? 'active' : ''}" onclick="togglePersonalAssetChip('${pair}')">
+        <span>${isSelected ? '✓' : '+'}</span>
+        <span>${pair}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderStrategiesList() {
   const strats = PersonalState.strategies || [];
-  const activeCount = strats.filter(s => s.enabled).length;
-  if (countIndicator) countIndicator.textContent = `${activeCount} / ${strats.length} Active`;
+  const masterSelect = document.getElementById('strategy-master-select');
+  if (masterSelect) {
+    masterSelect.innerHTML = strats.map(s => `
+      <option value="${s.id}" ${s.id === PersonalState.selectedStrategyId ? 'selected' : ''}>
+        ${s.enabled ? '⚡' : '⏸️'} ${escapeHtml(s.name)} (${s.timeframe || '1M'} • ${s.direction || 'BOTH'})
+      </option>
+    `).join('');
+    if (PersonalState.selectedStrategyId) {
+      masterSelect.value = PersonalState.selectedStrategyId;
+    }
+  }
+
+  const container = document.getElementById('strategies-list-container');
+  const countIndicator = document.getElementById('strat-count-indicator');
+  if (countIndicator) {
+    const activeCount = strats.filter(s => s.enabled).length;
+    countIndicator.textContent = `${activeCount} / ${strats.length} Active`;
+  }
+  if (!container) return;
 
   if (strats.length === 0) {
     container.innerHTML = `
@@ -502,6 +1510,19 @@ function selectStrategyForEditing(strategyId) {
   document.getElementById('strat-cooldown-select').value = String(strat.cooldown_seconds || 120);
   document.getElementById('strat-mtg1-toggle').checked = !!strat.martingale_mtg1;
 
+  // Asset scope
+  const assets = strat.assets || ["ALL_REAL"];
+  if (assets.includes("ALL_REAL") || assets.length === 0 || assets.length === ALL_REAL_FOREX_PAIRS.length) {
+    personalSelectedCustomAssets = new Set(ALL_REAL_FOREX_PAIRS);
+    setPersonalAssetScope('ALL_REAL');
+  } else if (assets.length === MAJOR_REAL_FOREX_PAIRS.length && assets.every(p => MAJOR_REAL_FOREX_PAIRS.includes(p))) {
+    personalSelectedCustomAssets = new Set(MAJOR_REAL_FOREX_PAIRS);
+    setPersonalAssetScope('MAJORS');
+  } else {
+    personalSelectedCustomAssets = new Set(assets);
+    setPersonalAssetScope('CUSTOM');
+  }
+
   // Filters & Triggers
   const filters = strat.filters || {};
   const trend = filters.trend || {};
@@ -509,33 +1530,220 @@ function selectStrategyForEditing(strategyId) {
   const pa = filters.price_action || {};
   const smc = filters.smc || {};
   const inds = filters.indicators || [];
+  const conf = filters.confluence || {};
 
   document.getElementById('strat-trend-filter').checked = !!trend.enabled;
   document.getElementById('strat-trend-mtf').value = trend.mtf_timeframe || '5M';
   document.getElementById('strat-trend-ema').value = String(trend.ema_period || 20);
 
-  document.getElementById('strat-body-ratio').value = String(anatomy.min_body_ratio || 0.50);
-  document.getElementById('strat-max-wick').value = String(anatomy.max_opposing_wick || 0.35);
+  // Precision candle anatomy values
+  const bodyRatio = anatomy.min_body_ratio !== undefined ? Number(anatomy.min_body_ratio).toFixed(2) : '0.20';
+  const maxWick = anatomy.max_opposing_wick !== undefined ? Number(anatomy.max_opposing_wick).toFixed(2) : '0.40';
+  document.getElementById('strat-body-ratio').value = bodyRatio;
+  document.getElementById('strat-max-wick').value = maxWick;
   document.getElementById('strat-doji-filter').checked = anatomy.filter_preceding_doji !== false;
+
+  if (document.getElementById('strat-sr-clearance-input')) {
+    document.getElementById('strat-sr-clearance-input').value = String(pa.min_sr_clearance_pct ?? 0.05);
+  }
+  if (document.getElementById('strat-pinbar-ratio-input')) {
+    document.getElementById('strat-pinbar-ratio-input').value = String(anatomy.min_rejection_wick_ratio ?? 2.0);
+  }
 
   document.getElementById('strat-engulfing-filter').checked = !!pa.require_engulfing;
   document.getElementById('strat-sr-breakout-filter').checked = !!pa.require_sr_breakout;
 
-  document.getElementById('strat-rsi-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'RSI');
-  document.getElementById('strat-bollinger-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'BOLLINGER');
-  document.getElementById('strat-stochastic-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'STOCHASTIC');
-  document.getElementById('strat-macd-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'MACD');
-  document.getElementById('strat-supertrend-filter').checked = inds.some(i => ['SUPERTREND', 'ST'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-sar-filter').checked = inds.some(i => ['PARABOLIC_SAR', 'SAR', 'PSAR'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-ao-filter').checked = inds.some(i => ['AWESOME_OSCILLATOR', 'AO'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-williams-filter').checked = inds.some(i => ['WILLIAMS_R', 'WILLIAMS_%R', 'WR'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-cci-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'CCI');
-  document.getElementById('strat-demarker-filter').checked = inds.some(i => ['DEMARKER', 'DEM'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-elder-filter').checked = inds.some(i => ['BULLS_POWER', 'BEARS_POWER', 'ELDER'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-alligator-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'ALLIGATOR');
-  document.getElementById('strat-keltner-filter').checked = inds.some(i => ['KELTNER', 'DONCHIAN', 'ENVELOPES'].includes((i.indicator || '').toUpperCase()));
-  document.getElementById('strat-vortex-filter').checked = inds.some(i => (i.indicator || '').toUpperCase() === 'VORTEX');
+  // Technical Indicators & Drawers
+  const syncInd = (key, names, cbId, paramMap) => {
+    const found = inds.find(i => names.includes((i.indicator || '').toUpperCase()));
+    const active = !!found;
+    const cb = document.getElementById(cbId);
+    if (cb) cb.checked = active;
+    toggleIndicatorDrawer(key, active);
+    if (found && found.params && paramMap) {
+      for (const [elId, paramKey, defaultVal] of paramMap) {
+        const el = document.getElementById(elId);
+        if (el) el.value = found.params[paramKey] ?? defaultVal;
+      }
+    }
+  };
 
+  // 1. Bollinger
+  syncInd('bollinger', ['BOLLINGER'], 'strat-bollinger-filter', [
+    ['ind-bb-p1', 'period_1', 10],
+    ['ind-bb-p2', 'period_2', 13],
+    ['ind-bb-dev', 'deviation', 2.0],
+    ['ind-bb-protrusion', 'min_body_protrusion', 20]
+  ]);
+
+  // 2. Supertrend
+  syncInd('supertrend', ['SUPERTREND', 'ST'], 'strat-supertrend-filter', [
+    ['ind-st-period', 'atr_period', 10],
+    ['ind-st-mult', 'multiplier', 3.0]
+  ]);
+
+  // 3. Parabolic SAR
+  syncInd('sar', ['PARABOLIC_SAR', 'SAR', 'PSAR'], 'strat-sar-filter', [
+    ['ind-sar-step', 'step', 0.02],
+    ['ind-sar-max', 'max_step', 0.2]
+  ]);
+
+  // 4. Moving Average
+  syncInd('ma', ['MOVING_AVERAGE', 'MA', 'SMA_EMA'], 'strat-ma-filter', [
+    ['ind-ma-period', 'period', 14],
+    ['ind-ma-type', 'type', 'SMA']
+  ]);
+
+  // 5. Keltner Channel
+  syncInd('keltner', ['KELTNER', 'DONCHIAN_KELTNER'], 'strat-keltner-filter', [
+    ['ind-keltner-period', 'ema_period', 20],
+    ['ind-keltner-atr', 'atr_period', 10],
+    ['ind-keltner-mult', 'multiplier', 1.0]
+  ]);
+
+  // 6. Donchian Channel
+  syncInd('donchian', ['DONCHIAN'], 'strat-donchian-filter', [
+    ['ind-donchian-period', 'period', 20]
+  ]);
+
+  // 7. Envelopes
+  syncInd('envelopes', ['ENVELOPES'], 'strat-envelopes-filter', [
+    ['ind-env-period', 'period', 14],
+    ['ind-env-dev', 'deviation_pct', 0.1]
+  ]);
+
+  // 8. Alligator
+  syncInd('alligator', ['ALLIGATOR'], 'strat-alligator-filter', [
+    ['ind-allig-jaw', 'jaw_period', 13],
+    ['ind-allig-teeth', 'teeth_period', 8],
+    ['ind-allig-lips', 'lips_period', 5]
+  ]);
+
+  // 9. Ichimoku Cloud
+  syncInd('ichimoku', ['ICHIMOKU'], 'strat-ichimoku-filter', [
+    ['ind-ichi-tenkan', 'tenkan_period', 9],
+    ['ind-ichi-kijun', 'kijun_period', 26],
+    ['ind-ichi-senkou', 'senkou_b_period', 52]
+  ]);
+
+  // 10. Fractal
+  syncInd('fractal', ['FRACTAL'], 'strat-fractal-filter', [
+    ['ind-frac-period', 'period', 2]
+  ]);
+
+  // 11. Zig Zag
+  syncInd('zigzag', ['ZIGZAG', 'ZIG_ZAG'], 'strat-zigzag-filter', [
+    ['ind-zz-depth', 'depth', 12],
+    ['ind-zz-dev', 'deviation', 5],
+    ['ind-zz-backstep', 'backstep', 3]
+  ]);
+
+  // 12. RSI
+  syncInd('rsi', ['RSI'], 'strat-rsi-filter', [
+    ['ind-rsi-period', 'period', 14],
+    ['ind-rsi-ob', 'overbought', 70],
+    ['ind-rsi-os', 'oversold', 30]
+  ]);
+
+  // 13. Stochastic
+  syncInd('stoch', ['STOCHASTIC'], 'strat-stochastic-filter', [
+    ['ind-stoch-k', 'k_period', 14],
+    ['ind-stoch-d', 'd_period', 3],
+    ['ind-stoch-ob', 'overbought', 80],
+    ['ind-stoch-os', 'oversold', 20]
+  ]);
+
+  // 14. MACD
+  syncInd('macd', ['MACD'], 'strat-macd-filter', [
+    ['ind-macd-fast', 'fast_period', 12],
+    ['ind-macd-slow', 'slow_period', 26],
+    ['ind-macd-signal', 'signal_period', 9]
+  ]);
+
+  // 15. Awesome Oscillator
+  syncInd('ao', ['AWESOME_OSCILLATOR', 'AO'], 'strat-ao-filter', [
+    ['ind-ao-fast', 'fast_period', 5],
+    ['ind-ao-slow', 'slow_period', 34]
+  ]);
+
+  // 16. Williams %R
+  syncInd('williams', ['WILLIAMS_R', 'WILLIAMS_%R', 'WR'], 'strat-williams-filter', [
+    ['ind-wr-period', 'period', 14],
+    ['ind-wr-ob', 'overbought', -20],
+    ['ind-wr-os', 'oversold', -80]
+  ]);
+
+  // 17. CCI
+  syncInd('cci', ['CCI'], 'strat-cci-filter', [
+    ['ind-cci-period', 'period', 20],
+    ['ind-cci-ob', 'overbought', 100],
+    ['ind-cci-os', 'oversold', -100]
+  ]);
+
+  // 18. DeMarker
+  syncInd('demarker', ['DEMARKER', 'DEM'], 'strat-demarker-filter', [
+    ['ind-dem-period', 'period', 14],
+    ['ind-dem-ob', 'overbought', 0.7],
+    ['ind-dem-os', 'oversold', 0.3]
+  ]);
+
+  // 19. Bulls & Bears Power (Elder Ray)
+  syncInd('elder', ['BULLS_POWER', 'BEARS_POWER', 'ELDER', 'ELDER_RAY'], 'strat-elder-filter', [
+    ['ind-elder-period', 'period', 13]
+  ]);
+
+  // 20. ADX
+  syncInd('adx', ['ADX'], 'strat-adx-filter', [
+    ['ind-adx-period', 'period', 14]
+  ]);
+
+  // 21. Aroon
+  syncInd('aroon', ['AROON'], 'strat-aroon-filter', [
+    ['ind-aroon-period', 'period', 14]
+  ]);
+
+  // 22. ATR
+  syncInd('atr', ['ATR'], 'strat-atr-filter', [
+    ['ind-atr-period', 'period', 14]
+  ]);
+
+  // 23. Momentum
+  syncInd('momentum', ['MOMENTUM'], 'strat-momentum-filter', [
+    ['ind-mom-period', 'period', 10]
+  ]);
+
+  // 24. ROC
+  syncInd('roc', ['ROC'], 'strat-roc-filter', [
+    ['ind-roc-period', 'period', 9]
+  ]);
+
+  // 25. Vortex
+  syncInd('vortex', ['VORTEX'], 'strat-vortex-filter', [
+    ['ind-vortex-period', 'period', 14]
+  ]);
+
+  // 26. Schaff Trend Cycle
+  syncInd('stc', ['SCHAFF', 'STC', 'SCHAFF_TREND_CYCLE'], 'strat-stc-filter', [
+    ['ind-stc-fast', 'fast_period', 23],
+    ['ind-stc-slow', 'slow_period', 50],
+    ['ind-stc-cycle', 'cycle_period', 10]
+  ]);
+
+  // 27. Volume Oscillator
+  syncInd('volosc', ['VOLUME_OSCILLATOR', 'VO'], 'strat-volosc-filter', [
+    ['ind-vo-short', 'short_period', 5],
+    ['ind-vo-long', 'long_period', 10]
+  ]);
+
+
+  // Confluence Matrix
+  if (document.getElementById('strat-confluence-toggle')) {
+    document.getElementById('strat-confluence-toggle').checked = !!conf.enabled;
+    document.getElementById('strat-confluence-min').value = String(conf.min_agreeing_factors ?? 2);
+    document.getElementById('strat-confluence-score').value = String(conf.min_quality_score ?? 75);
+  }
+
+  // SMC
   document.getElementById('strat-smc-fvg').checked = !!smc.fvg_enabled;
   document.getElementById('strat-smc-sweep').checked = !!smc.liquidity_sweep_enabled;
   document.getElementById('strat-smc-bos').checked = !!smc.bos_enabled;
@@ -546,8 +1754,41 @@ function selectStrategyForEditing(strategyId) {
 
   const delBtn = document.getElementById('btn-delete-strategy');
   if (delBtn) delBtn.style.display = 'inline-block';
+
+  // Set preview pair if strategy specifies assets
+  if (strat.assets && strat.assets.length > 0 && strat.assets[0] !== 'ALL_REAL') {
+    activeStrategyPreviewPair = strat.assets[0];
+    const pairSel = document.getElementById('strat-preview-pair-select');
+    if (pairSel) pairSel.value = activeStrategyPreviewPair;
+  }
+
+  // Update Visual Studio
+  if (!strategyChartEngine) {
+    initStrategyVisualizer();
+  } else {
+    fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+  }
+  const masterSelect = document.getElementById('strategy-master-select');
+  if (masterSelect && masterSelect.value !== id) {
+    masterSelect.value = id;
+  }
 }
 window.selectStrategyForEditing = selectStrategyForEditing;
+
+function duplicateCurrentStrategy() {
+  const curId = PersonalState.selectedStrategyId;
+  const strat = PersonalState.strategies.find(s => s.id === curId);
+  if (!strat) return;
+  const clone = JSON.parse(JSON.stringify(strat));
+  clone.id = 'strat_' + Date.now();
+  clone.name = clone.name + ' (Copy)';
+  PersonalState.strategies.unshift(clone);
+  PersonalState.selectedStrategyId = clone.id;
+  renderStrategiesList();
+  selectStrategyForEditing(clone.id);
+  showToast(`Duplicated "${clone.name}"`, 'success');
+}
+window.duplicateCurrentStrategy = duplicateCurrentStrategy;
 
 function applyArchetypePreset(presetKey) {
   if (!presetKey) return;
@@ -757,20 +1998,68 @@ function applyArchetypePreset(presetKey) {
   document.getElementById('strat-engulfing-filter').checked = !!p.engulfing;
   document.getElementById('strat-sr-breakout-filter').checked = !!p.srBreakout;
 
-  document.getElementById('strat-rsi-filter').checked = !!p.rsi;
-  document.getElementById('strat-bollinger-filter').checked = !!p.bollinger;
-  document.getElementById('strat-stochastic-filter').checked = !!p.stoch;
-  document.getElementById('strat-macd-filter').checked = !!p.macd;
-  document.getElementById('strat-supertrend-filter').checked = !!p.supertrend;
-  document.getElementById('strat-sar-filter').checked = !!p.sar;
-  document.getElementById('strat-ao-filter').checked = !!p.ao;
-  document.getElementById('strat-williams-filter').checked = !!p.williams;
-  document.getElementById('strat-cci-filter').checked = !!p.cci;
-  document.getElementById('strat-demarker-filter').checked = !!p.demarker;
-  document.getElementById('strat-elder-filter').checked = !!p.elder;
-  document.getElementById('strat-alligator-filter').checked = !!p.alligator;
-  document.getElementById('strat-keltner-filter').checked = !!p.keltner;
-  document.getElementById('strat-vortex-filter').checked = !!p.vortex;
+  const allDrawerKeys = ['bollinger', 'supertrend', 'sar', 'ma', 'keltner', 'donchian', 'envelopes', 'alligator', 'ichimoku', 'fractal', 'zigzag', 'rsi', 'stoch', 'macd', 'ao', 'williams', 'cci', 'demarker', 'elder', 'adx', 'aroon', 'atr', 'momentum', 'roc', 'vortex', 'stc', 'volosc'];
+  allDrawerKeys.forEach(k => toggleIndicatorDrawer(k, false));
+
+  const allIndicatorKeys = [
+    { key: 'bollinger', cb: 'strat-bollinger-filter' },
+    { key: 'supertrend', cb: 'strat-supertrend-filter' },
+    { key: 'sar', cb: 'strat-sar-filter' },
+    { key: 'ma', cb: 'strat-ma-filter' },
+    { key: 'keltner', cb: 'strat-keltner-filter' },
+    { key: 'donchian', cb: 'strat-donchian-filter' },
+    { key: 'envelopes', cb: 'strat-envelopes-filter' },
+    { key: 'alligator', cb: 'strat-alligator-filter' },
+    { key: 'ichimoku', cb: 'strat-ichimoku-filter' },
+    { key: 'fractal', cb: 'strat-fractal-filter' },
+    { key: 'zigzag', cb: 'strat-zigzag-filter' },
+    { key: 'rsi', cb: 'strat-rsi-filter' },
+    { key: 'stoch', cb: 'strat-stochastic-filter' },
+    { key: 'macd', cb: 'strat-macd-filter' },
+    { key: 'ao', cb: 'strat-ao-filter' },
+    { key: 'williams', cb: 'strat-williams-filter' },
+    { key: 'cci', cb: 'strat-cci-filter' },
+    { key: 'demarker', cb: 'strat-demarker-filter' },
+    { key: 'elder', cb: 'strat-elder-filter' },
+    { key: 'adx', cb: 'strat-adx-filter' },
+    { key: 'aroon', cb: 'strat-aroon-filter' },
+    { key: 'atr', cb: 'strat-atr-filter' },
+    { key: 'momentum', cb: 'strat-momentum-filter' },
+    { key: 'roc', cb: 'strat-roc-filter' },
+    { key: 'vortex', cb: 'strat-vortex-filter' },
+    { key: 'stc', cb: 'strat-stc-filter' },
+    { key: 'volosc', cb: 'strat-volosc-filter' }
+  ];
+
+  allIndicatorKeys.forEach(item => {
+    const active = !!p[item.key];
+    const cb = document.getElementById(item.cb);
+    if (cb) cb.checked = active;
+    toggleIndicatorDrawer(item.key, active);
+  });
+
+  // Configure specific parameters & drawers per archetype
+  if (presetKey === 'dual_bollinger_protrusion') {
+    if (document.getElementById('ind-bb-p1')) document.getElementById('ind-bb-p1').value = "10";
+    if (document.getElementById('ind-bb-p2')) document.getElementById('ind-bb-p2').value = "13";
+    if (document.getElementById('ind-bb-dev')) document.getElementById('ind-bb-dev').value = "2.0";
+    if (document.getElementById('ind-bb-protrusion')) document.getElementById('ind-bb-protrusion').value = "30";
+    toggleIndicatorDrawer('bollinger', true);
+    if (document.getElementById('strat-confluence-toggle')) document.getElementById('strat-confluence-toggle').checked = false;
+    setPersonalAssetScope('ALL_REAL');
+  } else if (presetKey === 'ultra_confluence') {
+    toggleIndicatorDrawer('rsi', true);
+    toggleIndicatorDrawer('supertrend', true);
+    toggleIndicatorDrawer('sar', true);
+    if (document.getElementById('strat-confluence-toggle')) {
+      document.getElementById('strat-confluence-toggle').checked = true;
+      document.getElementById('strat-confluence-min').value = "3";
+      document.getElementById('strat-confluence-score').value = "80";
+    }
+  } else {
+    if (document.getElementById('strat-confluence-toggle')) document.getElementById('strat-confluence-toggle').checked = false;
+  }
+
 
   document.getElementById('strat-smc-fvg').checked = !!p.fvg;
   document.getElementById('strat-smc-sweep').checked = !!p.sweep;
@@ -793,37 +2082,67 @@ function createNewStrategy() {
   document.getElementById('strat-id-input').value = newId;
   document.getElementById('strat-name-input').value = `Custom Strategy #${randomSuffix}`;
   document.getElementById('strat-tf-select').value = '1M';
-  document.getElementById('strat-exp-input').value = '2';
+  document.getElementById('strat-exp-input').value = '1';
   document.getElementById('strat-payout-input').value = '80';
   document.getElementById('strat-direction-select').value = 'BOTH';
   document.getElementById('strat-cooldown-select').value = '120';
   document.getElementById('strat-mtg1-toggle').checked = false;
 
-  document.getElementById('strat-trend-filter').checked = true;
+  setPersonalAssetScope('ALL_REAL');
+
+  document.getElementById('strat-trend-filter').checked = false;
   document.getElementById('strat-trend-mtf').value = '5M';
   document.getElementById('strat-trend-ema').value = '20';
 
-  document.getElementById('strat-body-ratio').value = '0.50';
-  document.getElementById('strat-max-wick').value = '0.35';
+  document.getElementById('strat-body-ratio').value = '0.20';
+  document.getElementById('strat-max-wick').value = '0.40';
   document.getElementById('strat-doji-filter').checked = true;
+  if (document.getElementById('strat-sr-clearance-input')) document.getElementById('strat-sr-clearance-input').value = '0.05';
+  if (document.getElementById('strat-pinbar-ratio-input')) document.getElementById('strat-pinbar-ratio-input').value = '2.0';
 
   document.getElementById('strat-engulfing-filter').checked = false;
   document.getElementById('strat-sr-breakout-filter').checked = false;
 
-  document.getElementById('strat-rsi-filter').checked = false;
-  document.getElementById('strat-bollinger-filter').checked = false;
-  document.getElementById('strat-stochastic-filter').checked = false;
-  document.getElementById('strat-macd-filter').checked = false;
-  document.getElementById('strat-supertrend-filter').checked = false;
-  document.getElementById('strat-sar-filter').checked = false;
-  document.getElementById('strat-ao-filter').checked = false;
-  document.getElementById('strat-williams-filter').checked = false;
-  document.getElementById('strat-cci-filter').checked = false;
-  document.getElementById('strat-demarker-filter').checked = false;
-  document.getElementById('strat-elder-filter').checked = false;
-  document.getElementById('strat-alligator-filter').checked = false;
-  document.getElementById('strat-keltner-filter').checked = false;
-  document.getElementById('strat-vortex-filter').checked = false;
+  const allIndicatorKeys = [
+    { key: 'bollinger', cb: 'strat-bollinger-filter', defaultActive: true },
+    { key: 'supertrend', cb: 'strat-supertrend-filter' },
+    { key: 'sar', cb: 'strat-sar-filter' },
+    { key: 'ma', cb: 'strat-ma-filter' },
+    { key: 'keltner', cb: 'strat-keltner-filter' },
+    { key: 'donchian', cb: 'strat-donchian-filter' },
+    { key: 'envelopes', cb: 'strat-envelopes-filter' },
+    { key: 'alligator', cb: 'strat-alligator-filter' },
+    { key: 'ichimoku', cb: 'strat-ichimoku-filter' },
+    { key: 'fractal', cb: 'strat-fractal-filter' },
+    { key: 'zigzag', cb: 'strat-zigzag-filter' },
+    { key: 'rsi', cb: 'strat-rsi-filter' },
+    { key: 'stoch', cb: 'strat-stochastic-filter' },
+    { key: 'macd', cb: 'strat-macd-filter' },
+    { key: 'ao', cb: 'strat-ao-filter' },
+    { key: 'williams', cb: 'strat-williams-filter' },
+    { key: 'cci', cb: 'strat-cci-filter' },
+    { key: 'demarker', cb: 'strat-demarker-filter' },
+    { key: 'elder', cb: 'strat-elder-filter' },
+    { key: 'adx', cb: 'strat-adx-filter' },
+    { key: 'aroon', cb: 'strat-aroon-filter' },
+    { key: 'atr', cb: 'strat-atr-filter' },
+    { key: 'momentum', cb: 'strat-momentum-filter' },
+    { key: 'roc', cb: 'strat-roc-filter' },
+    { key: 'vortex', cb: 'strat-vortex-filter' },
+    { key: 'stc', cb: 'strat-stc-filter' },
+    { key: 'volosc', cb: 'strat-volosc-filter' }
+  ];
+
+  allIndicatorKeys.forEach(item => {
+    const cb = document.getElementById(item.cb);
+    if (cb) cb.checked = !!item.defaultActive;
+    toggleIndicatorDrawer(item.key, !!item.defaultActive);
+  });
+
+
+  if (document.getElementById('strat-confluence-toggle')) {
+    document.getElementById('strat-confluence-toggle').checked = false;
+  }
 
   document.getElementById('strat-smc-fvg').checked = false;
   document.getElementById('strat-smc-sweep').checked = false;
@@ -843,19 +2162,30 @@ function savePersonalStrategy(e) {
   const stratId = document.getElementById('strat-id-input')?.value || `strat_${Date.now()}`;
   const name = document.getElementById('strat-name-input')?.value.trim();
   const tf = document.getElementById('strat-tf-select')?.value;
-  const exp = parseInt(document.getElementById('strat-exp-input')?.value || '2', 10);
+  const exp = parseInt(document.getElementById('strat-exp-input')?.value || '1', 10);
   const minP = parseInt(document.getElementById('strat-payout-input')?.value || '80', 10);
   const dir = document.getElementById('strat-direction-select')?.value || 'BOTH';
   const cd = parseInt(document.getElementById('strat-cooldown-select')?.value || '120', 10);
   const mtg1 = document.getElementById('strat-mtg1-toggle')?.checked || false;
 
+  let assetList = ["ALL_REAL"];
+  if (personalCurrentScope === 'MAJORS') {
+    assetList = MAJOR_REAL_FOREX_PAIRS;
+  } else if (personalCurrentScope === 'CUSTOM') {
+    assetList = Array.from(personalSelectedCustomAssets);
+    if (assetList.length === 0) assetList = ["ALL_REAL"];
+  }
+
   const trendEnabled = document.getElementById('strat-trend-filter')?.checked || false;
   const trendMtf = document.getElementById('strat-trend-mtf')?.value || '5M';
   const trendEma = parseInt(document.getElementById('strat-trend-ema')?.value || '20', 10);
 
-  const minBodyRatio = parseFloat(document.getElementById('strat-body-ratio')?.value || '0.50');
-  const maxOpposingWick = parseFloat(document.getElementById('strat-max-wick')?.value || '0.35');
+  const minBodyRatio = parseFloat(document.getElementById('strat-body-ratio')?.value || '0.20');
+  const maxOpposingWick = parseFloat(document.getElementById('strat-max-wick')?.value || '0.40');
   const dojiFilter = document.getElementById('strat-doji-filter')?.checked !== false;
+
+  const srClearance = parseFloat(document.getElementById('strat-sr-clearance-input')?.value || '0.05');
+  const pinbarRatio = parseFloat(document.getElementById('strat-pinbar-ratio-input')?.value || '2.0');
 
   const engulfingEnabled = document.getElementById('strat-engulfing-filter')?.checked || false;
   const srBreakoutEnabled = document.getElementById('strat-sr-breakout-filter')?.checked || false;
@@ -877,22 +2207,78 @@ function savePersonalStrategy(e) {
 
   const indicatorsList = [];
   if (rsiEnabled) {
-    indicatorsList.push({ indicator: 'RSI', period: 14, condition: 'BETWEEN', min_val: 20, max_val: 80 });
+    const period = parseInt(document.getElementById('ind-rsi-period')?.value || '14', 10);
+    const ob = parseFloat(document.getElementById('ind-rsi-ob')?.value || '70');
+    const os = parseFloat(document.getElementById('ind-rsi-os')?.value || '30');
+    indicatorsList.push({
+      indicator: 'RSI',
+      period: period,
+      condition: 'BETWEEN',
+      min_val: os,
+      max_val: ob,
+      params: { period, overbought: ob, oversold: os }
+    });
   }
   if (bollingerEnabled) {
-    indicatorsList.push({ indicator: 'BOLLINGER', period: 20, condition: 'BETWEEN', min_val: 0, max_val: 1 });
+    const p1 = parseInt(document.getElementById('ind-bb-p1')?.value || '10', 10);
+    const p2 = parseInt(document.getElementById('ind-bb-p2')?.value || '13', 10);
+    const dev = parseFloat(document.getElementById('ind-bb-dev')?.value || '2.0');
+    const protrusion = parseFloat(document.getElementById('ind-bb-protrusion')?.value || '20');
+    indicatorsList.push({
+      indicator: 'BOLLINGER',
+      period: p1,
+      condition: 'BETWEEN',
+      min_val: 0,
+      max_val: 1,
+      params: { period_1: p1, period_2: p2, deviation: dev, min_body_protrusion: protrusion }
+    });
   }
   if (stochEnabled) {
-    indicatorsList.push({ indicator: 'STOCHASTIC', period: 14, condition: 'BETWEEN', min_val: 0, max_val: 100 });
+    const k = parseInt(document.getElementById('ind-stoch-k')?.value || '14', 10);
+    const d = parseInt(document.getElementById('ind-stoch-d')?.value || '3', 10);
+    const ob = parseFloat(document.getElementById('ind-stoch-ob')?.value || '80');
+    const os = parseFloat(document.getElementById('ind-stoch-os')?.value || '20');
+    indicatorsList.push({
+      indicator: 'STOCHASTIC',
+      period: k,
+      condition: 'BETWEEN',
+      min_val: os,
+      max_val: ob,
+      params: { k_period: k, d_period: d, overbought: ob, oversold: os }
+    });
   }
   if (macdEnabled) {
-    indicatorsList.push({ indicator: 'MACD', period: 12, condition: 'BETWEEN', min_val: -999999, max_val: 999999 });
+    const fast = parseInt(document.getElementById('ind-macd-fast')?.value || '12', 10);
+    const slow = parseInt(document.getElementById('ind-macd-slow')?.value || '26', 10);
+    const sig = parseInt(document.getElementById('ind-macd-signal')?.value || '9', 10);
+    indicatorsList.push({
+      indicator: 'MACD',
+      period: fast,
+      condition: 'BETWEEN',
+      min_val: -999999,
+      max_val: 999999,
+      params: { fast_period: fast, slow_period: slow, signal_period: sig }
+    });
   }
   if (supertrendEnabled) {
-    indicatorsList.push({ indicator: 'SUPERTREND', period: 10, condition: 'BULLISH' });
+    const atr = parseInt(document.getElementById('ind-st-period')?.value || '10', 10);
+    const mult = parseFloat(document.getElementById('ind-st-mult')?.value || '3.0');
+    indicatorsList.push({
+      indicator: 'SUPERTREND',
+      period: atr,
+      condition: 'BULLISH',
+      params: { atr_period: atr, multiplier: mult }
+    });
   }
   if (sarEnabled) {
-    indicatorsList.push({ indicator: 'PARABOLIC_SAR', period: 14, condition: 'BULLISH' });
+    const step = parseFloat(document.getElementById('ind-sar-step')?.value || '0.02');
+    const maxA = parseFloat(document.getElementById('ind-sar-max')?.value || '0.2');
+    indicatorsList.push({
+      indicator: 'PARABOLIC_SAR',
+      period: 14,
+      condition: 'BULLISH',
+      params: { step: step, max_step: maxA }
+    });
   }
   if (aoEnabled) {
     indicatorsList.push({ indicator: 'AWESOME_OSCILLATOR', period: 34, condition: 'BULLISH' });
@@ -919,6 +2305,10 @@ function savePersonalStrategy(e) {
     indicatorsList.push({ indicator: 'VORTEX', period: 14, condition: 'BULLISH' });
   }
 
+  const confluenceEnabled = document.getElementById('strat-confluence-toggle')?.checked || false;
+  const confluenceMin = parseInt(document.getElementById('strat-confluence-min')?.value || '2', 10);
+  const confluenceScore = parseFloat(document.getElementById('strat-confluence-score')?.value || '75');
+
   const smcFvg = document.getElementById('strat-smc-fvg')?.checked || false;
   const smcSweep = document.getElementById('strat-smc-sweep')?.checked || false;
   const smcBos = document.getElementById('strat-smc-bos')?.checked || false;
@@ -934,12 +2324,13 @@ function savePersonalStrategy(e) {
     min_payout: minP,
     cooldown_seconds: cd,
     martingale_mtg1: mtg1,
-    assets: ["ALL_REAL"],
+    assets: assetList,
     filters: {
       trend: { enabled: trendEnabled, mtf_timeframe: trendMtf, ema_period: trendEma, require_alignment: trendEnabled },
-      candle_anatomy: { min_body_ratio: minBodyRatio, max_opposing_wick: maxOpposingWick, filter_preceding_doji: dojiFilter, filter_spike_multiplier: 2.8 },
+      candle_anatomy: { min_body_ratio: minBodyRatio, max_opposing_wick: maxOpposingWick, filter_preceding_doji: dojiFilter, filter_spike_multiplier: 2.8, min_rejection_wick_ratio: pinbarRatio },
       indicators: indicatorsList,
-      price_action: { require_engulfing: engulfingEnabled, require_sr_breakout: srBreakoutEnabled, min_sr_clearance_pct: 0.1 },
+      price_action: { require_engulfing: engulfingEnabled, require_sr_breakout: srBreakoutEnabled, min_sr_clearance_pct: srClearance },
+      confluence: { enabled: confluenceEnabled, min_agreeing_factors: confluenceMin, min_quality_score: confluenceScore },
       smc: { fvg_enabled: smcFvg, liquidity_sweep_enabled: smcSweep, bos_enabled: smcBos, order_block_enabled: smcOb }
     }
   };
@@ -1133,6 +2524,7 @@ PersonalState.cardOptions = {
 };
 
 function initTemplateEditor() {
+  selectCardStyle(PersonalState.cardStyle || 'vip');
   updateCardPreview();
 }
 
@@ -1181,7 +2573,12 @@ window.switchPreviewTab = switchPreviewTab;
 
 function buildTemplateStrings() {
   const isVip = (PersonalState.cardStyle === 'vip');
-  const opt = PersonalState.cardOptions;
+  const opt = PersonalState.cardOptions || {
+    strategy: true,
+    payout: true,
+    timing: true,
+    guidelines: true
+  };
 
   let sigTmpl = '';
   if (isVip) {
@@ -1234,42 +2631,63 @@ function buildTemplateStrings() {
     "━━━━━━━━━━━━━━━━━━━━\n" +
     "🔒 <i>TradePulse Real-Time Verification</i>";
 
+  const defaultCb = (typeof DEFAULT_TEMPLATES !== 'undefined' && DEFAULT_TEMPLATES.circuit_breaker)
+    ? DEFAULT_TEMPLATES.circuit_breaker
+    : "🛑 <b>TRADEPULSE CIRCUIT BREAKER ACTIVATED</b>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ <b>Signal Scanner Auto-Paused</b>\n• <b>Trigger Reason:</b> <b>{cb_reason}</b>\n• <b>Session Net PnL:</b> <b>{net_pnl}</b>\n• <b>Total Trades:</b> <b>{total_trades}</b>\n━━━━━━━━━━━━━━━━━━━━\n🔒 <i>Scanner halted to safeguard capital. Manage in TradePulse Terminal.</i>";
+
   return {
     signal: sigTmpl.trim(),
     pre_signal: preTmpl.trim(),
     outcome: outTmpl.trim(),
-    circuit_breaker: DEFAULT_TEMPLATES.circuit_breaker
+    circuit_breaker: defaultCb
   };
 }
 
 function updateCardPreview() {
-  const box = document.getElementById('template-preview-box');
-  if (!box) return;
+  try {
+    const box = document.getElementById('template-preview-box');
+    if (!box) return;
 
-  const templates = buildTemplateStrings();
-  const tab = PersonalState.cardPreviewTab || 'signal';
-  let raw = templates[tab] || templates.signal;
+    const templates = buildTemplateStrings();
+    const tab = PersonalState.cardPreviewTab || 'signal';
+    let raw = templates[tab] || templates.signal || '';
 
-  raw = raw
-    .replace(/{strategy}/g, 'Dual Bollinger Protrusion')
-    .replace(/{asset}/g, 'EUR/USD')
-    .replace(/{payout}/g, '85')
-    .replace(/{arrow}/g, '🟢')
-    .replace(/{dir_badge}/g, 'CALL (BUY)')
-    .replace(/{direction}/g, 'CALL')
-    .replace(/{chart_timeframe}/g, '1M')
-    .replace(/{timeframe}/g, '1M')
-    .replace(/{expiry}/g, '1')
-    .replace(/{entry_time}/g, '14:35:00')
-    .replace(/{remaining_seconds}/g, '20')
-    .replace(/{stake_line}/g, '💵 <b>Stake:</b> $25.00 (Kelly Edge)\n')
-    .replace(/{header}/g, '🎉 <b>TRADE WON — EUR/USD (CALL)</b>')
-    .replace(/{outcome_badge}/g, 'WIN (PROFIT)')
-    .replace(/{entry_price}/g, '1.08450')
-    .replace(/{exit_price}/g, '1.08472')
-    .replace(/{pnl_text}/g, '💰 <b>Net Return:</b> +$21.25');
+    const now = new Date();
+    const istHours = String(now.getHours()).padStart(2, '0');
+    const istMins = String(now.getMinutes()).padStart(2, '0');
+    const istTime = `${istHours}:${istMins}:00`;
 
-  box.innerHTML = raw.replace(/\n/g, '<br>');
+    const mockReplacements = {
+      '{strategy}': 'Dual Bollinger Protrusion',
+      '{asset}': 'EUR/USD',
+      '{payout}': '85',
+      '{arrow}': '🟢',
+      '{dir_badge}': 'CALL (BUY)',
+      '{direction}': 'CALL',
+      '{chart_timeframe}': '1M',
+      '{timeframe}': '1M',
+      '{expiry}': '1',
+      '{entry_time}': istTime,
+      '{remaining_seconds}': '20',
+      '{stake_line}': '💵 <b>Stake:</b> $25.00 (Kelly Edge)\n',
+      '{header}': '🎉 <b>TRADE WON — EUR/USD (CALL)</b>',
+      '{outcome_badge}': 'WIN (PROFIT) ✅',
+      '{entry_price}': '1.08450',
+      '{exit_price}': '1.08472',
+      '{pnl_text}': '💰 <b>Net Return:</b> +$21.25',
+      '{cb_reason}': 'Max Daily Loss Safeguard Hit',
+      '{net_pnl}': '-$50.00',
+      '{total_trades}': '12'
+    };
+
+    for (const [key, val] of Object.entries(mockReplacements)) {
+      raw = raw.split(key).join(val);
+    }
+
+    box.innerHTML = raw.replace(/\n/g, '<br>');
+  } catch (err) {
+    console.error('[CARD PREVIEW ERROR]', err);
+  }
 }
 window.updateCardPreview = updateCardPreview;
 
@@ -1487,8 +2905,27 @@ window.onBatchTicks = function(ticks) {
     PersonalState.prices[sym] = data.price;
     const rateEl = document.getElementById(`rate-${sanitizeId(sym)}`);
     if (rateEl) rateEl.textContent = formatLivePrice(sym, data.price);
-    if (sym === PersonalState.activeChartPair && chartEngine) {
-      chartEngine.updateLiveTick(data.price);
+    if (sym === PersonalState.activeChartPair) {
+      const hudPrice = document.getElementById('chart-hud-price');
+      if (hudPrice) {
+        hudPrice.textContent = formatLivePrice(sym, data.price);
+      }
+      if (chartEngine) {
+        chartEngine.updateLiveTick(data.price);
+        if (chartEngine.candles && chartEngine.candles.length > 0) {
+          updateChartHudStats(chartEngine.candles, sym);
+        }
+      }
+    }
+
+    if (sym === activeStrategyPreviewPair) {
+      if (strategyChartEngine) {
+        strategyChartEngine.updateLiveTick(data.price);
+        const currentStrat = compileCurrentStrategyForm();
+        if (currentStrat) {
+          updateActiveRuleRadar(currentStrat);
+        }
+      }
     }
   }
 };
@@ -1598,15 +3035,91 @@ function escapeHtml(str) {
 // 1-Year Subscription & Single-PC License Management
 // ============================================================================
 function updateLicenseStatusUI() {
-  // Developer license check handled in background; not displayed on user interface.
+  const lic = PersonalState.license || {};
+  const isLicensed = lic.licensed === true;
+  const statusPill = document.getElementById('license-status-pill');
+  const statusText = document.getElementById('license-status-text');
+
+  if (statusText) {
+    if (isLicensed) {
+      const daysLeft = lic.days_remaining !== undefined ? `${lic.days_remaining}d` : 'Active';
+      statusText.textContent = `License: Active (${daysLeft})`;
+      if (statusPill) {
+        statusPill.classList.remove('offline', 'disconnected', 'error');
+        statusPill.classList.add('online');
+      }
+    } else {
+      statusText.textContent = 'License: Unlicensed';
+      if (statusPill) {
+        statusPill.classList.remove('online');
+        statusPill.classList.add('disconnected');
+      }
+    }
+  }
+
+  const statVal = document.getElementById('lic-status-val');
+  if (statVal) {
+    statVal.textContent = isLicensed ? 'Active & Bound' : (lic.revoked ? 'Revoked' : 'Unlicensed');
+    statVal.style.color = isLicensed ? 'var(--emerald)' : 'var(--rose)';
+  }
+
+  const clientName = document.getElementById('lic-client-name');
+  if (clientName) {
+    clientName.textContent = lic.client_name || (isLicensed ? 'Verified Subscriber' : '--');
+  }
+
+  const expiryVal = document.getElementById('lic-expiry-val');
+  if (expiryVal) {
+    if (lic.expires_at) {
+      try {
+        expiryVal.textContent = new Date(lic.expires_at).toLocaleString();
+      } catch (e) {
+        expiryVal.textContent = lic.expires_at;
+      }
+    } else {
+      expiryVal.textContent = isLicensed ? '1 Year Active' : '--';
+    }
+  }
+
+  const hwidEl = document.getElementById('lic-modal-hwid');
+  if (hwidEl && lic.hwid) {
+    hwidEl.textContent = lic.hwid;
+  }
 }
 window.updateLicenseStatusUI = updateLicenseStatusUI;
 
-function openLicenseModal() {}
+function openLicenseModal() {
+  const modal = document.getElementById('lic-modal');
+  if (!modal) return;
+  modal.classList.add('active');
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.get_license_status) {
+    window.pywebview.api.get_license_status().then(lic => {
+      if (lic) {
+        PersonalState.license = lic;
+        updateLicenseStatusUI();
+      }
+    }).catch(e => console.error('Failed to fetch license status', e));
+  } else {
+    updateLicenseStatusUI();
+  }
+}
 window.openLicenseModal = openLicenseModal;
 
-function closeLicenseModal() {}
+function closeLicenseModal() {
+  const modal = document.getElementById('lic-modal');
+  if (modal) modal.classList.remove('active');
+}
 window.closeLicenseModal = closeLicenseModal;
+
+window.onLicenseRevoked = function(reason) {
+  showToast(`License Revoked: ${reason}`, 'error');
+  if (PersonalState.license) {
+    PersonalState.license.licensed = false;
+    PersonalState.license.revoked = true;
+  }
+  updateLicenseStatusUI();
+  updateMasterScannerUI();
+};
 
 function copyHWID() {
   const hwid = PersonalState.license?.hwid || document.getElementById('lic-modal-hwid')?.textContent.trim();
@@ -1833,4 +3346,190 @@ function sendTestTelegramChart() {
   }
 }
 window.sendTestTelegramChart = sendTestTelegramChart;
+
+// ============================================================================
+// Strategy Optimizer & Monte Carlo Stress-Test Controller
+// ============================================================================
+function openOptimizerModal() {
+  const modal = document.getElementById('optimizer-modal');
+  if (modal) modal.classList.add('active');
+}
+window.openOptimizerModal = openOptimizerModal;
+
+function closeOptimizerModal() {
+  const modal = document.getElementById('optimizer-modal');
+  if (modal) modal.classList.remove('active');
+}
+window.closeOptimizerModal = closeOptimizerModal;
+
+function executeOptimizerSweep() {
+  const sym = document.getElementById('opt-symbol-select')?.value || 'EUR/USD';
+  const payout = parseFloat(document.getElementById('opt-payout-input')?.value || '85');
+  const btn = document.getElementById('btn-run-optimizer');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Sweeping 48 Setups...';
+  }
+
+  showToast(`Running 48-combination parameter sweep for ${sym}...`, 'info');
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.run_strategy_optimizer) {
+    window.pywebview.api.run_strategy_optimizer(sym, payout).then(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Grid Sweep';
+      }
+      if (!res || res.error) {
+        showToast(res ? res.error : 'Optimizer execution returned no data', 'error');
+        return;
+      }
+      renderOptimizerResults(res, payout);
+      showToast(`Grid sweep complete: Evaluated ${res.total_combinations_tested || 48} parameter setups!`, 'success');
+    }).catch(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Grid Sweep';
+      }
+      showToast('Optimizer execution failed: ' + (err || 'Unknown error'), 'error');
+    });
+  } else {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⚡ Run Grid Sweep';
+    }
+    showToast('Strategy Optimizer API not available', 'error');
+  }
+}
+window.executeOptimizerSweep = executeOptimizerSweep;
+
+function renderOptimizerResults(res, payout) {
+  const emptyState = document.getElementById('opt-empty-state');
+  const resultsContainer = document.getElementById('opt-results-container');
+  const mcContainer = document.getElementById('opt-monte-carlo-container');
+  const tbody = document.getElementById('opt-results-tbody');
+
+  if (emptyState) emptyState.style.display = 'none';
+  if (resultsContainer) resultsContainer.style.display = 'block';
+
+  const rows = res.ranked_results || [];
+  if (tbody) {
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-dim);">No positive expectancy configurations found for current market data.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map((r, idx) => {
+        const evColor = (r.ev_per_trade || 0) >= 0 ? 'var(--cyan-bright)' : 'var(--rose)';
+        const evSign = (r.ev_per_trade || 0) >= 0 ? '+' : '';
+        const params = r.parameters || {};
+        return `
+          <tr>
+            <td style="font-weight: 800; color: #fff;">#${idx + 1}</td>
+            <td style="font-family: var(--font-mono);">${params.rsi_period || '-'}</td>
+            <td style="font-family: var(--font-mono);">${params.rsi_ob || 70} / ${params.rsi_os || 30}</td>
+            <td style="font-family: var(--font-mono);">${params.bb_dev || '2.0'}σ</td>
+            <td style="font-weight: 700; color: var(--emerald);">${r.win_rate || 0}%</td>
+            <td style="font-family: var(--font-mono);">${r.total_signals || 0}</td>
+            <td style="font-weight: 700; color: ${evColor}; font-family: var(--font-mono);">${evSign}$${r.ev_per_trade || 0}</td>
+            <td style="font-family: var(--font-mono);">${r.profit_factor || 0}</td>
+            <td style="font-family: var(--font-mono); color: var(--cyan-bright);">${r.recommended_stake_pct || 0}%</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // Run Monte Carlo permutation stress test on top configuration
+  const topResult = rows[0];
+  if (topResult && topResult.wins !== undefined && topResult.losses !== undefined) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.run_monte_carlo_test) {
+      window.pywebview.api.run_monte_carlo_test(topResult.wins, topResult.losses, payout, 500, 10.0).then(mc => {
+        if (!mc) return;
+        if (mcContainer) mcContainer.style.display = 'block';
+        const streakEl = document.getElementById('mc-stat-streak');
+        const ddEl = document.getElementById('mc-stat-dd');
+        const ruinEl = document.getElementById('mc-stat-ruin');
+        const medianEl = document.getElementById('mc-stat-median');
+
+        if (streakEl) streakEl.textContent = mc.percentile_95_max_consecutive_losses || 0;
+        if (ddEl) ddEl.textContent = `$${mc.percentile_95_drawdown || 0.00}`;
+        if (ruinEl) {
+          const ruinVal = mc.probability_of_ruin_pct || 0.0;
+          ruinEl.textContent = `${ruinVal}%`;
+          ruinEl.style.color = ruinVal > 5 ? 'var(--rose)' : 'var(--emerald)';
+        }
+        if (medianEl) {
+          const med = mc.median_expected_profit || 0.0;
+          medianEl.textContent = `${med >= 0 ? '+' : ''}$${med}`;
+        }
+      }).catch(err => console.error('MC error', err));
+    }
+  }
+}
+
+// ============================================================================
+// Institutional Forex Market Hours & Weekend Closure Handler
+// ============================================================================
+async function updateMarketSessionUI() {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_market_session_status) {
+    return;
+  }
+  try {
+    const status = await window.pywebview.api.get_market_session_status();
+    if (!status) return;
+
+    PersonalState.isMarketOpen = status.is_open;
+
+    // 1. Update Strategy Lab Market Badge
+    const stratBadge = document.getElementById('strat-market-status-badge');
+    if (stratBadge) {
+      if (status.is_open) {
+        stratBadge.textContent = '🟢 LIVE MARKET';
+        stratBadge.style.color = 'var(--emerald)';
+        stratBadge.style.borderColor = 'rgba(0, 245, 155, 0.3)';
+        stratBadge.style.background = 'rgba(0, 245, 155, 0.15)';
+      } else {
+        stratBadge.textContent = `🟡 WEEKEND STANDBY (${status.time_until_reopen ? 'in ' + status.time_until_reopen : 'Sun 21:00 UTC'})`;
+        stratBadge.style.color = 'var(--amber)';
+        stratBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        stratBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+      }
+    }
+
+    // 2. Update Live Chart Station Feed Badge
+    const chartBadge = document.getElementById('chart-feed-badge');
+    if (chartBadge) {
+      if (status.is_open) {
+        chartBadge.textContent = 'REAL-TIME FEED';
+        chartBadge.style.color = 'var(--emerald)';
+      } else {
+        chartBadge.textContent = `WEEKEND STANDBY — FRIDAY SETTLEMENT (${status.time_until_reopen ? 'Reopens in ' + status.time_until_reopen : 'Sun 21:00 UTC'})`;
+        chartBadge.style.color = 'var(--amber)';
+      }
+    }
+
+    // 3. Update Global Top Bar Market Mode Pill
+    const marketPill = document.querySelector('.top-status-pill');
+    if (marketPill) {
+      if (status.is_open) {
+        marketPill.textContent = '● LIVE MARKETS';
+        marketPill.style.color = 'var(--emerald)';
+        marketPill.style.background = 'rgba(0, 245, 155, 0.12)';
+      } else {
+        marketPill.textContent = '● WEEKEND STANDBY';
+        marketPill.style.color = 'var(--amber)';
+        marketPill.style.background = 'rgba(245, 158, 11, 0.15)';
+        marketPill.title = status.status_desc;
+      }
+    }
+  } catch (err) {
+    console.debug('Error updating market session UI:', err);
+  }
+}
+window.updateMarketSessionUI = updateMarketSessionUI;
+
+// Start periodic polling for market session status every 15s
+setInterval(updateMarketSessionUI, 15000);
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(updateMarketSessionUI, 1000);
+});
 

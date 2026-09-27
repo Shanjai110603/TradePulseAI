@@ -148,6 +148,27 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+function escapeAttr(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/</g, '\\x3c')
+    .replace(/>/g, '\\x3e');
+}
+
+
 function showToast(message, type = 'info') {
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -399,6 +420,14 @@ function switchView(viewId) {
       window.initLiveChartStation();
     }
   } else if (viewId === 'strategies') {
+    setTimeout(() => {
+      if (!strategyChartEngine) {
+        initStrategyVisualizer();
+      } else {
+        strategyChartEngine.resize();
+        fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+      }
+    }, 60);
     if (!AppState.selectedStrategyId && AppState.strategies.length > 0) {
       selectStrategy(AppState.strategies[0].id);
     } else {
@@ -594,11 +623,12 @@ window.onBrokerStatus = function(mode, text, latency) {
 function formatPriceCellContent(symbol, price, source, isOtc = true) {
   if (price === undefined || price === null || isNaN(price) || price <= 0.0001) {
     const isPairOtc = isOtc || (symbol && symbol.includes('(OTC)'));
-    const safeSym = (symbol || '').replace(/'/g, "\\'");
+    const safeJsSym = escapeJsString(symbol || '');
+    const safeAttrSym = escapeAttr(symbol || '');
     if (isPairOtc) {
-      return `<span class="waiting-price-tag" onclick="event.stopPropagation(); selectActiveMarket('${safeSym}')" title="Auto-connecting live stream for ${safeSym}... (or click to switch chart)">Waiting for stream...</span>`;
+      return `<span class="waiting-price-tag" onclick="event.stopPropagation(); selectActiveMarket('${safeJsSym}')" title="Auto-connecting live stream for ${safeAttrSym}... (or click to switch chart)">Waiting for stream...</span>`;
     } else {
-      return `<span class="standby-price-tag" onclick="event.stopPropagation(); selectActiveMarket('${safeSym}')" title="Click to open chart in Quotex terminal and activate live stream">Sync Chart 🔀</span>`;
+      return `<span class="standby-price-tag" onclick="event.stopPropagation(); selectActiveMarket('${safeJsSym}')" title="Click to open chart in Quotex terminal and activate live stream">Sync Chart 🔀</span>`;
     }
   }
 
@@ -620,7 +650,7 @@ function formatPriceCellContent(symbol, price, source, isOtc = true) {
   let badgeHtml = '';
 
   if (source === 'real_market' || source === 'binance_spot') {
-    badgeHtml = '<span class="source-badge source-real" title="Authentic Global Interbank Live Feed">REAL</span>';
+    badgeHtml = '<span class="source-badge source-real" title="Authentic Global Real-Time Market Feed">REAL</span>';
   } else if (source === 'active_chart' || source === 'ws_subscription' || source === 'ws_stream' || source === 'ws_history') {
     badgeHtml = '<span class="source-badge source-live" title="Confirmed Live Quotex OTC Stream">LIVE</span>';
   } else if (source === 'instrument_object') {
@@ -660,6 +690,15 @@ window.onBatchTicks = function(ticks) {
     // Forward tick directly to Real-Time Interactive Live Chart
     if (window.LiveChartEngine && window.LiveChartEngine.activeSymbol === symbol) {
       window.LiveChartEngine.onLiveTick(symbol, price);
+    }
+
+    // Forward tick directly to Strategy Visual Studio
+    if (window.strategyChartEngine && activeStrategyPreviewPair === symbol) {
+      window.strategyChartEngine.updateLiveTick(price);
+      if (typeof compileCurrentStrategyForm === 'function' && typeof updateActiveRuleRadar === 'function') {
+        const currentStrat = compileCurrentStrategyForm();
+        if (currentStrat) updateActiveRuleRadar(currentStrat);
+      }
     }
 
     const row = document.getElementById(`row-${sanitizeId(symbol)}`);
@@ -1020,7 +1059,8 @@ function renderMarketsTable(assets) {
 
   filtered.forEach(asset => {
     const symbol = asset.symbol;
-    const safeSym = symbol.replace(/'/g, "\\'");
+    const safeJsSym = escapeJsString(symbol);
+    const safeAttrSym = escapeAttr(symbol);
     const isOtc = asset.is_otc || symbol.includes('(OTC)');
     const payout = AppState.payouts[symbol];
     const isWatched = AppState.watchedMarkets[symbol] !== false; // Default true
@@ -1042,7 +1082,7 @@ function renderMarketsTable(assets) {
 
     const badgeTag = isOtc
       ? '<span class="pair-badge-sub badge-otc">OTC 24/7</span>'
-      : '<span class="pair-badge-sub badge-real">INTERBANK</span>';
+      : '<span class="pair-badge-sub badge-real">REAL MARKET</span>';
 
     const activeStrats = getAssignedStrategiesForAsset(symbol);
     const stratBadgeHtml = activeStrats.length > 0
@@ -1052,7 +1092,7 @@ function renderMarketsTable(assets) {
     const tr = document.createElement('tr');
     tr.id = `row-${sanitizeId(symbol)}`;
     tr.className = 'market-row';
-    tr.title = `Click to switch Quotex terminal chart to ${symbol}`;
+    tr.title = `Click to switch Quotex terminal chart to ${safeAttrSym}`;
     if (AppState.selectedMarket === symbol) {
       tr.classList.add('active-market-row');
     }
@@ -1065,18 +1105,18 @@ function renderMarketsTable(assets) {
 
     tr.innerHTML = `
       <td style="text-align: center;" onclick="event.stopPropagation()">
-        <button type="button" class="btn-star-fav ${isFav ? 'is-favorite' : ''}" onclick="toggleFavorite('${safeSym}', event)" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+        <button type="button" class="btn-star-fav ${isFav ? 'is-favorite' : ''}" onclick="toggleFavorite('${safeJsSym}', event)" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
           ${isFav ? '★' : '☆'}
         </button>
       </td>
       <td style="text-align: center;" onclick="event.stopPropagation()">
-        <input type="checkbox" class="custom-checkbox" ${isWatched ? 'checked' : ''} onchange="handleMarketToggle('${safeSym}', this.checked)">
+        <input type="checkbox" class="custom-checkbox" ${isWatched ? 'checked' : ''} onchange="handleMarketToggle('${safeJsSym}', this.checked)">
       </td>
       <td>
         <div class="pair-meta-cell">
           <div class="pair-icon-pill">${assetIcon}</div>
           <div class="pair-name-group">
-            <span class="pair-title">${symbol}</span>
+            <span class="pair-title">${escapeHtml(symbol)}</span>
             <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
               ${badgeTag}
               ${stratBadgeHtml}
@@ -1170,7 +1210,7 @@ function renderMarketHeatmap(assets) {
     const isFav = AppState.favorites.has(symbol);
     const price = AppState.prices[symbol];
     const priceDir = AppState.priceDirections[symbol];
-    const priceSrc = AppState.priceSources[symbol] || (isOtc ? 'Quotex OTC' : 'Interbank');
+    const priceSrc = AppState.priceSources[symbol] || (isOtc ? 'Quotex OTC' : 'Real Market');
 
     let payoutTierClass = 'payout-tier-mid';
     let payoutText = '--%';
@@ -1736,6 +1776,18 @@ function updateActiveCountdowns() {
 // Strategy Lab & Visual Rule Studio
 // ============================================================================
 function renderStrategyList() {
+  const masterSelect = document.getElementById('strategy-master-select');
+  if (masterSelect) {
+    masterSelect.innerHTML = AppState.strategies.map(s => `
+      <option value="${s.id}" ${s.id === AppState.selectedStrategyId ? 'selected' : ''}>
+        ${s.enabled ? '⚡' : '⏸️'} ${escapeHtml(s.name)} (${s.timeframe || '1M'} • ${s.direction || 'BOTH'})
+      </option>
+    `).join('');
+    if (AppState.selectedStrategyId) {
+      masterSelect.value = AppState.selectedStrategyId;
+    }
+  }
+
   const container = document.getElementById('strategy-list-container');
   if (!container) return;
   container.innerHTML = '';
@@ -1954,7 +2006,358 @@ function selectAssetPresetGroup(group) {
   }
   updateAssetScopeCountBadge();
 }
-window.selectAssetPresetGroup = selectAssetPresetGroup;
+const ALL_REAL_FOREX_PAIRS = [
+  "EUR/USD", "GBP/USD", "USD/JPY", "USD/CAD", "USD/CHF", "AUD/USD", "NZD/USD",
+  "EUR/GBP", "EUR/JPY", "EUR/AUD", "EUR/CAD", "EUR/CHF", "EUR/NZD",
+  "GBP/JPY", "GBP/AUD", "GBP/CAD", "GBP/CHF", "GBP/NZD",
+  "AUD/JPY", "AUD/CAD", "AUD/CHF", "AUD/NZD",
+  "CAD/JPY", "CAD/CHF", "CHF/JPY",
+  "NZD/JPY", "NZD/CAD", "NZD/CHF"
+];
+
+// ============================================================================
+// VISUAL STRATEGY STUDIO CONTROLLER & REAL-TIME BENCH (MAIN APP)
+// ============================================================================
+let strategyChartEngine = null;
+let activeStrategyPreviewPair = 'EUR/USD';
+let activeStrategyPreviewTf = '1M';
+let savedStrategyBaselineWR = 0;
+let strategyFormDebounceTimer = null;
+
+function initStrategyVisualizer() {
+  const canvas = document.getElementById('strategyVisualizerCanvas');
+  if (!canvas) return;
+
+  if (!strategyChartEngine) {
+    strategyChartEngine = new InteractiveChartEngine('strategyVisualizerCanvas');
+    window.strategyChartEngine = strategyChartEngine;
+  }
+
+  const sel = document.getElementById('strat-preview-pair-select');
+  if (sel) {
+    sel.innerHTML = ALL_REAL_FOREX_PAIRS.map(sym => `<option value="${sym}">${sym}</option>`).join('');
+    sel.value = activeStrategyPreviewPair;
+  }
+
+  fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+}
+window.initStrategyVisualizer = initStrategyVisualizer;
+
+function setStrategyPreviewTf(tf) {
+  activeStrategyPreviewTf = tf;
+  document.querySelectorAll('[id^="btn-strat-tf-"]').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `btn-strat-tf-${tf.toLowerCase()}`);
+  });
+  if (strategyChartEngine) {
+    strategyChartEngine.timeframe = tf;
+  }
+  fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+}
+window.setStrategyPreviewTf = setStrategyPreviewTf;
+
+function changeStrategyPreviewPair(pair) {
+  if (!pair) return;
+  activeStrategyPreviewPair = pair;
+  const sel = document.getElementById('strat-preview-pair-select');
+  if (sel && sel.value !== pair) sel.value = pair;
+  fetchCandlesForStrategyPreview(pair);
+}
+window.changeStrategyPreviewPair = changeStrategyPreviewPair;
+
+function fetchCandlesForStrategyPreview(pair) {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_candles_for_chart) {
+    return;
+  }
+  window.pywebview.api.get_candles_for_chart(pair, activeStrategyPreviewTf).then(candles => {
+    if (candles && candles.length > 0 && strategyChartEngine) {
+      strategyChartEngine.setCandles(candles);
+      strategyChartEngine.symbol = pair;
+      strategyChartEngine.timeframe = activeStrategyPreviewTf;
+      recalculateStrategyVisualizer();
+    }
+  }).catch(err => {
+    console.error('Error fetching candles for strategy visualizer:', err);
+  });
+}
+window.fetchCandlesForStrategyPreview = fetchCandlesForStrategyPreview;
+
+function onStrategyFormChange() {
+  if (strategyFormDebounceTimer) clearTimeout(strategyFormDebounceTimer);
+  strategyFormDebounceTimer = setTimeout(() => {
+    recalculateStrategyVisualizer();
+  }, 40);
+}
+window.onStrategyFormChange = onStrategyFormChange;
+
+function recalculateStrategyVisualizer() {
+  if (!strategyChartEngine || !strategyChartEngine.candles || strategyChartEngine.candles.length === 0) return;
+  if (typeof StrategyEvaluator === 'undefined') return;
+
+  const currentStrat = compileCurrentStrategyForm();
+  if (!currentStrat) return;
+
+  strategyChartEngine.setStrategyConfig(currentStrat);
+  const evalResult = StrategyEvaluator.evaluateStrategy(currentStrat, strategyChartEngine.candles);
+  strategyChartEngine.setSignalMarkers(evalResult.results_log);
+
+  const sigEl = document.getElementById('hud-strat-signals');
+  const winEl = document.getElementById('hud-strat-wins');
+  const lossEl = document.getElementById('hud-strat-losses');
+  const wrEl = document.getElementById('hud-strat-winrate');
+  const pfEl = document.getElementById('hud-strat-pf');
+
+  if (sigEl) sigEl.textContent = evalResult.total_signals;
+  if (winEl) winEl.textContent = evalResult.wins;
+  if (lossEl) lossEl.textContent = evalResult.losses;
+  if (wrEl) {
+    wrEl.textContent = `${evalResult.win_rate}%`;
+    wrEl.style.color = evalResult.win_rate >= 60 ? 'var(--emerald)' : (evalResult.win_rate >= 54 ? 'var(--cyan-bright)' : 'var(--rose)');
+  }
+  if (pfEl) pfEl.textContent = evalResult.profit_factor.toFixed(2);
+
+  const diffBadge = document.getElementById('strat-diff-badge');
+  if (diffBadge) {
+    if (savedStrategyBaselineWR > 0) {
+      const diff = evalResult.win_rate - savedStrategyBaselineWR;
+      const isPos = diff >= 0;
+      diffBadge.style.display = 'inline-block';
+      diffBadge.textContent = `vs Saved: ${isPos ? '+' : ''}${diff.toFixed(1)}% WR`;
+      diffBadge.style.color = isPos ? 'var(--emerald)' : 'var(--rose)';
+      diffBadge.style.borderColor = isPos ? 'rgba(0, 245, 155, 0.4)' : 'rgba(255, 51, 102, 0.4)';
+    } else {
+      diffBadge.style.display = 'none';
+    }
+  }
+
+  updateActiveRuleRadar(currentStrat);
+}
+window.recalculateStrategyVisualizer = recalculateStrategyVisualizer;
+
+function updateActiveRuleRadar(currentStrat) {
+  if (!strategyChartEngine || !strategyChartEngine.candles || typeof StrategyEvaluator === 'undefined') return;
+  const radar = StrategyEvaluator.evaluateActiveBarRadar(currentStrat, strategyChartEngine.candles, strategyChartEngine.livePrice);
+
+  const summaryEl = document.getElementById('strat-radar-summary');
+  const chipsEl = document.getElementById('strat-radar-chips');
+
+  if (summaryEl) {
+    summaryEl.textContent = `${radar.summary} (${radar.score}% MET)`;
+    summaryEl.style.color = radar.score >= 70 ? 'var(--emerald)' : (radar.score >= 50 ? 'var(--cyan-bright)' : 'var(--text-dim)');
+  }
+
+  if (chipsEl) {
+    chipsEl.innerHTML = radar.rules.map(r => {
+      let clickAction = '';
+      if (r.name.includes('Bollinger') || r.name.includes('Dev')) {
+        clickAction = `onclick="focusStrategyRule('bollinger')" title="Click to tune Bollinger Band Contact settings"`;
+      } else if (r.name.includes('Body') || r.name.includes('Ratio')) {
+        clickAction = `onclick="focusStrategyRule('body')" title="Click to tune Candle Anatomy settings"`;
+      } else if (r.name.includes('RSI')) {
+        clickAction = `onclick="focusStrategyRule('rsi')" title="Click to tune RSI settings"`;
+      } else {
+        clickAction = `onclick="focusStrategyRule('general')"`;
+      }
+      return `
+        <button type="button" class="token-chip ${r.passed ? 'active' : ''}" ${clickAction} style="cursor: pointer; font-size: 10px; padding: 2px 8px; background: ${r.passed ? 'rgba(0, 245, 155, 0.18)' : 'rgba(255,255,255,0.06)'}; color: ${r.passed ? 'var(--emerald)' : 'var(--amber)'}; border-color: ${r.passed ? 'rgba(0, 245, 155, 0.4)' : 'rgba(245, 158, 11, 0.3)'}; transition: all 0.2s;">
+          ${r.passed ? '✅' : '⏳'} ${r.name}
+        </button>
+      `;
+    }).join('');
+  }
+
+  strategyChartEngine.updateLiveConfluenceRadar(radar);
+}
+
+function focusStrategyRule(ruleKey) {
+  if (ruleKey === 'bollinger') {
+    const sec = document.getElementById('sec-ind-bollinger');
+    const checkbox = document.getElementById('strat-bollinger-filter');
+    const drawer = document.getElementById('ind-params-bollinger');
+    if (checkbox && !checkbox.checked) {
+      checkbox.checked = true;
+      toggleIndicatorDrawer('bollinger', true);
+    } else if (drawer) {
+      drawer.style.display = 'grid';
+    }
+    if (sec) {
+      sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      sec.style.transition = 'all 0.4s ease';
+      sec.style.background = 'rgba(0, 240, 255, 0.15)';
+      sec.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)';
+      sec.style.borderColor = 'var(--cyan-bright)';
+      setTimeout(() => {
+        sec.style.background = '';
+        sec.style.boxShadow = '';
+        sec.style.borderColor = 'transparent';
+      }, 2500);
+    }
+    const devInput = document.getElementById('ind-bb-dev');
+    if (devInput) {
+      setTimeout(() => devInput.focus(), 300);
+    }
+    if (typeof recalculateStrategyVisualizer === 'function') recalculateStrategyVisualizer();
+    if (typeof showToast === 'function') showToast('Focused on Bollinger Band Contact rules', 'info');
+  } else if (ruleKey === 'body') {
+    const el = document.getElementById('strat-body-ratio');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+    }
+  } else if (ruleKey === 'rsi') {
+    const sec = document.getElementById('sec-ind-rsi');
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+window.focusStrategyRule = focusStrategyRule;
+
+function compileCurrentStrategyForm() {
+  const id = document.getElementById('strat-id')?.value || 'temp_strat';
+  const name = document.getElementById('strat-name')?.value || 'Custom Strategy';
+  const tf = AppState.activeTimeframe || '1M';
+  const expiry = parseInt(document.getElementById('strat-duration')?.value, 10) || 2;
+  const payout = parseFloat(document.getElementById('strat-min-payout')?.value) || 85;
+  const direction = AppState.activeDirection || 'BOTH';
+  const cooldown = parseInt(document.getElementById('strat-cooldown-select')?.value, 10) || 120;
+
+  const trendEnabled = document.getElementById('rule-trend')?.checked || false;
+  const solidBody = document.getElementById('rule-solid-body')?.checked !== false;
+  const maxWick = document.getElementById('rule-wick')?.checked !== false;
+  const filterDoji = document.getElementById('rule-doji')?.checked !== false;
+  const engulfing = document.getElementById('rule-engulfing')?.checked || false;
+
+  const indicators = [];
+
+  if (document.getElementById('rule-bb')?.checked) {
+    indicators.push({
+      indicator: 'BOLLINGER',
+      params: {
+        period_1: 20,
+        deviation: 2.0,
+        min_protrusion_pct: 0.20
+      }
+    });
+  }
+
+  if (document.getElementById('rule-rsi')?.checked) {
+    indicators.push({
+      indicator: 'RSI',
+      params: {
+        period: 14,
+        overbought: 70,
+        oversold: 30
+      }
+    });
+  }
+
+  return {
+    id,
+    name,
+    timeframe: tf,
+    expiry_minutes: expiry,
+    min_payout: payout,
+    direction,
+    cooldown_seconds: cooldown,
+    filters: {
+      trend: { enabled: trendEnabled, ema_period: 20 },
+      candle_anatomy: {
+        min_body_ratio: solidBody ? 0.35 : 0.15,
+        max_opposing_wick: maxWick ? 0.35 : 0.60,
+        filter_preceding_doji: filterDoji
+      },
+      price_action: {
+        require_engulfing: engulfing
+      },
+      indicators,
+      confluence: { min_factors: 1 }
+    }
+  };
+}
+
+function open28PairMatrixModal() {
+  const modal = document.getElementById('matrix-modal');
+  if (modal) {
+    modal.classList.add('active');
+    run28PairStrategyEvaluation();
+  }
+}
+window.open28PairMatrixModal = open28PairMatrixModal;
+
+function close28PairMatrixModal() {
+  const modal = document.getElementById('matrix-modal');
+  if (modal) modal.classList.remove('active');
+}
+window.close28PairMatrixModal = close28PairMatrixModal;
+
+async function run28PairStrategyEvaluation() {
+  const tbody = document.getElementById('matrix-results-tbody');
+  const loadBar = document.getElementById('matrix-loading-bar');
+  const progressFill = document.getElementById('matrix-progress-fill');
+  const progressPct = document.getElementById('matrix-progress-pct');
+  const btn = document.getElementById('btn-run-matrix-eval');
+
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (loadBar) loadBar.style.display = 'block';
+  if (btn) btn.disabled = true;
+
+  const currentStrat = compileCurrentStrategyForm();
+  let profitableCount = 0;
+  let totalWR = 0;
+  let testedCount = 0;
+
+  for (let i = 0; i < ALL_REAL_FOREX_PAIRS.length; i++) {
+    const pair = ALL_REAL_FOREX_PAIRS[i];
+    const pct = Math.round(((i + 1) / ALL_REAL_FOREX_PAIRS.length) * 100);
+    if (progressFill) progressFill.style.width = `${pct}%`;
+    if (progressPct) progressPct.textContent = `${pct}% (${pair})`;
+
+    try {
+      let candles = [];
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_candles_for_chart) {
+        candles = await window.pywebview.api.get_candles_for_chart(pair, '1M');
+      }
+
+      if (candles && candles.length >= 25 && typeof StrategyEvaluator !== 'undefined') {
+        const res = StrategyEvaluator.evaluateStrategy(currentStrat, candles);
+        testedCount++;
+        totalWR += res.win_rate;
+        if (res.win_rate >= 55) profitableCount++;
+
+        const curRate = candles[candles.length - 1].close;
+        const payout = AppState.payouts[pair] || 85;
+        const isProfitable = res.win_rate >= 55;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${pair}</strong></td>
+          <td style="font-family: var(--font-mono);">${formatLivePrice(pair, curRate)}</td>
+          <td><span class="nav-badge" style="background: rgba(0, 245, 155, 0.1); color: var(--emerald);">${payout}%</span></td>
+          <td>${res.total_signals}</td>
+          <td><span style="color: var(--emerald);">${res.wins}W</span> / <span style="color: var(--rose);">${res.losses}L</span></td>
+          <td><strong style="color: ${isProfitable ? 'var(--emerald)' : 'var(--rose)'}; font-size: 12px;">${res.win_rate}%</strong></td>
+          <td style="font-family: var(--font-mono);">${res.profit_factor.toFixed(2)}</td>
+          <td>
+            <button type="button" class="btn-secondary" style="font-size: 10px; padding: 2px 8px;" onclick="close28PairMatrixModal(); changeStrategyPreviewPair('${pair}');">
+              👁️ View
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    } catch (e) {
+      console.debug('Matrix eval error for', pair, e);
+    }
+  }
+
+  if (loadBar) loadBar.style.display = 'none';
+  if (btn) btn.disabled = false;
+
+  const profEl = document.getElementById('matrix-profitable-pairs');
+  const avgWrEl = document.getElementById('matrix-avg-wr');
+  if (profEl) profEl.textContent = `${profitableCount} / ${testedCount}`;
+  if (avgWrEl && testedCount > 0) avgWrEl.textContent = `${(totalWR / testedCount).toFixed(1)}%`;
+}
+window.run28PairStrategyEvaluation = run28PairStrategyEvaluation;
 
 function selectStrategy(id) {
   AppState.selectedStrategyId = id;
@@ -2069,7 +2472,40 @@ function selectStrategy(id) {
 
   const delBtn = document.getElementById('btn-delete-strat');
   if (delBtn) delBtn.style.display = 'inline-block';
+
+  // Set preview pair if strategy specifies assets
+  if (strat.assets && strat.assets.length > 0 && strat.assets[0] !== 'ALL_REAL' && strat.assets[0] !== 'ALL_MARKETS') {
+    activeStrategyPreviewPair = strat.assets[0];
+    const pairSel = document.getElementById('strat-preview-pair-select');
+    if (pairSel) pairSel.value = activeStrategyPreviewPair;
+  }
+
+  // Update Visual Studio
+  if (!strategyChartEngine) {
+    initStrategyVisualizer();
+  } else {
+    fetchCandlesForStrategyPreview(activeStrategyPreviewPair);
+  }
+  const masterSelect = document.getElementById('strategy-master-select');
+  if (masterSelect && masterSelect.value !== id) {
+    masterSelect.value = id;
+  }
 }
+
+function duplicateCurrentStrategy() {
+  const curId = AppState.selectedStrategyId;
+  const strat = AppState.strategies.find(s => s.id === curId);
+  if (!strat) return;
+  const clone = JSON.parse(JSON.stringify(strat));
+  clone.id = 'strat_' + Date.now();
+  clone.name = clone.name + ' (Copy)';
+  AppState.strategies.unshift(clone);
+  AppState.selectedStrategyId = clone.id;
+  renderStrategyList();
+  selectStrategy(clone.id);
+  showToast(`Duplicated "${clone.name}"`, 'success');
+}
+window.duplicateCurrentStrategy = duplicateCurrentStrategy;
 
 function applyArchetypePreset(presetKey) {
   if (!presetKey) return;
@@ -5112,3 +5548,191 @@ function persistTelegramManagerConfig(patch, successMsg) {
     showToast('Telegram configuration updated locally.', 'info');
   }
 }
+
+// ============================================================================
+// Strategy Optimizer & Monte Carlo Stress-Test Controller
+// ============================================================================
+function openOptimizerModal() {
+  const modal = document.getElementById('optimizer-modal');
+  if (modal) modal.classList.add('active');
+}
+window.openOptimizerModal = openOptimizerModal;
+
+function closeOptimizerModal() {
+  const modal = document.getElementById('optimizer-modal');
+  if (modal) modal.classList.remove('active');
+}
+window.closeOptimizerModal = closeOptimizerModal;
+
+function executeOptimizerSweep() {
+  const sym = document.getElementById('opt-symbol-select')?.value || 'EUR/USD';
+  const payout = parseFloat(document.getElementById('opt-payout-input')?.value || '85');
+  const btn = document.getElementById('btn-run-optimizer');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Sweeping 48 Setups...';
+  }
+
+  showToast(`Running 48-combination parameter sweep for ${sym}...`, 'info');
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.run_strategy_optimizer) {
+    window.pywebview.api.run_strategy_optimizer(sym, payout).then(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Grid Sweep';
+      }
+      if (!res || res.error) {
+        showToast(res ? res.error : 'Optimizer execution returned no data', 'error');
+        return;
+      }
+      renderOptimizerResults(res, payout);
+      showToast(`Grid sweep complete: Evaluated ${res.total_combinations_tested || 48} parameter setups!`, 'success');
+    }).catch(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Grid Sweep';
+      }
+      showToast('Optimizer execution failed: ' + (err || 'Unknown error'), 'error');
+    });
+  } else {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⚡ Run Grid Sweep';
+    }
+    showToast('Strategy Optimizer API not available', 'error');
+  }
+}
+window.executeOptimizerSweep = executeOptimizerSweep;
+
+function renderOptimizerResults(res, payout) {
+  const emptyState = document.getElementById('opt-empty-state');
+  const resultsContainer = document.getElementById('opt-results-container');
+  const mcContainer = document.getElementById('opt-monte-carlo-container');
+  const tbody = document.getElementById('opt-results-tbody');
+
+  if (emptyState) emptyState.style.display = 'none';
+  if (resultsContainer) resultsContainer.style.display = 'block';
+
+  const rows = res.ranked_results || [];
+  if (tbody) {
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-muted);">No positive expectancy configurations found for current market data.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map((r, idx) => {
+        const evColor = (r.ev_per_trade || 0) >= 0 ? 'var(--cyan-bright)' : 'var(--rose)';
+        const evSign = (r.ev_per_trade || 0) >= 0 ? '+' : '';
+        const params = r.parameters || {};
+        return `
+          <tr>
+            <td style="font-weight: 800; color: #fff;">#${idx + 1}</td>
+            <td style="font-family: var(--font-mono);">${params.rsi_period || '-'}</td>
+            <td style="font-family: var(--font-mono);">${params.rsi_ob || 70} / ${params.rsi_os || 30}</td>
+            <td style="font-family: var(--font-mono);">${params.bb_dev || '2.0'}σ</td>
+            <td style="font-weight: 700; color: var(--emerald);">${r.win_rate || 0}%</td>
+            <td style="font-family: var(--font-mono);">${r.total_signals || 0}</td>
+            <td style="font-weight: 700; color: ${evColor}; font-family: var(--font-mono);">${evSign}$${r.ev_per_trade || 0}</td>
+            <td style="font-family: var(--font-mono);">${r.profit_factor || 0}</td>
+            <td style="font-family: var(--font-mono); color: var(--cyan-bright);">${r.recommended_stake_pct || 0}%</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // Run Monte Carlo permutation stress test on top configuration
+  const topResult = rows[0];
+  if (topResult && topResult.wins !== undefined && topResult.losses !== undefined) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.run_monte_carlo_test) {
+      window.pywebview.api.run_monte_carlo_test(topResult.wins, topResult.losses, payout, 500, 10.0).then(mc => {
+        if (!mc) return;
+        if (mcContainer) mcContainer.style.display = 'block';
+        const streakEl = document.getElementById('mc-stat-streak');
+        const ddEl = document.getElementById('mc-stat-dd');
+        const ruinEl = document.getElementById('mc-stat-ruin');
+        const medianEl = document.getElementById('mc-stat-median');
+
+        if (streakEl) streakEl.textContent = mc.percentile_95_max_consecutive_losses || 0;
+        if (ddEl) ddEl.textContent = `$${mc.percentile_95_drawdown || 0.00}`;
+        if (ruinEl) {
+          const ruinVal = mc.probability_of_ruin_pct || 0.0;
+          ruinEl.textContent = `${ruinVal}%`;
+          ruinEl.style.color = ruinVal > 5 ? 'var(--rose)' : 'var(--emerald)';
+        }
+        if (medianEl) {
+          const med = mc.median_expected_profit || 0.0;
+          medianEl.textContent = `${med >= 0 ? '+' : ''}$${med}`;
+        }
+      }).catch(err => console.error('MC error', err));
+    }
+  }
+}
+
+// ============================================================================
+// Institutional Forex Market Hours & Weekend Closure Handler (Pro)
+// ============================================================================
+async function updateMarketSessionUI() {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_market_session_status) {
+    return;
+  }
+  try {
+    const status = await window.pywebview.api.get_market_session_status();
+    if (!status) return;
+
+    AppState.isMarketOpen = status.is_open;
+
+    // 1. Update Strategy Lab Market Badge
+    const stratBadge = document.getElementById('strat-market-status-badge');
+    if (stratBadge) {
+      if (status.is_open) {
+        stratBadge.textContent = '🟢 LIVE MARKET';
+        stratBadge.style.color = 'var(--emerald)';
+        stratBadge.style.borderColor = 'rgba(0, 245, 155, 0.3)';
+        stratBadge.style.background = 'rgba(0, 245, 155, 0.15)';
+      } else {
+        stratBadge.textContent = `🟡 WEEKEND STANDBY (${status.time_until_reopen ? 'in ' + status.time_until_reopen : 'Sun 21:00 UTC'})`;
+        stratBadge.style.color = 'var(--amber)';
+        stratBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        stratBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+      }
+    }
+
+    // 2. Update Live Chart Station Feed Badge
+    const chartBadge = document.getElementById('chart-feed-badge');
+    if (chartBadge) {
+      if (status.is_open) {
+        chartBadge.textContent = 'REAL-TIME FEED';
+        chartBadge.style.color = 'var(--emerald)';
+      } else {
+        chartBadge.textContent = `WEEKEND STANDBY — FRIDAY SETTLEMENT (${status.time_until_reopen ? 'Reopens in ' + status.time_until_reopen : 'Sun 21:00 UTC'})`;
+        chartBadge.style.color = 'var(--amber)';
+      }
+    }
+
+    // 3. Update Global Top Bar Market Mode Pill
+    const marketPill = document.querySelector('.top-status-pill');
+    if (marketPill) {
+      if (status.is_open) {
+        marketPill.textContent = '● LIVE MARKETS';
+        marketPill.style.color = 'var(--emerald)';
+        marketPill.style.background = 'rgba(0, 245, 155, 0.12)';
+      } else {
+        marketPill.textContent = '● WEEKEND STANDBY';
+        marketPill.style.color = 'var(--amber)';
+        marketPill.style.background = 'rgba(245, 158, 11, 0.15)';
+        marketPill.title = status.status_desc;
+      }
+    }
+  } catch (err) {
+    console.debug('Error updating market session UI:', err);
+  }
+}
+window.updateMarketSessionUI = updateMarketSessionUI;
+
+// Start periodic polling for market session status every 15s
+setInterval(updateMarketSessionUI, 15000);
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(updateMarketSessionUI, 1000);
+});
+
+

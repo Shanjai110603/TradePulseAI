@@ -8,16 +8,19 @@ import datetime
 import json
 import logging
 import os
+import secrets
 import sys
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Request, Depends, Header
+from fastapi import FastAPI, HTTPException, Request, Depends, Header, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+
 
 # Include project root
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -47,6 +50,43 @@ app.add_middleware(
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# -----------------------------------------------------------------------------
+# Admin Session Management & Token Authentication
+# -----------------------------------------------------------------------------
+ADMIN_SESSIONS: Dict[str, float] = {}  # token -> expires_at_ts
+SESSION_TTL_SECONDS = 86400.0  # 24 hours
+
+def create_admin_session(username: str) -> str:
+    now = time.time()
+    # Prune expired tokens
+    expired = [t for t, exp in ADMIN_SESSIONS.items() if exp < now]
+    for t in expired:
+        ADMIN_SESSIONS.pop(t, None)
+    token = secrets.token_hex(32)
+    ADMIN_SESSIONS[token] = now + SESSION_TTL_SECONDS
+    return token
+
+def verify_admin_token(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_admin_token: Optional[str] = Header(None)
+) -> str:
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    elif x_admin_token:
+        token = x_admin_token.strip()
+
+    now = time.time()
+    if not token or token not in ADMIN_SESSIONS or ADMIN_SESSIONS[token] < now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: valid administrator session token required",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    return token
 
 
 # -----------------------------------------------------------------------------
@@ -175,20 +215,27 @@ async def admin_login(req: AdminLoginRequest):
     valid = master_db.verify_admin(req.username, req.password)
     if not valid:
         raise HTTPException(status_code=401, detail="Invalid administrator credentials")
-    return {"success": True, "token": "master_admin_session_active", "user": req.username}
+    token = create_admin_session(req.username)
+    return {"success": True, "token": token, "user": req.username}
 
 
-@app.get("/api/v1/admin/stats")
+@app.post("/api/v1/admin/logout")
+async def admin_logout(token: str = Depends(verify_admin_token)):
+    ADMIN_SESSIONS.pop(token, None)
+    return {"success": True, "message": "Logged out successfully"}
+
+
+@app.get("/api/v1/admin/stats", dependencies=[Depends(verify_admin_token)])
 async def get_admin_stats():
     return master_db.get_dashboard_metrics()
 
 
-@app.get("/api/v1/admin/licenses")
+@app.get("/api/v1/admin/licenses", dependencies=[Depends(verify_admin_token)])
 async def get_all_licenses():
     return master_db.get_all_licenses()
 
 
-@app.post("/api/v1/admin/licenses")
+@app.post("/api/v1/admin/licenses", dependencies=[Depends(verify_admin_token)])
 async def create_license(req: CreateLicenseRequest):
     lic = master_db.create_license(
         customer_name=req.customer_name,
@@ -202,20 +249,20 @@ async def create_license(req: CreateLicenseRequest):
     return {"success": True, "license": lic}
 
 
-@app.post("/api/v1/admin/licenses/{license_key}/reset-hwid")
+@app.post("/api/v1/admin/licenses/{license_key}/reset-hwid", dependencies=[Depends(verify_admin_token)])
 async def reset_license_hwid(license_key: str):
     """Allows user to bind and activate on a new/transferred machine."""
     ok = master_db.reset_hwid_binding(license_key)
     return {"success": ok, "message": f"Hardware ID binding reset for {license_key}"}
 
 
-@app.post("/api/v1/admin/licenses/{license_key}/toggle-status")
+@app.post("/api/v1/admin/licenses/{license_key}/toggle-status", dependencies=[Depends(verify_admin_token)])
 async def toggle_license_status(license_key: str):
     new_status = master_db.toggle_license_status(license_key)
     return {"success": True, "status": new_status}
 
 
-@app.post("/api/v1/admin/licenses/{license_key}/extend")
+@app.post("/api/v1/admin/licenses/{license_key}/extend", dependencies=[Depends(verify_admin_token)])
 async def extend_license(license_key: str, req: ExtendLicenseRequest):
     new_exp = master_db.extend_license(license_key, additional_days=req.days or 365)
     if not new_exp:
@@ -223,19 +270,19 @@ async def extend_license(license_key: str, req: ExtendLicenseRequest):
     return {"success": True, "expires_at": new_exp}
 
 
-@app.post("/api/v1/admin/licenses/{license_key}/set-max-devices")
+@app.post("/api/v1/admin/licenses/{license_key}/set-max-devices", dependencies=[Depends(verify_admin_token)])
 async def set_max_devices(license_key: str, req: SetDevicesRequest):
     ok = master_db.set_max_devices(license_key, max_devices=req.max_devices)
     return {"success": ok, "max_devices": req.max_devices}
 
 
-@app.delete("/api/v1/admin/licenses/{license_key}")
+@app.delete("/api/v1/admin/licenses/{license_key}", dependencies=[Depends(verify_admin_token)])
 async def delete_license(license_key: str):
     ok = master_db.delete_license(license_key)
     return {"success": ok}
 
 
-@app.get("/api/v1/admin/telemetry")
+@app.get("/api/v1/admin/telemetry", dependencies=[Depends(verify_admin_token)])
 async def get_all_telemetry():
     return master_db.get_all_telemetry()
 

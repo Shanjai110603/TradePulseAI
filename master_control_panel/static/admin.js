@@ -12,6 +12,21 @@ let AdminState = {
   authToken: localStorage.getItem('tp_admin_token') || null
 };
 
+function authFetch(url, options = {}) {
+  options = options || {};
+  options.headers = options.headers || {};
+  if (AdminState.authToken) {
+    options.headers['Authorization'] = `Bearer ${AdminState.authToken}`;
+  }
+  return fetch(url, options).then(res => {
+    if (res.status === 401 && !url.includes('/api/v1/admin/login')) {
+      handleAdminLogout();
+    }
+    return res;
+  });
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   // Poll telemetry and stats every 3 seconds when active
@@ -63,6 +78,11 @@ async function handleAdminLogin(e) {
 window.handleAdminLogin = handleAdminLogin;
 
 function handleAdminLogout() {
+  if (AdminState.authToken) {
+    try {
+      authFetch('/api/v1/admin/logout', { method: 'POST' }).catch(() => {});
+    } catch(e) {}
+  }
   AdminState.authToken = null;
   localStorage.removeItem('tp_admin_token');
   document.getElementById('login-overlay')?.classList.add('active');
@@ -93,7 +113,7 @@ async function loadAllData() {
 
 async function loadStats() {
   try {
-    const res = await fetch('/api/v1/admin/stats');
+    const res = await authFetch('/api/v1/admin/stats');
     if (res.ok) {
       const stats = await res.json();
       AdminState.stats = stats;
@@ -114,7 +134,7 @@ async function loadStats() {
 // ============================================================================
 async function loadLicensesData() {
   try {
-    const res = await fetch('/api/v1/admin/licenses');
+    const res = await authFetch('/api/v1/admin/licenses');
     if (res.ok) {
       AdminState.licenses = await res.json();
       renderLicensesTable();
@@ -236,7 +256,7 @@ async function handleCreateLicense(e) {
   const notes = document.getElementById('new-lic-notes')?.value.trim();
 
   try {
-    const res = await fetch('/api/v1/admin/licenses', {
+    const res = await authFetch('/api/v1/admin/licenses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -266,7 +286,7 @@ async function resetHwid(licenseKey) {
     return;
   }
   try {
-    const res = await fetch(`/api/v1/admin/licenses/${licenseKey}/reset-hwid`, { method: 'POST' });
+    const res = await authFetch(`/api/v1/admin/licenses/${licenseKey}/reset-hwid`, { method: 'POST' });
     if (res.ok) {
       showToast(`HWID Reset Successful! Client can now bind a new machine.`, 'success');
       loadAllData();
@@ -279,7 +299,7 @@ window.resetHwid = resetHwid;
 
 async function toggleLicenseStatus(licenseKey) {
   try {
-    const res = await fetch(`/api/v1/admin/licenses/${licenseKey}/toggle-status`, { method: 'POST' });
+    const res = await authFetch(`/api/v1/admin/licenses/${licenseKey}/toggle-status`, { method: 'POST' });
     if (res.ok) {
       const data = await res.json();
       showToast(`License status changed to ${data.status}`, 'info');
@@ -293,7 +313,7 @@ window.toggleLicenseStatus = toggleLicenseStatus;
 
 async function extendLicensePrompt(licenseKey) {
   try {
-    const res = await fetch(`/api/v1/admin/licenses/${licenseKey}/extend`, {
+    const res = await authFetch(`/api/v1/admin/licenses/${licenseKey}/extend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ days: 365 })
@@ -318,7 +338,7 @@ async function promptSetDevices(licenseKey, currentMax) {
     return;
   }
   try {
-    const res = await fetch(`/api/v1/admin/licenses/${licenseKey}/set-max-devices`, {
+    const res = await authFetch(`/api/v1/admin/licenses/${licenseKey}/set-max-devices`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ max_devices: num })
@@ -338,7 +358,7 @@ async function deleteLicense(licenseKey) {
     return;
   }
   try {
-    const res = await fetch(`/api/v1/admin/licenses/${licenseKey}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/v1/admin/licenses/${licenseKey}`, { method: 'DELETE' });
     if (res.ok) {
       showToast('License deleted', 'info');
       loadAllData();
@@ -354,7 +374,7 @@ window.deleteLicense = deleteLicense;
 // ============================================================================
 async function loadTelemetryData(showToastAlert = true) {
   try {
-    const res = await fetch('/api/v1/admin/telemetry');
+    const res = await authFetch('/api/v1/admin/telemetry');
     if (res.ok) {
       AdminState.telemetry = await res.json();
       renderTelemetryTable();
