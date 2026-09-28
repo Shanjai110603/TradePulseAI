@@ -2470,12 +2470,19 @@ function escapeHtml(str) {
 // ============================================================================
 function updateLicenseStatusUI() {
   const lic = PersonalState.license || {};
-  const isLicensed = lic.licensed === true;
+  const isTesting = lic.testing_mode === true;
+  const isLicensed = isTesting || lic.licensed === true || lic.is_licensed === true;
   const statusPill = document.getElementById('license-status-pill');
   const statusText = document.getElementById('license-status-text');
 
   if (statusText) {
-    if (isLicensed) {
+    if (isTesting) {
+      statusText.textContent = 'Testing Mode (Free Access)';
+      if (statusPill) {
+        statusPill.classList.remove('offline', 'disconnected', 'error');
+        statusPill.classList.add('online');
+      }
+    } else if (isLicensed) {
       const daysLeft = lic.days_remaining !== undefined ? `${lic.days_remaining}d` : 'Active';
       statusText.textContent = `License: Active (${daysLeft})`;
       if (statusPill) {
@@ -2493,18 +2500,20 @@ function updateLicenseStatusUI() {
 
   const statVal = document.getElementById('lic-status-val');
   if (statVal) {
-    statVal.textContent = isLicensed ? 'Active & Bound' : (lic.revoked ? 'Revoked' : 'Unlicensed');
+    statVal.textContent = isTesting ? 'Testing Phase (Bypassed)' : (isLicensed ? 'Active & Bound' : (lic.revoked ? 'Revoked' : 'Unlicensed'));
     statVal.style.color = isLicensed ? 'var(--emerald)' : 'var(--rose)';
   }
 
   const clientName = document.getElementById('lic-client-name');
   if (clientName) {
-    clientName.textContent = lic.client_name || (isLicensed ? 'Verified Subscriber' : '--');
+    clientName.textContent = lic.customer_name || lic.client_name || (isTesting ? 'Testing User (Full Access)' : (isLicensed ? 'Verified Subscriber' : '--'));
   }
 
   const expiryVal = document.getElementById('lic-expiry-val');
   if (expiryVal) {
-    if (lic.expires_at) {
+    if (isTesting) {
+      expiryVal.textContent = 'Unlimited (Testing Phase)';
+    } else if (lic.expires_at) {
       try {
         expiryVal.textContent = new Date(lic.expires_at).toLocaleString();
       } catch (e) {

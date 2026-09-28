@@ -260,10 +260,13 @@ class TradePulsePersonalEngine:
         self._flush_thread = threading.Thread(target=self._ui_flush_loop, daemon=True, name="TradePulsePersonal-UIFlush")
         self._flush_thread.start()
         
-        # Verify cached license and start live heartbeat to Master Control Server
-        if license_client.license_key:
-            threading.Thread(target=license_client.validate_license, daemon=True).start()
-        license_client.start_heartbeat()
+        # Verify cached license and start live heartbeat to Master Control Server (bypassed in testing mode)
+        if not getattr(license_client, "bypass_subscription", False):
+            if license_client.license_key:
+                threading.Thread(target=license_client.validate_license, daemon=True).start()
+            license_client.start_heartbeat()
+        else:
+            logger.info("🧪 [LICENSING] Testing phase active: Subscription requirement is disabled.")
 
         self.real_market_feed.start()
         tv_scanner.start()
@@ -720,7 +723,7 @@ class TradePulsePersonalEngine:
         elif cmd == "/resume":
             if not self.is_quotex_logged_in():
                 msg = "⚠️ Cannot resume: Please log into Quotex in the TradePulse Desktop App first."
-            elif not license_client.is_licensed:
+            elif not getattr(license_client, "bypass_subscription", False) and not license_client.is_licensed:
                 msg = "⚠️ Cannot resume: Active subscription license required."
             else:
                 self.scanning_paused = False
@@ -1077,7 +1080,7 @@ class PersonalWebViewApi:
                     "paused": True
                 }
 
-            if not license_client.is_licensed:
+            if not getattr(license_client, "bypass_subscription", False) and not license_client.is_licensed:
                 ok, lic_msg = license_client.validate_license()
                 if not ok:
                     logger.warning(f"[PERSONAL TOOL] Cannot start scanner: {lic_msg}")

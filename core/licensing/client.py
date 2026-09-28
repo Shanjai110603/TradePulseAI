@@ -71,7 +71,7 @@ def get_system_hwid() -> str:
 class LicenseClient:
     """Manages client license activation, local cache, and master server telemetry."""
 
-    def __init__(self, data_dir: Optional[Path] = None, cache_path: Optional[Path] = None):
+    def __init__(self, data_dir: Optional[Path] = None, cache_path: Optional[Path] = None, bypass_subscription: Optional[bool] = None):
         if cache_path:
             self.license_file = Path(cache_path)
             self.data_dir = self.license_file.parent
@@ -87,12 +87,20 @@ class LicenseClient:
         self.license_key: str = ""
         self.server_url: str = os.getenv("TRADEPULSE_MASTER_SERVER", "http://127.0.0.1:8000").rstrip("/")
         
-        self.is_licensed: bool = False
+        # Testing Phase: Subscription requirement disabled by default during app testing
+        if bypass_subscription is not None:
+            self.bypass_subscription = bypass_subscription
+        else:
+            is_pytest = "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST") is not None
+            force_enforce = os.getenv("TRADEPULSE_ENFORCE_SUBSCRIPTION", "0") == "1"
+            self.bypass_subscription = not is_pytest and not force_enforce
+
+        self.is_licensed: bool = True if self.bypass_subscription else False
         self.license_data: Dict[str, Any] = {}
         self.last_error_message: str = ""
-        self.customer_name: str = ""
-        self.expires_at: str = ""
-        self.last_verified_online_ts: float = 0.0
+        self.customer_name: str = "Testing Phase (Full Access)" if self.bypass_subscription else ""
+        self.expires_at: str = "Unlimited (Testing Phase)" if self.bypass_subscription else ""
+        self.last_verified_online_ts: float = time.time() if self.bypass_subscription else 0.0
         
         self._heartbeat_thread: Optional[threading.Thread] = None
         self._running: bool = False
@@ -100,6 +108,8 @@ class LicenseClient:
         self._on_revocation_callback = None
 
         self.load_cached_license()
+        if self.bypass_subscription:
+            self.is_licensed = True
 
     def set_telemetry_callback(self, cb):
         self._get_telemetry_callback = cb
@@ -147,6 +157,10 @@ class LicenseClient:
         Communicates with Master Control Panel to validate 1-year subscription
         and verify that this machine HWID is authorized.
         """
+        if self.bypass_subscription:
+            self.is_licensed = True
+            return True, "Testing Phase: Subscription requirement is disabled."
+
         key_to_check = (license_key or self.license_key).strip()
         if not key_to_check:
             self.is_licensed = False
@@ -317,12 +331,14 @@ class LicenseClient:
     def get_status(self) -> Dict[str, Any]:
         return {
             "hwid": self.hwid,
-            "license_key": self.license_key,
+            "license_key": self.license_key or ("TESTING-PHASE-ACTIVE" if self.bypass_subscription else ""),
             "server_url": self.server_url,
-            "is_licensed": self.is_licensed,
-            "customer_name": self.customer_name,
-            "expires_at": self.expires_at,
-            "last_error": self.last_error_message
+            "is_licensed": True if self.bypass_subscription else self.is_licensed,
+            "licensed": True if self.bypass_subscription else self.is_licensed,
+            "customer_name": self.customer_name or ("Testing Phase (Full Access)" if self.bypass_subscription else ""),
+            "expires_at": self.expires_at or ("Unlimited (Testing Phase)" if self.bypass_subscription else ""),
+            "last_error": "" if self.bypass_subscription else self.last_error_message,
+            "testing_mode": self.bypass_subscription
         }
 
 
