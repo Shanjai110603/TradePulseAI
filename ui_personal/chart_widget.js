@@ -50,8 +50,8 @@ class InteractiveChartEngine {
 
     // Indicator Visibility & Settings
     this.indicators = {
-      ema20: true,
-      ema50: true,
+      ema20: false,
+      ema50: false,
       ema200: false,
       bb: true,
       supertrend: false,
@@ -607,35 +607,43 @@ class InteractiveChartEngine {
 
     // 3. Multi-Cloud Bollinger Bands Engine (Multiple Clouds & Independent Deviations)
     let bbInstances = [];
-    if (this.canvas && this.canvas.id === 'strategyVisualizerCanvas' && typeof strategyIndicatorInstances !== 'undefined' && strategyIndicatorInstances.length > 0) {
-      bbInstances = strategyIndicatorInstances.filter(i => 
-        (i.type || '').toUpperCase() === 'BOLLINGER' && i.enabled && i.visibleOnChart !== false
-      ).map(i => ({
-        indicator: 'BOLLINGER',
-        color: i.color || i.params?.color,
-        params: i.params,
-        show_cloud: i.params?.show_cloud !== false
-      }));
-    } else if (this.strategyConfig?.filters?.indicators) {
-      bbInstances = this.strategyConfig.filters.indicators.filter(i => 
-        (i.indicator || '').toUpperCase() === 'BOLLINGER' && i.visible_on_chart !== false
-      );
+    if (this.indicators.bb !== false) {
+      if (typeof strategyIndicatorInstances !== 'undefined' && strategyIndicatorInstances.length > 0) {
+        bbInstances = strategyIndicatorInstances.filter(i => 
+          (i.type || '').toUpperCase() === 'BOLLINGER' && i.enabled && i.visibleOnChart !== false
+        ).map(i => ({
+          indicator: 'BOLLINGER',
+          color: i.color || i.params?.color,
+          params: i.params,
+          show_cloud: i.params?.show_cloud !== false
+        }));
+      } else if (this.strategyConfig?.filters?.indicators) {
+        bbInstances = this.strategyConfig.filters.indicators.filter(i => 
+          (i.indicator || '').toUpperCase() === 'BOLLINGER' && i.visible_on_chart !== false
+        );
+      }
+      if (bbInstances.length === 0 && this.indicators.bb) {
+        bbInstances = [
+          { indicator: 'BOLLINGER', params: { period: 10, deviation: 2.0, show_cloud: true, color: '#00f0ff' } },
+          { indicator: 'BOLLINGER', params: { period: 13, deviation: 2.5, show_cloud: true, color: '#ec4899' } }
+        ];
+      }
     }
-    const activeBBs = bbInstances.length > 0 ? bbInstances : (this.indicators.bb ? [{
-      indicator: 'BOLLINGER',
-      params: { period: 20, deviation: 2.0, show_cloud: true, color: '#00f0ff' }
-    }] : []);
+    const activeBBs = bbInstances;
 
-    // Sort: Larger deviations (wider cloud) drawn first underneath, tighter bands drawn on top
+    // Sort: Larger deviations (or periods if deviations equal) drawn first underneath, tighter bands drawn on top
     const sortedBBs = [...activeBBs].sort((a, b) => {
       const devA = Number(a.params?.deviation ?? 2.0);
       const devB = Number(b.params?.deviation ?? 2.0);
-      return devB - devA;
+      if (Math.abs(devB - devA) > 0.001) return devB - devA;
+      const perA = Number(a.params?.period ?? 20);
+      const perB = Number(b.params?.period ?? 20);
+      return perB - perA;
     });
 
     sortedBBs.forEach((inst, bbIdx) => {
       const p = Number(inst.params?.period_1 || inst.params?.period || 20);
-      const dev = Number(inst.params?.deviation || 2.0);
+      const dev = Number(inst.params?.deviation !== undefined ? inst.params.deviation : (bbIdx === 0 ? 2.5 : 2.0));
       const color = inst.color || inst.params?.color || (bbIdx === 0 ? '#ec4899' : '#00f0ff');
       const showCloud = inst.show_cloud !== false && inst.params?.show_cloud !== false;
 
@@ -702,7 +710,7 @@ class InteractiveChartEngine {
 
     // 4. Moving Average / EMA Ribbon Engine (Multi-Instance)
     let maInstances = [];
-    if (this.canvas && this.canvas.id === 'strategyVisualizerCanvas' && typeof strategyIndicatorInstances !== 'undefined' && strategyIndicatorInstances.length > 0) {
+    if (typeof strategyIndicatorInstances !== 'undefined' && strategyIndicatorInstances.length > 0) {
       maInstances = strategyIndicatorInstances.filter(i => 
         ['EMA', 'SMA', 'MOVING_AVERAGE'].includes((i.type || '').toUpperCase()) && i.enabled && i.visibleOnChart !== false
       ).map(i => ({
@@ -735,7 +743,7 @@ class InteractiveChartEngine {
         });
         ctx.stroke();
       });
-    } else if (this.canvas && this.canvas.id !== 'strategyVisualizerCanvas') {
+    } else if (this.indicators.ema20 || this.indicators.ema50 || this.indicators.ema200) {
       const drawEma = (period, color, width) => {
         const emaAll = this._computeEMA(activeCandles, period).slice(startIdx, endIdx);
         ctx.strokeStyle = color;
